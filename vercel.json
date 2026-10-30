@@ -1,0 +1,9 @@
+{
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/resumen", "destination": "/index.html" },
+    { "source": "/evolucion", "destination": "/index.html" },
+    { "source": "/simulacion", "destination": "/index.html" },
+    { "source": "/mis-inversiones", "destination": "/index.html" }
+  ]
+}
