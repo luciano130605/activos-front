@@ -48,7 +48,7 @@ export default function Sidebar(props: Props) {
     const icons: Record<PageId, ReactNode> = {
         summary: <HugeiconsIcon icon={DashboardCircleIcon} size={18} fill={page === 'summary' ? 'currentColor' : 'none'} />,
         evolution: <HugeiconsIcon icon={ChartLineData01Icon} size={18} fill={page === 'evolution' ? 'none' : 'none'} />,
-        simulation: <HugeiconsIcon icon={CalculateIcon} size={18} strokeWidth={1.6} fill={page === 'simulation' ? 'none' : 'none'} />,
+
         investments: <HugeiconsIcon icon={CoinsBitcoinIcon} size={18} strokeWidth={1.6} fill={page === 'investments' ? 'none' : 'none'} />,
     };
 
