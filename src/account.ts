@@ -9,7 +9,7 @@ export class ApiError extends Error {
     constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
-const apiBase = (import.meta.env.VITE_API_URL || 'activos-back-production.up.railway.app/').replace(/\/+$/, '');
+const apiBase = (import.meta.env.VITE_API_URL || 'activos-back-production.up.railway.app').replace(/\/+$/, '');
 
 export async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     let response: Response;
