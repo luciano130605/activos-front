@@ -4,6 +4,7 @@ import { cedearPriceOn, cedearPricesNow } from './cedears';
 import CryptoSearchDialog from './CryptoSearchDialog';
 import Simulator from './Simulator';
 import Distribution from './Distribution';
+import MarketIndices from './MarketIndices';
 import Sidebar from './Sidebar';
 import Select from './Select';
 import QuoteSource from './QuoteSource';
@@ -30,7 +31,7 @@ const dollarLabels: Record<string, string> = { bolsa: 'MEP', contadoconliqui: 'C
 const dollarOrder = ['bolsa', 'contadoconliqui', 'blue', 'oficial', 'mayorista', 'cripto', 'tarjeta'];
 const titleFor = (kind: Kind) => kind === 'rate' ? 'Con tasa' : kind === 'cedear' ? 'CEDEAR' : 'Cripto';
 const localISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const dateMillis = (iso: string) => new Date(`${iso}T12:00:00`).getTime();
+const dateMillis = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
 const money = (n: number, c: Currency) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(Number.isFinite(n) ? n : 0);
 const percent = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const formatDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -381,6 +382,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 </div>
                 <div hidden={page !== 'summary'}>
                     {items.length > 0 && <Distribution byKind={byKind} byCurrency={byCurrency} format={fmt} />}
+                    <MarketIndices theme={theme} />
                 </div>
                 {/* <div hidden={page !== 'summary' && page !== 'evolution'}>
                     <Compare cryptos={cryptos} cedears={cedears} />
