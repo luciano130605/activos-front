@@ -4,7 +4,7 @@ import { CalculateIcon, ChartLineData01Icon, CoinsBitcoinIcon, DarkModeFreeIcons
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
 
-type Filter = 'all' | 'rate' | 'cedear' | 'crypto';
+type Filter = 'all' | 'rate' | 'cedear' | 'index' | 'crypto';
 type Props = {
     page: PageId;
     collapsed: boolean;
@@ -35,6 +35,7 @@ const kindColors: Record<Filter, string> = {
     all: 'bg-[#929292] ring-[#929292]/15',
     rate: 'bg-[#7f96ff] ring-[#7f96ff]/15',
     cedear: 'bg-[#ff7d52] ring-[#ff7d52]/15',
+    index: 'bg-[#b59bff] ring-[#b59bff]/15',
     crypto: 'bg-[#f5c542] ring-[#f5c542]/15',
 };
 

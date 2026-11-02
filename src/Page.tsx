@@ -13,7 +13,7 @@ import { request, type Account, type Snapshot } from './account';
 import { usePortfolio } from './usePortfolio';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Bitcoin, ChartDecreaseFreeIcons, ChartIncreaseFreeIcons, ChartLineIcon, ChevronRightIcon, CoinsBitcoinIcon, DashboardCircleIcon, Delete02Icon, Dollar02Icon, Edit02Icon, LandmarkFreeIcons, LoaderPinwheelIcon, MenuTwoLineFreeIcons, PieChart02Icon, PlusIcon, Refresh04Icon, Search01Icon, ViewIcon, ViewOffIcon, XIcon } from '@hugeicons/core-free-icons';
-type Filter = 'all' | Kind;
+type Filter = 'all' | Kind | 'index';
 type AssetQuote = { id: string; date: string; kind: 'crypto' | 'cedear' } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
 type DollarRate = { nombre: string; compra: number | null; venta: number };
 type Rates = Record<string, DollarRate>;
@@ -23,12 +23,14 @@ const kinds: { id: Filter; label: string; color: string }[] = [
     { id: 'all', label: 'Todas las inversiones', color: '#929292' },
     { id: 'rate', label: 'Con tasa', color: '#7f96ff' },
     { id: 'cedear', label: 'CEDEARs', color: '#ff7d52' },
+    { id: 'index', label: 'Índices', color: '#b59bff' },
     { id: 'crypto', label: 'Criptomonedas', color: '#f5c542' },
 ];
 // Nombres de los tipos de dólar que devuelve dolarapi.com (campo "casa")
 const dollarLabels: Record<string, string> = { bolsa: 'MEP', contadoconliqui: 'CCL', blue: 'Blue', oficial: 'Oficial', mayorista: 'Mayorista', cripto: 'Cripto', tarjeta: 'Tarjeta' };
 const dollarOrder = ['bolsa', 'contadoconliqui', 'blue', 'oficial', 'mayorista', 'cripto', 'tarjeta'];
 const titleFor = (kind: Kind) => kind === 'rate' ? 'Con tasa' : kind === 'cedear' ? 'CEDEAR' : 'Cripto';
+const categoryOf = (investment: Investment): Exclude<Filter, 'all'> => investment.kind === 'cedear' && ['SPY', 'QQQ'].includes(investment.coin?.toUpperCase() ?? '') ? 'index' : investment.kind;
 const localISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const dateMillis = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
 const money = (n: number, c: Currency) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(Number.isFinite(n) ? n : 0);
@@ -177,11 +179,11 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const gainPct = invested > 0 ? gain / invested * 100 : 0;
     const end = today + horizon * MONTH_MS;
     const projected = items.reduce((s, i) => s + fx(valueAt(i, end, prices, today, officialRate), i.currency), 0);
-    const filtered = items.filter(i => (filter === 'all' || i.kind === filter) && `${i.name} ${i.coin ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.date.localeCompare(a.date));
-    const allCount = (kind: Filter) => kind === 'all' ? items.length : items.filter(i => i.kind === kind).length;
+    const filtered = items.filter(i => (filter === 'all' || categoryOf(i) === filter) && `${i.name} ${i.coin ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.date.localeCompare(a.date));
+    const allCount = (kind: Filter) => kind === 'all' ? items.length : items.filter(i => categoryOf(i) === kind).length;
     const colorOf = (k: Filter) => kinds.find(v => v.id === k)!.color;
     const valueOf = (list: Investment[]) => list.reduce((s, i) => s + fx(valueAt(i, today, prices, today, officialRate), i.currency), 0);
-    const byKind = (['rate', 'cedear', 'crypto'] as const).map(k => ({ label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(items.filter(i => i.kind === k)) }));
+    const byKind = (['rate', 'cedear', 'index', 'crypto'] as const).map(k => ({ label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(items.filter(i => categoryOf(i) === k)) }));
     const byCurrency = [
         { label: 'Dólares (USD)', color: '#71caa0', value: valueOf(items.filter(i => i.currency === 'USD')) },
         { label: 'Pesos (ARS)', color: '#7f96ff', value: valueOf(items.filter(i => i.currency === 'ARS')) },
