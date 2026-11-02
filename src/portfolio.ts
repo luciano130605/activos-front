@@ -14,6 +14,18 @@ export type Investment = {
     units?: number;
 };
 
+export type Sale = { id: string; name: string; date: string; fraction: number; proceeds: number; currency: Currency; cost: number; costCurrency: Currency };
+export function cleanSale(raw: unknown): Sale | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const s = raw as Record<string, unknown>;
+    if (typeof s.id !== 'string' || !s.id.trim() || s.id.length > 128 || typeof s.name !== 'string' || !s.name.trim() || s.name.length > 70 || typeof s.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.date)) return null;
+    const date = new Date(`${s.date}T12:00:00Z`);
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== s.date) return null;
+    if (typeof s.fraction !== 'number' || !Number.isFinite(s.fraction) || s.fraction <= 0 || s.fraction > 1 || typeof s.proceeds !== 'number' || !Number.isFinite(s.proceeds) || s.proceeds <= 0 || typeof s.cost !== 'number' || !Number.isFinite(s.cost) || s.cost <= 0) return null;
+    if ((s.currency !== 'ARS' && s.currency !== 'USD') || (s.costCurrency !== 'ARS' && s.costCurrency !== 'USD')) return null;
+    return { id: s.id, name: s.name, date: s.date, fraction: s.fraction, proceeds: s.proceeds, cost: s.cost, currency: s.currency, costCurrency: s.costCurrency };
+}
+
 export type Preferences = {
     theme: 'dark' | 'light';
     dollar: string;
@@ -21,10 +33,12 @@ export type Preferences = {
     sidebarCollapsed: boolean;
     display: Currency;
     horizon: number;
+    panels?: string[];
 };
 
 export type Portfolio = {
     investments: Investment[];
+    sales?: Sale[];
     preferences: Preferences;
 };
 

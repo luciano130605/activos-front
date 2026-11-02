@@ -10,7 +10,7 @@ import TopBar from './TopBar';
 import Select from './Select';
 import QuoteSource from './QuoteSource';
 import { pages, usePage } from './navigation';
-import { cleanInvestment, readLegacyPortfolio, type Currency, type Investment, type Kind, type Period } from './portfolio';
+import { cleanInvestment, cleanSale, readLegacyPortfolio, type Currency, type Investment, type Kind, type Period, type Sale } from './portfolio';
 import { request, type Account, type Snapshot } from './account';
 import { usePortfolio } from './usePortfolio';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -107,7 +107,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const closeCtx = useCallback(() => setCtx(null), []);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
-    const [importPreview, setImportPreview] = useState<{ items: Investment[]; skipped: number } | null>(null);
+    const [importPreview, setImportPreview] = useState<{ items: Investment[]; sales: Sale[]; skipped: number } | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
     const [name, setName] = useState('');
     const [amount, setAmount] = useState('');
@@ -121,6 +121,33 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [quoteRequest, setQuoteRequest] = useState(0);
     const [currency, setCurrency] = useState<Currency>('USD');
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+    const [sellId, setSellId] = useState<string | null>(null);
+    const [sellPercent, setSellPercent] = useState('100');
+    const [sellCurrency, setSellCurrency] = useState<Currency>('ARS');
+    const [sellError, setSellError] = useState('');
+    const [panelEditor, setPanelEditor] = useState(false);
+    const [panels, setPanels] = preference('panels');
+    const visiblePanels = panels ?? ['value', 'evolution', 'distribution', 'investments', 'inflation'];
+    const [inflation, setInflation] = useState<{ fecha: string; valor: number } | null>(null);
+    useEffect(() => {
+        const controller = new AbortController();
+        async function load() {
+            try {
+                const key = 'activos:inflation-interannual';
+                let cached = null;
+                try { cached = JSON.parse(localStorage.getItem(key) ?? 'null'); } catch { /* Sin caché. */ }
+                if (cached && Date.now() - cached.savedAt < 3 * 60 * 60 * 1000 && typeof cached.data?.valor === 'number' && typeof cached.data?.fecha === 'string') { setInflation(cached.data); return; }
+                const response = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/inflacionInteranual', { signal: controller.signal });
+                if (!response.ok) throw new Error('Inflación no disponible');
+                const data: unknown = await response.json();
+                if (!Array.isArray(data)) throw new Error('Respuesta inválida');
+                const latest = data.filter(x => typeof x?.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha) && typeof x.valor === 'number' && Number.isFinite(x.valor) && x.valor > -100).sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+                if (latest && !controller.signal.aborted) { setInflation(latest); try { localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data: latest })); } catch { /* El navegador puede bloquear el almacenamiento. */ } }
+            } catch { /* Se informa la falta de datos en el panel. */ }
+        }
+        void load();
+        return () => controller.abort();
+    }, []);
     const today = Date.now();
     const fxRate = usdc?.price; // 1 USDC en pesos: referencia única de conversión
     const fxSource = usdc?.source === 'mep' ? 'DolarAPI · MEP (CoinGecko no respondió)' : 'CoinGecko · USDC/ARS';
@@ -258,6 +285,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             version: 2,
             exportedAt: new Date().toISOString(),
             investments: items,
+            sales: view.portfolio.sales ?? [],
             preferences: view.portfolio.preferences,
         };
 
@@ -310,8 +338,14 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 const inv = cleanInvestment(raw);
                 if (inv && !seen.has(inv.id)) { seen.add(inv.id); valid.push(inv); }
             }
-            if (!valid.length) { setNotice('El archivo no contiene inversiones válidas.'); return; }
-            setImportPreview({ items: valid, skipped: list.length - valid.length });
+            const sales: Sale[] = [];
+            const saleIds = new Set<string>();
+            if (Array.isArray(data?.sales)) for (const raw of data.sales.slice(0, 10000)) {
+                const sale = cleanSale(raw);
+                if (sale && !saleIds.has(sale.id)) { saleIds.add(sale.id); sales.push(sale); }
+            }
+            if (!valid.length && !sales.length) { setNotice('El archivo no contiene inversiones ni ventas válidas.'); return; }
+            setImportPreview({ items: valid, sales, skipped: list.length - valid.length + (Array.isArray(data?.sales) ? data.sales.length - sales.length : 0) });
         } catch {
             setNotice('No se pudo leer el archivo. Elegí un JSON exportado desde esta app (máx. 2 MB).');
         }
@@ -320,13 +354,16 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         if (!importPreview) return;
         const incoming = importPreview.items;
         if (mode === 'replace') {
-            setItems(incoming);
+            sync.update(current => ({ ...current, investments: incoming, sales: importPreview.sales }));
             setNotice(`Cartera reemplazada: ${incoming.length} inversiones importadas.`);
         } else {
             const ids = new Set(items.map(i => i.id));
             const fresh = incoming.filter(i => !ids.has(i.id));
             const dup = incoming.length - fresh.length;
-            setItems(prev => [...prev, ...fresh]);
+            sync.update(current => {
+                const saleIds = new Set((current.sales ?? []).map(sale => sale.id));
+                return { ...current, investments: [...current.investments, ...fresh], sales: [...(current.sales ?? []), ...importPreview.sales.filter(sale => !saleIds.has(sale.id))] };
+            });
             setNotice(`Se agregaron ${fresh.length} inversiones${dup ? ` (${dup} ya existían y se omitieron)` : ''}.`);
         }
         setImportPreview(null);
@@ -345,7 +382,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         if (!legacy) return;
         sync.update(current => {
             const ids = new Set(current.investments.map(item => item.id));
-            return { investments: [...current.investments, ...legacy.investments.filter(item => !ids.has(item.id))], preferences: current.investments.length ? current.preferences : legacy.preferences };
+            return { ...current, investments: [...current.investments, ...legacy.investments.filter(item => !ids.has(item.id))], preferences: current.investments.length ? current.preferences : legacy.preferences };
         });
         if (await sync.flush()) {
             try { localStorage.setItem('inversiones:migrated-to', account.user.id); } catch { /* El respaldo original permanece disponible. */ }
@@ -365,6 +402,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const summaryOf = (i: Investment) => { const v = valueAt(i, today, prices, today, officialRate); return `${i.name} · ${titleFor(i.kind)} · invertido ${money(i.amount, i.currency)} · hoy ${Number.isFinite(v) ? money(v, i.currency) : '—'} (${percent(i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0)})`; };
     const copySummary = async (i: Investment) => { try { await navigator.clipboard.writeText(summaryOf(i)); setNotice('Resumen copiado al portapapeles.'); } catch { setNotice('No se pudo copiar. Tu navegador bloqueó el portapapeles.'); } };
     const menuFor = (i: Investment): MenuItem[] => [
+        { label: 'Registrar venta', icon: Estimate01Icon, onSelect: () => { setSellId(i.id); setSellPercent('100'); setSellCurrency(i.currency); setSellError(''); } },
         { label: 'Editar', icon: Edit01Icon, onSelect: () => openEdit(i) },
         { label: 'Duplicar', icon: CopyPlusIcon, onSelect: () => duplicate(i) },
         { label: 'Copiar resumen', icon: Copy01Icon, onSelect: () => void copySummary(i) },
@@ -373,7 +411,29 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         { sep: true },
         { label: 'Eliminar', icon: Delete02Icon, danger: true, onSelect: () => setConfirmDelete(i.id) },
     ] as MenuItem[];
+    const sellItem = items.find(item => item.id === sellId);
+    const sellValue = sellItem ? valueAt(sellItem, today, prices, today, officialRate) : NaN;
+    const sellAvailable = !!sellItem && (sellItem.kind === 'rate' || !!(sellItem.coin && prices[`${sellItem.kind}:${sellItem.coin}`] != null)) && Number.isFinite(sellValue) && (sellItem.currency === sellCurrency || !!fxRate);
+    const sellAmount = sellItem && sellAvailable ? (sellItem.currency === sellCurrency ? sellValue : sellCurrency === 'ARS' ? sellValue * fxRate! : sellValue / fxRate!) * Number(sellPercent) / 100 : NaN;
+    function registerSale() {
+        if (!sellItem || !sellAvailable) return setSellError('No hay una cotización disponible para registrar la venta.');
+        const fraction = Number(sellPercent) / 100;
+        if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 1 || !Number.isFinite(sellAmount) || sellAmount <= 0) return setSellError('Ingresá un porcentaje mayor a 0 y hasta 100.');
+        const sale = { id: crypto.randomUUID(), name: sellItem.name, date: localISO(), fraction, proceeds: sellAmount, currency: sellCurrency, cost: sellItem.amount * fraction, costCurrency: sellItem.currency };
+        sync.update(current => ({ ...current, sales: [...(current.sales ?? []), sale], investments: current.investments.flatMap(item => item.id !== sellItem.id ? [item] : fraction === 1 ? [] : [{ ...item, amount: item.amount * (1 - fraction), ...(item.units == null ? {} : { units: item.units * (1 - fraction) }) }]) }));
+        setSellId(null); setNotice('Venta registrada. El importe no se suma como efectivo a la cartera.');
+    }
     const ctxItem = ctx ? items.find(i => i.id === ctx.id) : undefined;
+    // Solo tasas en pesos permiten calcular ambos extremos sin inventar precios históricos ni tipos de cambio.
+    const inflationEnd = inflation ? dateMillis(inflation.fecha) : NaN;
+    const inflationStartDate = inflation ? new Date(`${inflation.fecha}T00:00:00`) : null;
+    if (inflationStartDate) inflationStartDate.setFullYear(inflationStartDate.getFullYear() - 1);
+    const inflationStart = inflationStartDate?.getTime() ?? NaN;
+    const inflationItems = items.filter(i => i.kind === 'rate' && i.currency === 'ARS' && dateMillis(i.date) <= inflationStart);
+    const inflationBase = inflationItems.reduce((sum, i) => sum + valueAt(i, inflationStart, prices, today, officialRate), 0);
+    const inflationEndValue = inflationItems.reduce((sum, i) => sum + valueAt(i, inflationEnd, prices, today, officialRate), 0);
+    const inflationNominal = inflationBase > 0 ? (inflationEndValue / inflationBase - 1) * 100 : NaN;
+    const inflationReal = inflation && Number.isFinite(inflationNominal) ? ((1 + inflationNominal / 100) / (1 + inflation.valor / 100) - 1) * 100 : NaN;
     const bigParts = (v: number) => {
         if (hidden) return { cur: '', int: MASK, dec: '' };
         if (!Number.isFinite(v)) return { cur: '', int: '—', dec: '' };
@@ -395,7 +455,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, []);
-    const locked = !!assetSearch || leaving;
+    const locked = !!assetSearch || !!sellItem || leaving;
     return <div data-theme={theme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
@@ -421,7 +481,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} />}
 
-                <div hidden={page !== 'summary'}>
+                {page === 'summary' && <div className="mb-4"><button type="button" className="btn-ghost" onClick={() => setPanelEditor(!panelEditor)} aria-expanded={panelEditor}>Personalizar panel</button>{panelEditor && <div className="card mt-2 flex flex-wrap gap-4 p-4">{([['value', 'Valor y capital'], ['evolution', 'Evolución'], ['distribution', 'Distribución'], ['investments', 'Inversiones'], ['inflation', 'Inflación']] as const).map(([id, title]) => <label key={id} className="flex items-center gap-2 text-[12px]"><input type="checkbox" checked={visiblePanels.includes(id)} onChange={e => setPanels(e.target.checked ? [...visiblePanels, id] : visiblePanels.filter(x => x !== id))} />{title}</label>)}</div>}</div>}
+                <div hidden={page !== 'summary' || !visiblePanels.includes('value')}>
                     <section className="mb-3.5 grid gap-3.5 lg:grid-cols-[1.5fr_1fr]" aria-label="Valor de la cartera">
                         <article className="card hero-glow flex min-h-[360px] flex-col overflow-hidden p-6">
                             <div className="flex items-center justify-between"><span className="lb">01 — VALOR ACTUAL</span><span className="lb sig">● {priceError ? 'parcial' : 'en vivo'}</span></div>
@@ -463,7 +524,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     </section>
                 </div>
 
-                <div hidden={page !== 'summary' && page !== 'evolution'}>
+                <div hidden={page !== 'evolution' && (page !== 'summary' || !visiblePanels.includes('evolution'))}>
                     <section className="card mb-3.5 p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">04 — EVOLUCIÓN</p><p className="mu mt-2 text-[11.5px]">Estimada · no es un historial real de precios</p></div><div role="group" aria-label="Período de evolución" className="seg">{([['7d', '7D'], ['1m', '1M'], ['6m', '6M'], ['1a', '1A'], ['todo', 'Todo']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => setRange(id)} aria-pressed={range === id}>{text}</button>)}</div></div>
                         {chart ? <><div className="relative mt-7 touch-pan-y" role="slider" tabIndex={0} aria-label="Explorar evolución estimada con las flechas" aria-valuemin={0} aria-valuemax={chart.points.length - 1} aria-valuenow={chartIndex ?? chart.points.length - 1} aria-valuetext={chartPoint ? `${chartDate(chartPoint.t)}: ${fmt(chartPoint.value)}` : `Hoy: ${fmt(current)}`} onBlur={() => setChartIndex(null)} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setChartIndex(index => Math.max(0, Math.min(chart.points.length - 1, (index ?? chart.points.length - 1) + (event.key === 'ArrowRight' ? 1 : -1)))); } }} onPointerMove={event => { const rect = event.currentTarget.getBoundingClientRect(); const x = (event.clientX - rect.left) / rect.width * chart.w; setChartIndex(Math.max(0, Math.min(chart.points.length - 1, Math.round((x - 12) / (chart.w - 24) * (chart.points.length - 1))))); }} onPointerLeave={() => setChartIndex(null)}>
                             <svg viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" className="h-[230px] w-full overflow-visible" aria-hidden="true"><defs><linearGradient id="invest-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .24 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs>{[.25, .5, .75, 1].map(n => <line key={n} x1="12" x2={chart.w - 12} y1={chart.h * n - 5} y2={chart.h * n - 5} stroke="var(--line2)" strokeDasharray="4 6" />)}<path d={chart.area} fill="url(#invest-fill)" /><path d={chart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />{chartPoint ? <><line x1={chartPoint.x} x2={chartPoint.x} y1="4" y2={chart.h - 12} stroke="var(--muted)" strokeOpacity=".7" strokeDasharray="4 5" /><circle cx={chartPoint.x} cy={chartPoint.y} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" /></> : <circle cx={chart.nowX} cy={chart.nowY} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" />}</svg>
@@ -473,9 +534,10 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     </section>
                 </div>
 
-                <div hidden={page !== 'summary'}>{items.length > 0 && <Distribution byKind={byKind} byCurrency={byCurrency} format={fmt} />}</div>
+                {(page === 'evolution' || (page === 'summary' && visiblePanels.includes('inflation'))) && <section className="card mb-3.5 p-5 sm:p-6"><p className="lb">RENDIMIENTO E INFLACIÓN ARGENTINA</p>{inflation ? <><p className="mt-3 text-[22px] font-light">Inflación interanual: {inflation.valor.toFixed(2)}%</p><p className="mu mt-2 text-[12px]">Dato publicado para {formatDate(inflation.fecha)} · período de 12 meses.</p>{inflationItems.length > 0 ? <><p className="mt-4 text-[14px]">Rendimiento nominal: {percent(inflationNominal)} · ajustado por inflación: {percent(inflationReal)}</p><p className="mu mt-2 text-[11px]">Cálculo sobre {inflationItems.length} {inflationItems.length === 1 ? 'inversión con tasa en pesos que ya existía' : 'inversiones con tasa en pesos que ya existían'} al comienzo del período. Usa las tasas ingresadas y no incluye ventas, comisiones ni aportes posteriores.</p></> : <p className="mu mt-4 text-[12px]">Para calcular el rendimiento ajustado necesitás una inversión con tasa en pesos anterior al inicio del período. Cripto, CEDEARs y posiciones en dólares requieren precios o tipos de cambio históricos que no están disponibles en la cartera.</p>}<a className="mu mt-3 inline-block text-[11px] underline" href="https://argentinadatos.com/docs/operations/get-finanzas-indices-inflacion-interanual" target="_blank" rel="noopener noreferrer">Fuente: ArgentinaDatos · BCRA</a></> : <p className="mu mt-3 text-[12px]">No se pudo consultar la inflación.</p>}</section>}
+                <div hidden={page !== 'summary' || !visiblePanels.includes('distribution')}>{items.length > 0 && <Distribution byKind={byKind} byCurrency={byCurrency} format={fmt} />}</div>
 
-                <div hidden={page !== 'summary' && page !== 'investments'}>
+                <div hidden={page !== 'investments' && (page !== 'summary' || !visiblePanels.includes('investments'))}>
                     <section className="card overflow-hidden" aria-label="Mis inversiones">
                         <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">05 — MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Clic derecho o ⋯ en una fila para editar, duplicar o eliminar</p></div>
                             <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><button onClick={() => void refresh()} disabled={refreshing} title="Actualizar precios" aria-label="Actualizar precios" className="ibtn !h-[38px] !w-[38px] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div></div>
@@ -494,6 +556,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                         }) : <div className="flex flex-col items-center px-4 py-16 text-center"><div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--raised)]"><HugeiconsIcon icon={CoinsBitcoinIcon} size={21} className="text-[var(--muted)]" /></div><h3 className="text-[14px] font-medium">{items.length ? 'No hay inversiones con este filtro' : 'Tu cartera está vacía'}</h3><p className="mt-2 max-w-xs text-[12px] text-[var(--muted)]">{items.length ? 'Probá otra categoría o búsqueda.' : 'Empezá cargando una inversión o importá un archivo exportado.'}</p>{!items.length && <div className="mt-5 flex gap-2"><button onClick={openModal} className="btn-primary !min-h-10 !text-[13px]">Agregar inversión</button><button onClick={() => fileRef.current?.click()} className="btn-ghost">Importar datos</button></div>}</div>}</div>
                     </section>
                 </div>
+                {page === 'investments' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>{mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}</span></div>)}</div></section>}
                 <footer className="mu mt-8 space-y-2 text-[10px]">
                     <div className="flex flex-wrap items-center justify-between gap-2"><span>ACTIVOS / PANEL PERSONAL</span><span>Precios orientativos · No es asesoramiento financiero.</span></div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Fuentes de las cotizaciones"><QuoteSource source="usdc" label="USDC" /><QuoteSource source="dollar" label="Dólares" /><QuoteSource source="crypto" label="Cripto" /><QuoteSource source="cedear" label="CEDEARs e índices" /></div>
@@ -502,6 +565,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         </div>
         <button inert={locked} onClick={openModal} aria-label="Nueva inversión" className="fixed bottom-6 right-5 z-20 grid h-14 w-14 place-items-center rounded-full bg-[var(--ink)] text-[var(--bg)] shadow-[0_6px_24px_rgba(0,0,0,.38)] sm:hidden"><HugeiconsIcon icon={PlusIcon} size={24} /></button>
         {ctx && ctxItem && <ContextMenu x={ctx.x} y={ctx.y} title={ctxItem.name} items={menuFor(ctxItem)} onClose={closeCtx} />}
+        {sellItem && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setSellId(null); }}><section role="dialog" aria-modal="true" aria-label="Registrar venta" className="card w-full max-w-md p-6"><h2 className="text-xl">Registrar venta</h2><p className="mu mt-2">{sellItem.name} · valor estimado actual {sellAvailable ? mny(sellValue, sellItem.currency) : 'no disponible'}</p><label className={`${label} mt-5`}>Porcentaje a vender<input className={`${field} mt-1`} type="number" min="0.01" max="100" step="any" value={sellPercent} onChange={e => setSellPercent(e.target.value)} /></label><label className={`${label} mt-4`}>Moneda de la venta<select className={`${field} mt-1`} value={sellCurrency} onChange={e => setSellCurrency(e.target.value as Currency)}><option value="ARS">Pesos argentinos (ARS)</option><option value="USD">Dólares (USD)</option></select></label><p className="mt-4 text-[14px]">Importe estimado: {sellAvailable && Number.isFinite(sellAmount) ? mny(sellAmount, sellCurrency) : 'No disponible'}</p><p className="mu mt-2 text-[11px]">Se usa la última cotización disponible y USDC para convertir monedas. No incluye comisiones ni ejecuta una orden en tu broker.</p>{sellError && <p role="alert" className="mt-3 text-[var(--neg)]">{sellError}</p>}<div className="mt-5 flex gap-3"><button className="btn-primary" onClick={registerSale}>Registrar venta</button><button className="btn-ghost" onClick={() => setSellId(null)}>Cancelar</button></div></section></div>}
         {modal && <div inert={!!assetSearch} className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 backdrop-blur-[5px] sm:items-center sm:p-4" onMouseDown={e => { if (e.target === e.currentTarget) closeModal() }}>
             <div role="dialog" aria-modal="true" aria-labelledby="modal-title" className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[22px] border border-[var(--line2)] bg-[var(--surface)] p-5 shadow-[0_25px_90px_rgba(0,0,0,.5)] sm:max-w-[470px] sm:rounded-[22px] sm:p-6">
                 <div className="mb-5 flex items-start justify-between"><div><h2 id="modal-title" className="text-[24px] font-light tracking-tight">{editingId ? 'Editar inversión' : 'Nueva inversión'}</h2><p className="mt-1 font-mono text-[11px] text-[var(--muted)]">{editingId ? 'Modificá los datos de esta posición' : 'Registrá una posición en tu cartera'}</p></div><button onClick={closeModal} aria-label="Cerrar" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={XIcon} size={19} /></button></div>
