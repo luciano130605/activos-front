@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { DarkModeFreeIcons, Download02Icon, LogoutCircle01Icon, MenuTwoLineIcon, MoreHorizontalIcon, Search01Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon } from '@hugeicons/core-free-icons';
+import { DarkModeFreeIcons, DashboardCircleIcon, Download02Icon, LogoutCircle01Icon, MenuTwoLineIcon, MoreHorizontalIcon, Search01Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon } from '@hugeicons/core-free-icons';
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
 import PageIcon from './PageIcon';
@@ -11,6 +11,7 @@ type Props = {
     page: PageId; count: number; theme: 'light' | 'dark'; onTheme: () => void; hidden: boolean; onHidden: () => void;
     display: Currency; onDisplay: (c: Currency) => void; onSearch: () => void; onExport: () => void; onImport: () => void;
     email: string; syncLabel: string; onLogout: () => void; leaving: boolean;
+    onCustomize: () => void;
 };
 
 function ThemeIcon({ size = 18 }: { size?: number }) {
@@ -59,6 +60,7 @@ export default function TopBar(p: Props) {
         </div>
         {menu && <ContextMenu x={menu.x} y={menu.y} title={`${p.email} · ${p.syncLabel}`} onClose={() => setMenu(null)} items={[
             { label: 'Buscar activos', icon: Search01Icon, onSelect: p.onSearch, hint: '/' },
+            { label: 'Personalizar panel', icon: DashboardCircleIcon, onSelect: p.onCustomize },
             { label: 'Exportar datos', icon: Download02Icon, onSelect: p.onExport },
             { label: 'Importar datos', icon: Upload06Icon, onSelect: p.onImport },
             { sep: true },
