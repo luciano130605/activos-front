@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { CalculateIcon, ChartLineData01Icon, CoinsBitcoinIcon, DarkModeFreeIcons, DashboardCircleIcon, Download02Icon, LogoutCircle01Icon, PanelLeftCloseFreeIcons, PanelLeftOpenIcon, Search01Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, XIcon } from '@hugeicons/core-free-icons';
+import { DarkModeFreeIcons, Download02Icon, LogoutCircle01Icon, PanelLeftCloseFreeIcons, PanelLeftOpenIcon, Search01Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, XIcon } from '@hugeicons/core-free-icons';
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
+import PageIcon from './PageIcon';
 
 type Filter = 'all' | 'rate' | 'cedear' | 'index' | 'crypto';
 type Props = {
@@ -46,13 +47,6 @@ export default function Sidebar(props: Props) {
     const labelClass = `block overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-[280ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none ${compact ? 'max-w-0 opacity-0' : 'max-w-[210px] opacity-100'}`;
     const countClass = `ml-auto overflow-hidden font-mono text-[11px] text-[var(--faint)] transition-[max-width,opacity] duration-[280ms] motion-reduce:transition-none ${compact ? 'max-w-0 opacity-0' : 'max-w-12 opacity-100'}`;
     const itemClass = (active = false) => `flex min-h-[41px] w-full items-center rounded-[10px] border px-3 py-2.5 text-left text-[13px] no-underline transition-[color,background-color,gap] duration-[280ms] hover:bg-[var(--raised)] hover:text-[var(--ink)] motion-reduce:transition-none ${focusClass} ${compact ? 'gap-0' : 'gap-2.5'} ${active ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]' : 'border-transparent text-[var(--muted)]'}`;
-    const icons: Record<PageId, ReactNode> = {
-        summary: <HugeiconsIcon icon={DashboardCircleIcon} size={18} fill={page === 'summary' ? 'currentColor' : 'none'} />,
-        evolution: <HugeiconsIcon icon={ChartLineData01Icon} size={18} fill={page === 'evolution' ? 'none' : 'none'} />,
-
-        investments: <HugeiconsIcon icon={CoinsBitcoinIcon} size={18} strokeWidth={1.6} fill={page === 'investments' ? 'none' : 'none'} />,
-        dividends: <HugeiconsIcon icon={CalculateIcon} size={18} />,
-    };
 
     useEffect(() => {
         if (!mobile) return;
@@ -100,7 +94,7 @@ export default function Sidebar(props: Props) {
             <nav className="space-y-1" aria-label="Navegación principal">
                 {(Object.keys(pages) as PageId[]).map(id => <PageLink key={id} page={id} className={itemClass(page === id)} aria-current={page === id ? 'page' : undefined} aria-label={pages[id].label} title={pages[id].label}
                     onClick={() => { if (id === 'summary' || id === 'investments') onFilter('all'); onClose(); }}>
-                    <span className={iconClass}>{icons[id]}</span><span className={`${labelClass} flex-1`}>{pages[id].label}</span>
+                    <span className={iconClass}><PageIcon page={id} /></span><span className={`${labelClass} flex-1`}>{pages[id].label}</span>
                     {(id === 'summary' || id === 'investments') && <span className={countClass}>{count('all')}</span>}
                 </PageLink>)}
             </nav>
