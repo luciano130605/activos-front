@@ -3,7 +3,7 @@ import type { Investment, Sale } from './portfolio';
 
 type Point = { date: string; value: number };
 type Series = Record<string, Point[]>;
-type Historical = { uva: Point[]; fx: Point[]; assets: Series; errors: string[] };
+type Historical = { uva: Point[]; interannual: Point[]; fx: Point[]; assets: Series; errors: string[] };
 const day = 86400000;
 const ms = (s: string) => Date.parse(`${s}T12:00:00Z`);
 const date = (t: number) => new Date(t).toISOString().slice(0, 10);
@@ -30,11 +30,15 @@ async function json(url: string, signal: AbortSignal) {
 }
 async function historical(items: Investment[], signal: AbortSignal): Promise<Historical> {
     const ids = [...new Set(items.filter(i => i.kind !== 'rate' && i.coin).map(i => `${i.kind}:${i.coin}`))];
-    const result: Historical = { uva: [], fx: [], assets: {}, errors: [] };
+    const result: Historical = { uva: [], interannual: [], fx: [], assets: {}, errors: [] };
     const tasks: Promise<void>[] = [json('https://api.argentinadatos.com/v1/finanzas/indices/uva', signal).then(data => {
         if (!Array.isArray(data)) throw Error(); result.uva = normalize(data.map(x => ({ date: x.fecha?.slice(0, 10), value: x.valor })));
         if (!result.uva.length) throw Error();
     }).catch(() => { result.errors.push('índice UVA'); })];
+    tasks.push(json('https://api.argentinadatos.com/v1/finanzas/indices/inflacionInteranual', signal).then(data => {
+        if (!Array.isArray(data)) throw Error();
+        result.interannual = data.filter(x => typeof x?.fecha === 'string' && typeof x.valor === 'number' && Number.isFinite(x.valor) && x.valor > -100).map(x => ({ date: x.fecha.slice(0, 10), value: x.valor })).sort((a, b) => a.date.localeCompare(b.date));
+    }).catch(() => { /* La UVA sigue siendo suficiente si está disponible. */ }));
     if (items.some(i => i.kind === 'crypto' || (i.kind === 'rate' && i.currency === 'USD'))) tasks.push(json('https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa', signal).then(data => {
         if (!Array.isArray(data)) throw Error(); result.fx = normalize(data.map(x => ({ date: x.fecha?.slice(0, 10), value: x.venta })));
         if (!result.fx.length) throw Error();
@@ -71,37 +75,57 @@ export default function Inflation({ items, sales, prices, fxRate, hidden }: { it
         return sum + (price == null || !i.units ? NaN : i.units * price * (i.kind === 'crypto' ? (fxRate ?? NaN) : 1));
     }, 0);
     const chart = useMemo(() => {
-        if (!data || !data.uva.length || !items.length || data.errors.length) return null;
+        if (!data || !items.length) return null;
         const today = date(Date.now());
-        const end = [...data.uva].reverse().find(p => p.date <= today)?.date;
-        if (!end) return null;
+        const lastUva = [...data.uva].reverse().find(p => p.date <= today);
+        const annual = [...data.interannual].reverse().find(p => p.date <= today);
+        if (!lastUva && !annual) return null;
+        const end = lastUva?.date ?? today;
         const endTime = ms(end);
         const startTime = endTime - (range === 'day' ? 1 : range === 'month' ? 30 : 365) * day;
         const start = date(startTime);
-        if (items.some(i => i.date > start) || sales.some(s => s.date >= start && s.date <= end)) return null;
         const count = range === 'month' ? 31 : 74;
         const dates = range === 'day' ? [start, end] : Array.from({ length: count }, (_, i) => date(startTime + (endTime - startTime) * i / (count - 1)));
+        const reasons = new Set<string>();
+        if (items.some(i => i.date > start)) reasons.add('Las compras posteriores al inicio se tratan como si las posiciones actuales hubieran estado en cartera durante todo el período.');
+        if (sales.some(s => s.date >= start && s.date <= end)) reasons.add('Las ventas no se reconstruyen: se compara la composición actual.');
+        const uvaBase = at(data.uva, start);
+        const useUva = !!uvaBase && dates.every(d => at(data.uva, d) != null);
+        if (!useUva && !annual) return null;
+        if (!useUva) reasons.add('Se estima la inflación diaria a partir de la última tasa interanual disponible, suponiendo un ritmo constante.');
         const values = dates.map(d => {
-            const uva = at(data.uva, d); const dollar = at(data.fx, d);
+            let dollar = at(data.fx, d);
+            if (!dollar && fxRate) { dollar = fxRate; if (items.some(i => i.kind === 'crypto' || (i.kind === 'rate' && i.currency === 'USD'))) reasons.add('Para fechas sin dólar MEP histórico se usa la cotización actual de USDC.'); }
             const total = items.reduce((sum, i) => {
                 if (i.kind === 'rate') { const r = (i.rate ?? 0) / 100; const monthly = i.period === 'month' ? r : Math.pow(1 + r, 1 / 12) - 1; return sum + i.amount * Math.pow(1 + monthly, (ms(d) - ms(i.date)) / (day * 30.4375)) * (i.currency === 'USD' ? (dollar ?? NaN) : 1); }
                 const price = at(data.assets[`${i.kind}:${i.coin}`] ?? [], d);
-                return sum + (i.units ?? NaN) * (price ?? NaN) * (i.kind === 'crypto' ? (dollar ?? NaN) : 1);
+                if (price != null) return sum + (i.units ?? NaN) * price * (i.kind === 'crypto' ? (dollar ?? NaN) : 1);
+                // Sin cotización histórica se interpola entre el costo de compra y el valor actual.
+                const purchaseFx = at(data.fx, i.date) ?? fxRate;
+                const purchase = i.amount * (i.currency === 'USD' ? (purchaseFx ?? NaN) : 1);
+                const live = prices[`${i.kind}:${i.coin}`];
+                const currentValue = live != null && i.units ? i.units * live * (i.kind === 'crypto' ? (fxRate ?? NaN) : 1) : purchase;
+                if (i.currency === 'USD' && !at(data.fx, i.date) && fxRate) reasons.add('Los costos en dólares sin cambio histórico usan la cotización actual de USDC.');
+                if (live == null) reasons.add('Las posiciones sin precio actual ni histórico se estiman usando su costo de compra.');
+                reasons.add('Los precios históricos faltantes se aproximan entre el costo de compra y el precio actual; antes de la compra se usa el costo.');
+                const k = Math.max(0, Math.min(1, (ms(d) - ms(i.date)) / Math.max(day, Date.now() - ms(i.date))));
+                return sum + purchase + (currentValue - purchase) * k;
             }, 0);
-            return { date: d, total, uva };
+            const inflation = useUva ? (at(data.uva, d)! / uvaBase! - 1) * 100 : (Math.pow(1 + annual!.value / 100, (ms(d) - startTime) / (365 * day)) - 1) * 100;
+            return { date: d, total, inflation };
         });
         const base = values[0];
-        if (!base.uva || !Number.isFinite(base.total) || base.total <= 0 || values.some(v => !v.uva || !Number.isFinite(v.total))) return null;
-        const points = values.map(v => ({ date: v.date, portfolio: (v.total / base.total - 1) * 100, inflation: (v.uva! / base.uva! - 1) * 100 }));
+        if (!Number.isFinite(base.total) || base.total <= 0 || values.some(v => !Number.isFinite(v.total) || !Number.isFinite(v.inflation))) return null;
+        const points = values.map(v => ({ date: v.date, portfolio: (v.total / base.total - 1) * 100, inflation: v.inflation }));
         const min = Math.min(0, ...points.flatMap(p => [p.portfolio, p.inflation])); const max = Math.max(0, ...points.flatMap(p => [p.portfolio, p.inflation]));
         const y = (v: number) => 210 - (v - min) / (max - min || 1) * 185;
         const path = (key: 'portfolio' | 'inflation') => points.map((p, i) => `${i ? 'L' : 'M'} ${(12 + i / (points.length - 1) * 826).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
-        return { start, end, points, portfolio: path('portfolio'), inflation: path('inflation'), last: points[points.length - 1] };
-    }, [data, items, sales, range]);
+        return { start, end, points, portfolio: path('portfolio'), inflation: path('inflation'), last: points[points.length - 1], reasons: [...reasons], useUva };
+    }, [data, items, sales, range, prices, fxRate]);
     return <div className="space-y-3.5">
         <section className="card p-6"><p className="lb">TU CARTERA EN PESOS · VALOR ACTUAL</p><p className="mt-4 text-[clamp(1.8rem,4vw,3rem)] font-light">{hidden ? '****' : items.length && Number.isFinite(current) ? money(current) : items.length ? 'No disponible' : money(0)}</p><p className="mu mt-2 text-[12px]">Cripto y posiciones en dólares convertidas al valor actual de USDC en pesos.</p></section>
         <section className="card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">CARTERA VS. INFLACIÓN</p><p className="mu mt-2 text-[12px]">Variación porcentual desde el mismo punto de partida</p></div><div className="seg" role="group" aria-label="Período">{([['day','Diario'],['month','Mensual'],['year','Anual']] as const).map(([id, label]) => <button key={id} type="button" aria-pressed={range === id} onClick={() => setRange(id)}>{label}</button>)}</div></div>
-        {loading ? <p className="mu py-20 text-center">Consultando datos históricos…</p> : chart ? <><div className="mt-6 flex flex-wrap gap-4 text-[13px]"><span style={{color:'var(--sig)'}}>● Cartera {pct(chart.last.portfolio)}</span><span style={{color:'var(--c-cedear)'}}>● UVA {pct(chart.last.inflation)}</span><strong>{chart.last.portfolio >= chart.last.inflation ? 'Por encima de la referencia' : 'Por debajo de la referencia'}</strong></div><svg className="mt-6 h-[230px] w-full" viewBox="0 0 850 230" preserveAspectRatio="none" role="img" aria-label={`Cartera ${pct(chart.last.portfolio)}, UVA ${pct(chart.last.inflation)}`}><line x1="12" x2="838" y1="210" y2="210" stroke="var(--line2)"/><path d={chart.portfolio} fill="none" stroke="var(--sig)" strokeWidth="2.5" vectorEffect="non-scaling-stroke"/><path d={chart.inflation} fill="none" stroke="var(--c-cedear)" strokeWidth="2.5" strokeDasharray="6 4" vectorEffect="non-scaling-stroke"/></svg><div className="mu flex justify-between text-[11px]"><span>{fmtDate(chart.start)}</span><span>{fmtDate(chart.end)}</span></div><p className="mu mt-4 text-[12px]">Rendimiento ajustado por UVA: {pct(((1 + chart.last.portfolio / 100) / (1 + chart.last.inflation / 100) - 1) * 100)}.</p></> : <div className="mu py-12 text-center text-[13px]">{!items.length ? 'Agregá inversiones para comparar tu cartera.' : data?.errors.length ? `No se pudieron obtener datos históricos: ${data.errors.join(', ')}.` : 'No hay datos suficientes para comparar toda la cartera en este período. Puede haber posiciones compradas durante el período, ventas registradas o cotizaciones históricas faltantes.'}<br/><button type="button" onClick={() => setRetry(x => x + 1)} className="mt-3 underline">Reintentar</button></div>}
-        <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[11px] leading-5">La UVA es una referencia diaria que sigue al CER; no es inflación diaria oficial. Se compara la composición actual durante todo el período, sin aportes ni ventas. Precios históricos de CEDEARs: Data912; cripto: CoinGecko; conversión histórica: dólar MEP venta. La valuación actual usa USDC, por lo que puede diferir. Días sin cotización usan el último dato disponible hasta 7 días antes.</p><a className="mu mt-2 inline-block text-[11px] underline" href="https://argentinadatos.com/docs/operations/get-finanzas-indices-uva" target="_blank" rel="noopener noreferrer">Fuente UVA y dólar: ArgentinaDatos · BCRA / DolarApi</a></section>
+        {loading ? <p className="mu py-20 text-center">Consultando datos históricos…</p> : chart ? <><>{chart.reasons.length > 0 && <div role="status" className="mt-5 rounded-xl border border-[var(--line2)] bg-[var(--raised)] p-4 text-[12px]"><strong>Comparación aproximada</strong><ul className="mu mt-2 list-disc space-y-1 pl-4">{chart.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul></div>}<div className="mt-6 flex flex-wrap gap-4 text-[13px]"><span style={{color:'var(--sig)'}}>● Cartera {pct(chart.last.portfolio)}</span><span style={{color:'var(--c-cedear)'}}>● {chart.useUva ? 'UVA' : 'Inflación estimada'} {pct(chart.last.inflation)}</span><strong>{chart.last.portfolio >= chart.last.inflation ? 'Por encima de la referencia' : 'Por debajo de la referencia'}</strong></div><svg className="mt-6 h-[230px] w-full" viewBox="0 0 850 230" preserveAspectRatio="none" role="img" aria-label={`Cartera ${pct(chart.last.portfolio)}, ${chart.useUva ? 'UVA' : 'inflación estimada'} ${pct(chart.last.inflation)}`}><line x1="12" x2="838" y1="210" y2="210" stroke="var(--line2)"/><path d={chart.portfolio} fill="none" stroke="var(--sig)" strokeWidth="2.5" vectorEffect="non-scaling-stroke"/><path d={chart.inflation} fill="none" stroke="var(--c-cedear)" strokeWidth="2.5" strokeDasharray="6 4" vectorEffect="non-scaling-stroke"/></svg><div className="mu flex justify-between text-[11px]"><span>{fmtDate(chart.start)}</span><span>{fmtDate(chart.end)}</span></div><p className="mu mt-4 text-[12px]">Rendimiento ajustado {chart.useUva ? 'por UVA' : 'por inflación estimada'}: {pct(((1 + chart.last.portfolio / 100) / (1 + chart.last.inflation / 100) - 1) * 100)}.</p></></> : <div className="mu py-12 text-center text-[13px]">{!items.length ? 'Agregá inversiones para comparar tu cartera.' : data?.errors.length ? `No se pudieron obtener datos históricos: ${data.errors.join(', ')}.` : 'No se puede construir una aproximación: faltan cotizaciones para convertir la cartera a pesos o una referencia de inflación.'}<br/><button type="button" onClick={() => setRetry(x => x + 1)} className="mt-3 underline">Reintentar</button></div>}
+        <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[11px] leading-5">La UVA es una referencia diaria que sigue al CER; no es inflación diaria oficial. Se compara la composición actual durante todo el período, sin reconstruir aportes ni ventas. Precios históricos de CEDEARs: Data912; cripto: CoinGecko; conversión histórica: dólar MEP venta. La valuación actual usa USDC, por lo que puede diferir. Días sin cotización usan el último dato disponible hasta 7 días antes.</p><a className="mu mt-2 inline-block text-[11px] underline" href="https://argentinadatos.com/docs/operations/get-finanzas-indices-uva" target="_blank" rel="noopener noreferrer">Fuente UVA y dólar: ArgentinaDatos · BCRA / DolarApi</a> · <a className="mu text-[11px] underline" href="https://argentinadatos.com/docs/operations/get-finanzas-indices-inflacion-interanual" target="_blank" rel="noopener noreferrer">Inflación interanual: ArgentinaDatos · BCRA</a></section>
     </div>;
 }
