@@ -14,7 +14,7 @@ import { cleanInvestment, readLegacyPortfolio, type Currency, type Investment, t
 import { request, type Account, type Snapshot } from './account';
 import { usePortfolio } from './usePortfolio';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Bitcoin, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Delete02Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderPinwheelIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, XIcon } from '@hugeicons/core-free-icons';
+import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderPinwheelIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, XIcon } from '@hugeicons/core-free-icons';
 type Filter = 'all' | Kind | 'index';
 type AssetQuote = { id: string; date: string; kind: 'crypto' | 'cedear' } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
 type DollarRate = { nombre: string; compra: number | null; venta: number };
@@ -365,8 +365,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const summaryOf = (i: Investment) => { const v = valueAt(i, today, prices, today, officialRate); return `${i.name} · ${titleFor(i.kind)} · invertido ${money(i.amount, i.currency)} · hoy ${Number.isFinite(v) ? money(v, i.currency) : '—'} (${percent(i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0)})`; };
     const copySummary = async (i: Investment) => { try { await navigator.clipboard.writeText(summaryOf(i)); setNotice('Resumen copiado al portapapeles.'); } catch { setNotice('No se pudo copiar. Tu navegador bloqueó el portapapeles.'); } };
     const menuFor = (i: Investment): MenuItem[] => [
-        { label: 'Editar', icon: Edit02Icon, onSelect: () => openEdit(i) },
-        { label: 'Duplicar', icon: Copy01Icon, onSelect: () => duplicate(i) },
+        { label: 'Editar', icon: Edit01Icon, onSelect: () => openEdit(i) },
+        { label: 'Duplicar', icon: CopyPlusIcon, onSelect: () => duplicate(i) },
         { label: 'Copiar resumen', icon: Copy01Icon, onSelect: () => void copySummary(i) },
         ...(i.kind === 'crypto' && i.coin ? [{ label: 'Ver en CoinGecko', icon: LinkSquare02Icon, href: `https://www.coingecko.com/en/coins/${encodeURIComponent(i.coin)}` }] : []),
         ...(i.kind === 'cedear' && i.coin ? [{ label: 'Ver dividendos', icon: Estimate01Icon, onSelect: () => goTo('/dividendos') }, { label: 'Ver en Data912', icon: LinkSquare02Icon, href: `https://data912.com/historical/cedears/${encodeURIComponent(i.coin)}` }] : []),
@@ -426,7 +426,14 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                         <article className="card hero-glow flex min-h-[360px] flex-col overflow-hidden p-6">
                             <div className="flex items-center justify-between"><span className="lb">01 — VALOR ACTUAL</span><span className="lb sig">● {priceError ? 'parcial' : 'en vivo'}</span></div>
                             <p className="big mt-6" aria-label={hidden ? 'Monto oculto' : undefined}>{big.cur && <span className="cur">{big.cur}</span>}{big.int}{big.dec && <span className="dec">{big.dec}</span>}</p>
-                            <div className="mt-4 flex flex-wrap items-center gap-3"><span className={`pill ${gain >= 0 ? '' : 'neg'}`}>{gain >= 0 ? '▲' : '▼'} {Number.isFinite(gainPct) ? percent(gainPct) : '—'}</span><span className="mu">{fmt(gain)} respecto al capital aportado</span></div>
+                            <div className="mt-4 flex flex-wrap items-center gap-3"><span className={`pill ${gain >= 0 ? '' : 'neg'}`}>
+                                <HugeiconsIcon
+                                    icon={gain >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon}
+                                    size={16}
+                                    color={gain >= 0 ? "#22c55e" : "#ef4444"}
+                                    strokeWidth={2}
+                                />{gain >= 0 ? '▲' : '▼'}
+                                {Number.isFinite(gainPct) ? percent(gainPct) : '—'}</span><span className="mu">{fmt(gain)} respecto al capital aportado</span></div>
                             {slicesForBar.length > 0 && <div className="mt-7"><div className="dm" role="img" aria-label={`Distribución: ${slicesForBar.map(k => `${k.label} ${(k.value / slicesTotal * 100).toFixed(0)}%`).join(', ')}`}>{slicesForBar.map(k => <i key={k.label} style={{ ['--c' as string]: k.color, flex: k.value }} />)}</div><div className="lg mt-3">{slicesForBar.map(k => <span key={k.label} style={{ ['--c' as string]: k.color }}>{k.label} {(k.value / slicesTotal * 100).toFixed(0)}%</span>)}</div></div>}
                             {chart && <svg className="mt-auto -mx-6 -mb-6 block h-[100px] w-[calc(100%+3rem)] pt-4" viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .28 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs><path d={chart.area} fill="url(#hero-fill)" /><path d={chart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>}
                         </article>
@@ -440,7 +447,15 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             <article className="card side-glow p-6">
                                 <div className="flex items-center justify-between"><p className="lb">03 — REFERENCIA USDC</p><button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Actualizar cotizaciones" title="Actualizar" className="text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div>
                                 <p className="mt-3 text-[clamp(1.6rem,3vw,2.2rem)] font-light leading-none tracking-tight tabular-nums">{fxRate ? money(fxRate, 'ARS') : 'No disponible'}</p>
-                                <p className="mu mt-2 text-[11px]">1 USDC en pesos · convierte USD ⇄ ARS en toda la app</p>
+                                <p className="mu mt-2 flex items-center gap-1 text-[11px]">
+                                    1 USDC en pesos · convierte USD
+                                    <HugeiconsIcon
+                                        icon={ArrowReloadHorizontalIcon}
+                                        size={13}
+                                        className="inline-block"
+                                    />
+                                    ARS en toda la app
+                                </p>
                                 {compare.length > 0 && <div className="mt-4 divide-y divide-[var(--line)] border-t border-[var(--line)]">{compare.map(k => { const gap = fxRate ? (fxRate / rates[k].venta - 1) * 100 : NaN; return <div key={k} className="flex items-center justify-between py-2 font-mono text-[12px]"><span className="text-[var(--muted)]">{dollarLabels[k]}</span><span className="tabular-nums">{money(rates[k].venta, 'ARS')}</span><span className={`pill ${gap >= 0 || !Number.isFinite(gap) ? '' : 'neg'}`} title={`USDC ${Number.isFinite(gap) ? percent(gap) : '—'} respecto al dólar ${dollarLabels[k]}`}>{Number.isFinite(gap) ? percent(gap) : '—'}</span></div>; })}</div>}
                                 <div className="mt-3 space-y-1"><p className="mu text-[10.5px]">Precio de USDC: <a href="https://www.coingecko.com/en/coins/usd-coin" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--ink)]">{usdc ? fxSource : 'CoinGecko'}</a></p><QuoteSource source="dollar" label="Dólares comparados" /></div>
                             </article>
@@ -466,7 +481,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><button onClick={() => void refresh()} disabled={refreshing} title="Actualizar precios" aria-label="Actualizar precios" className="ibtn !h-[38px] !w-[38px] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div></div>
                         <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
                         <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
-                        <div className="mt-3">{filtered.length ? filtered.map(i => { const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : `Cripto · ${i.coin}`;
+                        <div className="mt-3">{filtered.length ? filtered.map(i => {
+                            const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : `Cripto · ${i.coin}`;
                             return <div key={i.id} className={`li ${ctx?.id === i.id ? 'menu-open' : ''}`} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
                                 <div className="tk" style={{ ['--c' as string]: colorOf(cat) }} aria-hidden="true">{tickerOf(i)}</div>
                                 <div className="min-w-0"><p className="truncate text-[14px] font-medium">{i.name}</p><p className="mu mt-1 truncate text-[11.5px]">{sub} <span className="hidden sm:inline">· {formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">Sin precio · se muestra el monto original</p>}</div>
@@ -474,7 +490,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                 <div className="r hid"><p>{mny(v, i.currency)}</p><div className="mt-1 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada por vos</span> : <QuoteSource source={i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
                                 <div className="r"><span className={`pill ${change >= 0 ? '' : 'neg'}`}>{missing ? '—' : percent(change)}</span><p className="mu mt-1 text-[10px] sm:hidden">{mny(v, i.currency)}</p></div>
                                 <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setCtx(ctx?.id === i.id ? null : { x: r.right - 220, y: r.bottom + 6, id: i.id }); }} aria-haspopup="menu" aria-expanded={ctx?.id === i.id} aria-label={`Acciones de ${i.name}`} className="ibtn !h-9 !w-9 !border-transparent !bg-transparent"><HugeiconsIcon icon={MoreHorizontalIcon} size={17} /></button>
-                            </div>; }) : <div className="flex flex-col items-center px-4 py-16 text-center"><div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--raised)]"><HugeiconsIcon icon={CoinsBitcoinIcon} size={21} className="text-[var(--muted)]" /></div><h3 className="text-[14px] font-medium">{items.length ? 'No hay inversiones con este filtro' : 'Tu cartera está vacía'}</h3><p className="mt-2 max-w-xs text-[12px] text-[var(--muted)]">{items.length ? 'Probá otra categoría o búsqueda.' : 'Empezá cargando una inversión o importá un archivo exportado.'}</p>{!items.length && <div className="mt-5 flex gap-2"><button onClick={openModal} className="btn-primary !min-h-10 !text-[13px]">Agregar inversión</button><button onClick={() => fileRef.current?.click()} className="btn-ghost">Importar datos</button></div>}</div>}</div>
+                            </div>;
+                        }) : <div className="flex flex-col items-center px-4 py-16 text-center"><div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--raised)]"><HugeiconsIcon icon={CoinsBitcoinIcon} size={21} className="text-[var(--muted)]" /></div><h3 className="text-[14px] font-medium">{items.length ? 'No hay inversiones con este filtro' : 'Tu cartera está vacía'}</h3><p className="mt-2 max-w-xs text-[12px] text-[var(--muted)]">{items.length ? 'Probá otra categoría o búsqueda.' : 'Empezá cargando una inversión o importá un archivo exportado.'}</p>{!items.length && <div className="mt-5 flex gap-2"><button onClick={openModal} className="btn-primary !min-h-10 !text-[13px]">Agregar inversión</button><button onClick={() => fileRef.current?.click()} className="btn-ghost">Importar datos</button></div>}</div>}</div>
                     </section>
                 </div>
                 <footer className="mu mt-8 space-y-2 text-[10px]">
