@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react';
 import { request, type Account } from './account';
-import { Logo } from './TopBar';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { EyeClosedFreeIcons, LoaderPinwheel, LoaderPinwheelIcon, ViewIcon } from '@hugeicons/core-free-icons';
 
@@ -37,7 +36,7 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
     const pinInput = `${input} font-mono text-[18px] tracking-[.35em]`;
     return <main data-theme="dark" className="app grid min-h-dvh place-items-center px-5 py-12">
         <div className="w-full max-w-[430px]">
-            <div className="brand mb-9"><Logo size={30} />activos<span className="sig">.</span></div>
+            <div className="brand mb-9"><img src='/icon.png' alt="Activos Logo" className="brand-logo" />activos<span className="sig">.</span></div>
             <section className="card hero-glow p-7 shadow-2xl sm:p-9">
                 <p className="lb mb-3">TU CARTERA PERSONAL</p>
                 <h1 className="text-[34px] font-light leading-[1.05] tracking-[-.045em]">{mode === 'register' ? 'Crear cuenta' : fixedEmail ? 'Volvé a ingresar' : 'Bienvenido de nuevo'}<span className="sig">.</span></h1>
