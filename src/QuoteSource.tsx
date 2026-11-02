@@ -1,6 +1,7 @@
 
 const sources = {
     dollar: { name: 'DolarAPI', url: 'https://dolarapi.com/v1/dolares' },
+    usdc: { name: 'CoinGecko · USDC/ARS', url: 'https://www.coingecko.com/en/coins/usd-coin' },
     crypto: { name: 'CoinGecko', url: 'https://www.coingecko.com/' },
     cedear: { name: 'Data912', url: 'https://data912.com/live/arg_cedears' },
 };

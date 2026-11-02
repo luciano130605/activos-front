@@ -71,3 +71,12 @@ export async function listCryptoAssets(signal?: AbortSignal): Promise<CryptoAsse
     coinCatalog = { coins, expires: Date.now() + 10 * 60_000 };
     return coins;
 }
+
+// USDC en pesos: la referencia de conversión de toda la app (CoinGecko, par usd-coin/ars).
+export async function usdcArsNow(signal?: AbortSignal): Promise<number> {
+    const query = new URLSearchParams({ ids: 'usd-coin', vs_currencies: 'ars', precision: 'full' });
+    const data = await request<Record<string, { ars?: unknown }>>(`/simple/price?${query}`, signal);
+    const price = data['usd-coin']?.ars;
+    if (!validPrice(price)) throw new Error('CoinGecko no devolvió el precio de USDC en pesos.');
+    return price;
+}

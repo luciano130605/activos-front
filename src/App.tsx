@@ -14,7 +14,7 @@ export default function App() {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-  if (loading) return <main className="grid min-h-dvh place-items-center bg-[#0a0a0a] font-mono text-[12px] text-[#999]" role="status">Abriendo tu cuenta…</main>;
+  if (loading) return <main className="grid min-h-dvh place-items-center bg-[#0a0a09] font-mono text-[12px] text-[#9a9a94]" role="status">Abriendo tu cuenta…</main>;
   if (!account) return <Login onLogin={setAccount} initialError={error} />;
   return <Page key={account.user.id} account={account} onLogout={() => { setAccount(null); setError(''); }} />;
 }
