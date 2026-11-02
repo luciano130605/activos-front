@@ -38,7 +38,7 @@ const dateMillis = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
 const money = (n: number, c: Currency) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(Number.isFinite(n) ? n : 0);
 const percent = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const formatDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
-const monthName = (time: number) => new Date(time).toLocaleDateString('es-AR', { month: 'short', year: '2-digit' });
+const chartDate = (time: number) => new Date(time).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: '2-digit' });
 const monthlyRate = (i: Investment) => { const r = (i.rate ?? 0) / 100; return i.period === 'month' ? r : r > -1 ? Math.pow(1 + r, 1 / 12) - 1 : -1; };
 function valueAt(i: Investment, t: number, prices: Record<string, number>, now: number, officialRate?: number) {
     const start = dateMillis(i.date);
@@ -89,7 +89,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [filter, setFilter] = useState<Filter>('all');
     const [search, setSearch] = useState('');
     const [display, setDisplay] = preference('display');
-    const [horizon, setHorizon] = preference('horizon');
+    const [range, setRange] = useState<'7d' | '1m' | '6m' | '1a' | 'todo'>('1m');
     const [prices, setPrices] = useState<Record<string, number>>({});
     const [rates, setRates] = useState<Rates>({});
     const [dollar, setDollar] = preference('dollar');
@@ -179,8 +179,6 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const current = items.reduce((s, i) => s + fx(valueAt(i, today, prices, today, officialRate), i.currency), 0);
     const gain = current - invested;
     const gainPct = invested > 0 ? gain / invested * 100 : 0;
-    const end = today + horizon * MONTH_MS;
-    const projected = items.reduce((s, i) => s + fx(valueAt(i, end, prices, today, officialRate), i.currency), 0);
     const filtered = items.filter(i => (filter === 'all' || categoryOf(i) === filter) && `${i.name} ${i.coin ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.date.localeCompare(a.date));
     const allCount = (kind: Filter) => kind === 'all' ? items.length : items.filter(i => categoryOf(i) === kind).length;
     const colorOf = (k: Filter) => kinds.find(v => v.id === k)!.color;
@@ -191,8 +189,11 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         { label: 'Pesos (ARS)', color: '#7f96ff', value: valueOf(items.filter(i => i.currency === 'ARS')) },
     ];
     const chart = useMemo(() => {
-        if (!items.length || !Number.isFinite(current) || !Number.isFinite(projected) || !fxRate && items.some(i => i.currency !== display)) return null;
-        const start = Math.min(today, ...items.map(i => dateMillis(i.date)));
+        if (!items.length || !Number.isFinite(current) || !fxRate && items.some(i => i.currency !== display)) return null;
+        const earliest = Math.min(today, ...items.map(i => dateMillis(i.date)));
+        const days = { '7d': 7, '1m': 30, '6m': 182, '1a': 365 };
+        const start = range === 'todo' ? Math.min(earliest, today - 86400000) : today - days[range] * 86400000;
+        const end = today;
         const len = 72, w = 850, h = 230, pad = 12;
         const samples = Array.from({ length: len + 1 }, (_, idx) => { const t = start + (end - start) * idx / len; return { t, value: items.reduce((s, i) => s + fx(valueAt(i, t, prices, today, officialRate), i.currency), 0) }; });
         const max = Math.max(1, ...samples.map(s => s.value)) * 1.12;
@@ -202,8 +203,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const baseline = h - pad;
         const area = `${line} L ${px(end)} ${baseline} L ${px(start)} ${baseline} Z`;
         const nowX = Math.min(w - pad, px(today));
-        return { w, h, line, area, nowX, nowY: py(current), first: monthName(start), last: monthName(end) };
-    }, [items, prices, horizon, display, fxRate, officialRate, today, end, current, projected]);
+        return { w, h, line, area, nowX, nowY: py(current), first: chartDate(start) };
+    }, [items, prices, range, display, fxRate, officialRate, today, current]);
     const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); setCoin(k === 'cedear' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
     function openModal() {
         setError(''); setEditingId(null); setName(''); setAmount(''); setRate(''); setDate(localISO());
@@ -388,9 +389,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 </section>
                 </div>
                 <div hidden={page !== 'summary' && page !== 'evolution'}>
-                <section className={`${panel} mb-3.5 p-5 sm:p-6`}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-[16px] font-medium tracking-tight">Evolución de la cartera</h2><p className="mt-1 font-mono text-[11px] text-[var(--muted)]">Estimación de valor · no representa un historial real de mercado</p></div><div className="inline-flex rounded-[10px] border border-[var(--line)] bg-[var(--bg)] p-1">{[0, 12, 36, 60].map(n => <button key={n} onClick={() => setHorizon(n)} aria-pressed={horizon === n} className={`rounded-[7px] px-3 py-1.5 font-mono text-[11px] ${horizon === n ? 'bg-[var(--raised)] text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line2)]' : 'text-[var(--muted)]'}`}>{n === 0 ? 'Hoy' : `${n / 12}a`}</button>)}</div></div>
-                    {chart ? <><div className="relative mt-7"><svg viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" className="h-[210px] w-full overflow-visible" role="img" aria-label="Gráfico estimado de evolución de la cartera"><defs><linearGradient id="invest-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7f96ff" stopOpacity=".23" /><stop offset="100%" stopColor="#7f96ff" stopOpacity="0" /></linearGradient></defs>{[.25, .5, .75, 1].map(n => <line key={n} x1="12" x2={chart.w - 12} y1={chart.h * n - 5} y2={chart.h * n - 5} stroke="var(--line)" strokeDasharray="4 5" />)}<path d={chart.area} fill="url(#invest-fill)" /><path d={chart.line} fill="none" stroke="#7f96ff" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" /><line x1={chart.nowX} x2={chart.nowX} y1="4" y2={chart.h - 12} stroke="var(--muted)" strokeOpacity=".5" strokeDasharray="4 5" /><circle cx={chart.nowX} cy={chart.nowY} r="5" fill="#7f96ff" stroke="var(--surface)" strokeWidth="3" /></svg></div><div className="mt-2 flex justify-between font-mono text-[11px] text-[var(--muted)]"><span>{chart.first}</span><span>Hoy</span><span>{chart.last}</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
-                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4"><div><p className="font-mono text-[11px] text-[var(--muted)]">VALOR {horizon === 0 ? 'ACTUAL' : `ESTIMADO EN ${horizon} MESES`}</p><p className="mt-1 text-[21px] font-light tracking-tight tabular-nums">{fmt(projected)}</p></div><p className="max-w-xs text-right font-mono text-[10px] leading-5 text-[var(--faint)]">Solo las inversiones con tasa generan rendimiento proyectado. CEDEARs y cripto se mantienen a precio actual.</p></div>
+                <section className={`${panel} mb-3.5 p-5 sm:p-6`}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-[16px] font-medium tracking-tight">Evolución de la cartera</h2><p className="mt-1 font-mono text-[11px] text-[var(--muted)]">Evolución estimada · no es un historial real de precios</p></div><div role="group" aria-label="Período de evolución" className="inline-flex max-w-full overflow-x-auto rounded-[10px] border border-[var(--line)] bg-[var(--bg)] p-1">{([['7d', '7D'], ['1m', '1M'], ['6m', '6M'], ['1a', '1A'], ['todo', 'Todo']] as const).map(([id, label]) => <button key={id} type="button" onClick={() => setRange(id)} aria-pressed={range === id} className={`rounded-[7px] px-3 py-1.5 font-mono text-[11px] ${range === id ? 'bg-[var(--raised)] text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line2)]' : 'text-[var(--muted)]'}`}>{label}</button>)}</div></div>
+                    {chart ? <><div className="relative mt-7"><svg viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" className="h-[210px] w-full overflow-visible" role="img" aria-label="Gráfico estimado de evolución de la cartera"><defs><linearGradient id="invest-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7f96ff" stopOpacity=".23" /><stop offset="100%" stopColor="#7f96ff" stopOpacity="0" /></linearGradient></defs>{[.25, .5, .75, 1].map(n => <line key={n} x1="12" x2={chart.w - 12} y1={chart.h * n - 5} y2={chart.h * n - 5} stroke="var(--line)" strokeDasharray="4 5" />)}<path d={chart.area} fill="url(#invest-fill)" /><path d={chart.line} fill="none" stroke="#7f96ff" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" /><circle cx={chart.nowX} cy={chart.nowY} r="5" fill="#7f96ff" stroke="var(--surface)" strokeWidth="3" /></svg></div><div className="mt-2 flex justify-between font-mono text-[11px] text-[var(--muted)]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4"><div><p className="font-mono text-[11px] text-[var(--muted)]">VALOR ACTUAL</p><p className="mt-1 text-[21px] font-light tracking-tight tabular-nums">{fmt(current)}</p></div><p className="max-w-sm text-right font-mono text-[10px] leading-5 text-[var(--faint)]">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el dólar actual; no refleja rendimientos históricos reales.</p></div>
                 </section>
                 </div>
                 <div hidden={page !== 'summary'}>
