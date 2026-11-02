@@ -432,7 +432,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                     size={16}
                                     color={gain >= 0 ? "#22c55e" : "#ef4444"}
                                     strokeWidth={2}
-                                />{gain >= 0 ? '▲' : '▼'}
+                                />
                                 {Number.isFinite(gainPct) ? percent(gainPct) : '—'}</span><span className="mu">{fmt(gain)} respecto al capital aportado</span></div>
                             {slicesForBar.length > 0 && <div className="mt-7"><div className="dm" role="img" aria-label={`Distribución: ${slicesForBar.map(k => `${k.label} ${(k.value / slicesTotal * 100).toFixed(0)}%`).join(', ')}`}>{slicesForBar.map(k => <i key={k.label} style={{ ['--c' as string]: k.color, flex: k.value }} />)}</div><div className="lg mt-3">{slicesForBar.map(k => <span key={k.label} style={{ ['--c' as string]: k.color }}>{k.label} {(k.value / slicesTotal * 100).toFixed(0)}%</span>)}</div></div>}
                             {chart && <svg className="mt-auto -mx-6 -mb-6 block h-[100px] w-[calc(100%+3rem)] pt-4" viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .28 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs><path d={chart.area} fill="url(#hero-fill)" /><path d={chart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>}
