@@ -51,6 +51,7 @@ export default function Sidebar(props: Props) {
         evolution: <HugeiconsIcon icon={ChartLineData01Icon} size={18} fill={page === 'evolution' ? 'none' : 'none'} />,
 
         investments: <HugeiconsIcon icon={CoinsBitcoinIcon} size={18} strokeWidth={1.6} fill={page === 'investments' ? 'none' : 'none'} />,
+        dividends: <HugeiconsIcon icon={CalculateIcon} size={18} />,
     };
 
     useEffect(() => {

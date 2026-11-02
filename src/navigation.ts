@@ -4,6 +4,7 @@ export const pages = {
     summary: { path: '/', label: 'Resumen', title: 'Mi cartera', description: 'El estado de tus inversiones, en un solo lugar.' },
     evolution: { path: '/evolucion', label: 'Evolución', title: 'Evolución', description: 'Seguí el valor de tu cartera y compará el rendimiento de tus activos.' },
     investments: { path: '/mis-inversiones', label: 'Mis inversiones', title: 'Mis inversiones', description: 'Administrá tus activos y las posiciones de tu cartera.' },
+    dividends: { path: '/dividendos', label: 'Dividendos', title: 'Dividendos', description: 'Próximos pagos anunciados para tus inversiones.' },
 } as const;
 
 export type PageId = keyof typeof pages;

@@ -4,6 +4,7 @@ import { cedearPriceOn, cedearPricesNow } from './cedears';
 import CryptoSearchDialog from './CryptoSearchDialog';
 import Simulator from './Simulator';
 import Distribution from './Distribution';
+import Dividends from './Dividends';
 import Sidebar from './Sidebar';
 import Select from './Select';
 import QuoteSource from './QuoteSource';
@@ -372,6 +373,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {notice && <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-4 py-3 text-[12px]"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Cerrar aviso" className="text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={XIcon} size={14} /></button></div>}
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[#ff7d52]/30 bg-[#ff7d52]/[.07] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[#ff7d52]/30 bg-[#ff7d52]/[.07] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización del dólar {dollarName}. Los totales se muestran como —.</div>}
+                {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} />}
                 <div hidden={page !== 'summary'}>
                 <section className="mb-3.5 grid gap-3.5 md:grid-cols-[1.15fr_1fr]">
                     <article className={`${panel} relative flex min-h-[205px] flex-col overflow-hidden p-6 [background-image:radial-gradient(100%_110%_at_40%_150%,rgba(206,58,160,.24),transparent_75%)]`}><div className="flex items-center justify-between"><p className="text-[13px] text-[var(--muted)]">Valor actual de la cartera</p><HugeiconsIcon icon={Dollar02Icon} size={17} className="text-[var(--muted)]" /></div><p className="mt-6 break-all text-[clamp(2.2rem,4.2vw,3.55rem)] font-light leading-tight tracking-[-.045em] tabular-nums">{fmt(current)}</p><div className="mt-auto flex flex-wrap items-center gap-2 pt-4"><span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[12px] ${gain >= 0 ? 'bg-[#4ade80]/10 text-[#4ade80]' : 'bg-[#ff7d52]/10 text-[#ff7d52]'}`}>{gain >= 0 ? <HugeiconsIcon icon={ChartIncreaseFreeIcons} size={14} /> : <HugeiconsIcon icon={ChartDecreaseFreeIcons} size={14} />} {Number.isFinite(gainPct) ? percent(gainPct) : '—'}</span><span className="font-mono text-[11px] text-[var(--muted)]">respecto al capital aportado</span></div></article>
