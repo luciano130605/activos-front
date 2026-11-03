@@ -107,6 +107,7 @@ export default function Benchmarks({
     available,
     historyLoading,
     historyError,
+    actualReturnArs,
 }: {
     start: number;
     end: number;
@@ -114,6 +115,7 @@ export default function Benchmarks({
     available: boolean;
     historyLoading: boolean;
     historyError: string;
+    actualReturnArs: number | null;
 }) {
     const [data, setData] = useState<Partial<Series> | null>(null);
     const [retry, setRetry] = useState(0);
@@ -480,12 +482,19 @@ export default function Benchmarks({
                 </div>
             </div>
 
+            <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
+                <p className="mu text-[11px]">Resultado de tus posiciones abiertas en pesos</p>
+                <p className="mt-2 text-[24px] font-medium tabular-nums" style={{ color: actualReturnArs == null ? 'var(--muted)' : actualReturnArs >= 0 ? '#39a967' : 'var(--neg)' }}>{actualReturnArs == null ? 'No disponible' : percent(actualReturnArs)}</p>
+                <p className="mu mt-2 text-[11px] leading-5">Compara el monto registrado de cada posición con su valor actual. Para montos en dólares usa el MEP de la fecha registrada y la cotización actual de conversión. Las fechas pueden ser distintas; no es necesariamente un rendimiento de 12 meses. Excluye ventas cerradas y dividendos.</p>
+                {actualReturnArs == null && <p className="mu mt-1 text-[11px]">Se necesitan precios actuales y cotizaciones históricas para las fechas de registro.</p>}
+            </div>
+
             {/* Portfolio return */}
             {portfolioReturn !== null && (
                 <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b border-[var(--line)] pb-5">
                     <div>
                         <p className="mu text-[11px]">
-                            Variación estimada de tu cartera
+                            Variación anual simulada de tu cartera
                         </p>
 
                         <div className="mt-2 flex items-center gap-3">

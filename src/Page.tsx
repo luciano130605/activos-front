@@ -277,7 +277,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [benchmarkHistory, setBenchmarkHistory] = useState<Record<string, HistoryPoint[]> | null>(null);
     const [benchmarkHistoryError, setBenchmarkHistoryError] = useState('');
     const historySignature = [...new Set(items.filter(i => i.kind !== 'rate' && i.coin).map(i => `${i.kind}:${i.coin}`))].sort().join('|');
-    const needsDollarHistory = items.some(i => i.kind === 'crypto' || (i.kind === 'rate' && i.currency === 'USD'));
+    const needsDollarHistory = items.some(i => i.kind === 'crypto' || i.currency === 'USD');
     useEffect(() => {
         if (page !== 'evolution') return;
         const controller = new AbortController();
@@ -346,6 +346,21 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         if (i.kind === 'cedear') return sum + i.units * historicalPrice;
         return sum + i.units * historicalPrice * benchmarkDollarAt(t);
     }, 0);
+    // El resultado de las posiciones abiertas usa la fecha de cada registro, no el período anual simulado.
+    const costInPesos = benchmarkItems.reduce((sum, i) => {
+        if (i.currency === 'ARS') return sum + i.amount;
+        const points = benchmarkHistory?.['dollar:mep'];
+        const purchaseTime = dateMillis(i.date) + 12 * 3600000;
+        const purchaseQuote = points?.filter(p => p.time <= purchaseTime).at(-1);
+        if (!purchaseQuote || purchaseTime - purchaseQuote.time > 7 * 86400000) return NaN;
+        return sum + i.amount * purchaseQuote.price;
+    }, 0);
+    const currentInPesos = benchmarkItems.reduce((sum, i) => {
+        if (i.kind !== 'rate' && (!i.coin || !prices[`${i.kind}:${i.coin}`])) return NaN;
+        const v = valueAt(i, today, prices, today, fxRate);
+        return sum + (i.currency === 'ARS' ? v : v * (fxRate ?? NaN));
+    }, 0);
+    const actualReturnArs = costInPesos > 0 && Number.isFinite(currentInPesos) ? (currentInPesos / costInPesos - 1) * 100 : null;
     const chartPoint = chartIndex == null ? null : chart?.points[chartIndex] ?? null;
     const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); setCoin(k === 'cedear' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
     function openModal() {
@@ -639,7 +654,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}
