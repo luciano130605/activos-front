@@ -198,6 +198,8 @@ export default function Benchmarks({
 
     onMonthsChange,
 
+    availablePeriods,
+
     valueAt,
 
     available,
@@ -231,6 +233,8 @@ export default function Benchmarks({
     months: number;
 
     onMonthsChange: (months: number) => void;
+
+    availablePeriods: number[];
 
     valueAt: (t: number) => number;
 
@@ -834,7 +838,8 @@ export default function Benchmarks({
                     { value: '1', label: '1 mes' }, { value: '6', label: '6 meses' },
                     { value: '12', label: '1 año' }, { value: '24', label: '2 años' },
                     { value: '36', label: '3 años' }, { value: '72', label: '6 años' },
-                ]} />
+                ].map(option => ({ ...option, disabled: !availablePeriods.includes(Number(option.value)) }))} />
+                {availablePeriods.length < 6 && <p className="mu mt-2 text-[11px]">Los períodos sin historial suficiente para la selección están deshabilitados.</p>}
             </div>
 
             <div className="mt-5 max-w-sm">
@@ -1109,7 +1114,7 @@ export default function Benchmarks({
 
                             {/* Monthly axis */}
 
-                            {result.monthTicks.map((t, i) => (
+                            {result.monthTicks.map(t => (
 
                                 <text
 

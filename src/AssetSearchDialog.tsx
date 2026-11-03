@@ -85,8 +85,8 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                         if (valid === undefined) {
                             const points = await history(kind, row.id, controller.signal);
                             const last = points.at(-1);
-                            valid = !!last && now - last.time <= 7 * day && Array.from({ length: 53 }, (_, i) => {
-                                const t = start + (now - start) * i / 52;
+                            valid = !!last && now - last.time <= 7 * day && Array.from({ length: 241 }, (_, i) => {
+                                const t = start + (now - start) * i / 240;
                                 const previous = points.filter(point => point.time <= t).at(-1);
                                 return previous ? t - previous.time <= 7 * day : points[0].time - t <= 3 * day;
                             }).every(Boolean);
