@@ -7,3 +7,7 @@ export function portfolioReturns(startArs: number, endArs: number, startDollar?:
 export function estimatedPesos(purchaseUsd: number, currentUsd: number, fraction: number, dollar: number) {
     return (purchaseUsd + (currentUsd - purchaseUsd) * fraction) * dollar;
 }
+
+export function estimatedAnnualReference(currentUsd: number, annualRate: number, elapsedYears: number, dollar: number) {
+    return currentUsd * Math.pow(1 + annualRate, elapsedYears) * dollar;
+}
