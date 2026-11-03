@@ -61,8 +61,8 @@ export default function TopBar(p: Props) {
             <button ref={more} type="button" className="ibtn" aria-haspopup="menu" aria-expanded={!!menu} aria-label="Más opciones" onClick={() => menu ? setMenu(null) : openMenu()}><HugeiconsIcon icon={MenuTwoLineIcon} size={18} /></button>
         </div>
         {menu && <ContextMenu x={menu.x} y={menu.y} title={`${p.email} · ${p.syncLabel}`} onClose={() => setMenu(null)} items={[
-            { label: 'Buscar activos', icon: DarkModeFreeIcons, onSelect: p.onSearch, hint: '/' },
-            { label: 'Apariencia', icon: Sun03Icon, onSelect: () => setAppearance(true) },
+            { label: 'Buscar activos', icon: Search01Icon, onSelect: p.onSearch, hint: '/' },
+            { label: 'Apariencia', icon: DarkModeFreeIcons, onSelect: () => setAppearance(true) },
             { label: 'Personalizar panel', icon: DashboardCircleEditIcon, onSelect: p.onCustomize },
             { label: p.passkeyCount === null ? 'Passkeys y llaves de seguridad' : p.passkeyCount > 0 ? `Passkeys activadas (${p.passkeyCount})` : 'Activar passkey o llave de seguridad', icon: ScanFaceIcon, onSelect: p.onPasskey },
             { label: 'Exportar datos', icon: Download02Icon, onSelect: p.onExport },
