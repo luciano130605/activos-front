@@ -18,7 +18,7 @@ import { cleanInvestment, cleanSale, readLegacyPortfolio, type Currency, type In
 import { request, type Account, type Snapshot } from './account';
 import { usePortfolio } from './usePortfolio';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderPinwheelIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, XIcon } from '@hugeicons/core-free-icons';
+import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, Loader, LoaderPinwheelIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, XIcon } from '@hugeicons/core-free-icons';
 type Filter = 'all' | Kind | 'index';
 type AssetQuote = { id: string; date: string; kind: 'crypto' | 'cedear' } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
 type DollarRate = { nombre: string; compra: number | null; venta: number };
@@ -620,7 +620,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                 {kind === 'crypto' ? <a href={`https://www.coingecko.com/en/coins/${encodeURIComponent(assetId)}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block break-all font-mono text-[11px] text-[var(--muted)] underline underline-offset-4">{assetId} ↗</a> : <p className="mt-2 font-mono text-[11px] text-[var(--muted)]">{assetId} · CEDEAR en pesos</p>}
                                 {previewUnits != null && Number.isFinite(previewUnits) && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-3 text-[12px]"><span className="text-[var(--muted)]">Unidades estimadas</span><span className="break-all font-mono">{new Intl.NumberFormat('es-AR', { maximumSignificantDigits: 10 }).format(previewUnits)}</span></div>}
                                 <p className="mt-2 text-[10px] text-[var(--muted)]">{date === todayDate ? 'Se usará esta cotización para calcular las unidades al guardar.' : kind === 'cedear' ? activeQuote.sourceDate !== date ? 'Se usa el cierre de la última rueda disponible anterior a la fecha elegida.' : 'Se usa el precio de cierre de la fecha de compra.' : 'Precio histórico de referencia a las 00:00 UTC. Se usará para calcular las unidades.'}</p>
-                            </> : <p role="status" className="flex items-center gap-2 text-[12px] text-[var(--muted)]"><HugeiconsIcon icon={LoaderPinwheelIcon} size={15} className="animate-spin" />Consultando {quoteSource}...</p>}
+                            </> : <p role="status" className="flex items-center gap-2 text-[12px] text-[var(--muted)]"><HugeiconsIcon icon={Loader} size={15} className="animate-spin" />Consultando {quoteSource}...</p>}
                         </div>
                     </div>}
                     {error && <p role="alert" className="rounded-lg bg-[var(--neg)]/10 p-3 text-[12px] text-[var(--neg)]">{error}</p>}
