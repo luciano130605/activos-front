@@ -61,7 +61,7 @@ export default function TopBar(p: Props) {
         {menu && <ContextMenu x={menu.x} y={menu.y} title={`${p.email} · ${p.syncLabel}`} onClose={() => setMenu(null)} items={[
             { label: 'Buscar activos', icon: Search01Icon, onSelect: p.onSearch, hint: '/' },
             { label: 'Personalizar panel', icon: DashboardCircleEditIcon, onSelect: p.onCustomize },
-            { label: 'Activar passkey / Face ID', icon: ScanFaceIcon, onSelect: p.onPasskey },
+            { label: 'Activar passkey o llave de seguridad', icon: ScanFaceIcon, onSelect: p.onPasskey },
             { label: 'Exportar datos', icon: Download02Icon, onSelect: p.onExport },
             { label: 'Importar datos', icon: Upload06Icon, onSelect: p.onImport },
             { sep: true },

@@ -8,7 +8,7 @@ type Props = { onLogin: (account: Account) => void; initialError?: string; fixed
 
 export default function Login({ onLogin, initialError = '', fixedEmail, onCancel }: Props) {
     const [mode, setMode] = useState<'login' | 'register'>('login');
-    const [email, setEmail] = useState(fixedEmail ?? '');
+    const [email, setEmail] = useState(fixedEmail ?? '@gmail.com');
     const [pin, setPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [visible, setVisible] = useState(false);
@@ -57,7 +57,7 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
                     {mode === 'register' && <div><label htmlFor="account-confirm-pin" className="mb-2 block text-[12px] text-[var(--muted)]">Confirmá tu PIN</label><input id="account-confirm-pin" type={visible ? 'text' : 'password'} inputMode="numeric" autoComplete="new-password" required pattern="[0-9]{6}" minLength={6} maxLength={6} disabled={busy} value={confirmPin} onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" className={pinInput} />{confirmPin && pin !== confirmPin && <p className="mt-2 text-[11px] text-[var(--neg)]">Los PINs no coinciden.</p>}</div>}
                     {error && <p role="alert" className="rounded-lg border border-[var(--neg)]/25 bg-[var(--negbg)] p-3 text-[12px] leading-5">{error}</p>}
                     <button type="submit" disabled={busy} className="btn-primary w-full disabled:cursor-wait disabled:opacity-60">{busy ? <><HugeiconsIcon icon={LoaderPinwheelIcon} size={16} className="animate-spin motion-reduce:animate-none" />{mode === 'register' ? 'Creando cuenta…' : 'Ingresando…'}</> : mode === 'register' ? 'Crear cuenta y entrar' : 'Ingresar'}</button>
-                    {mode === 'login' && !fixedEmail && supportsPasskeys() && <button type="button" disabled={busy} onClick={() => void passkeyLogin()} className="btn-ghost w-full disabled:opacity-60">Ingresar con passkey / Face ID</button>}
+                    {mode === 'login' && !fixedEmail && supportsPasskeys() && <div><button type="button" disabled={busy} onClick={() => void passkeyLogin()} className="btn-ghost w-full disabled:opacity-60">Ingresar con passkey o llave de seguridad</button><p className="mu mt-2 text-center !font-sans text-[11px] leading-5">Elegí Face ID, una llave de seguridad o una passkey en otro dispositivo. Si aparece un QR, escanealo con tu iPhone.</p></div>}
                     {!fixedEmail && <button type="button" disabled={busy} onClick={() => { setMode(value => value === 'login' ? 'register' : 'login'); setPin(''); setConfirmPin(''); setError(''); }} className="w-full text-[12px] text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-60">{mode === 'register' ? '¿Ya tenés cuenta? Ingresar' : '¿Primera vez? Crear cuenta'}</button>}
                     {onCancel && <button type="button" onClick={onCancel} className="w-full text-[12px] text-[var(--muted)]">Volver a mi cartera</button>}
                 </form>
