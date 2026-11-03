@@ -277,6 +277,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [benchmarkHistory, setBenchmarkHistory] = useState<Record<string, HistoryPoint[]> | null>(null);
     const [benchmarkHistoryError, setBenchmarkHistoryError] = useState('');
     const historySignature = [...new Set(items.filter(i => i.kind !== 'rate' && i.coin).map(i => `${i.kind}:${i.coin}`))].sort().join('|');
+    const needsDollarHistory = items.some(i => i.kind === 'crypto' || (i.kind === 'rate' && i.currency === 'USD'));
     useEffect(() => {
         if (page !== 'evolution') return;
         const controller = new AbortController();
@@ -284,10 +285,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const keys = historySignature ? historySignature.split('|') : [];
         const assetRequests = keys.map(async key => {
             const [assetKind, id] = key.split(':');
-            const points = await history(assetKind as 'cedear' | 'crypto', id, controller.signal);
-            return [key, assetKind === 'cedear' ? adjustPossibleRatios(points).points : points] as const;
+            try {
+                const points = await history(assetKind as 'cedear' | 'crypto', id, controller.signal);
+                return [key, assetKind === 'cedear' ? adjustPossibleRatios(points).points : points] as const;
+            } catch { return [key, []] as const; }
         });
-        const dollarRequest = keys.some(key => key.startsWith('crypto:')) ? fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) }).then(async response => {
+        const dollarRequest = needsDollarHistory ? fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) }).then(async response => {
             if (!response.ok) throw new Error('No se pudo consultar el historial del dólar MEP.');
             const rows: unknown = await response.json();
             if (!Array.isArray(rows)) throw new Error('El historial del dólar no está disponible.');
@@ -297,39 +300,51 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             }).sort((a, b) => a.time - b.time);
             if (!points.length) throw new Error('El historial del dólar no está disponible.');
             return ['dollar:mep', points] as const;
-        }) : Promise.resolve(null);
+        }).catch(() => null) : Promise.resolve(null);
         void Promise.all([Promise.all(assetRequests), dollarRequest]).then(([entries, dollar]) => {
             if (!controller.signal.aborted) setBenchmarkHistory(Object.fromEntries(dollar ? [...entries, dollar] : entries));
         }).catch(() => { if (!controller.signal.aborted) { setBenchmarkHistoryError('No se pudo obtener el historial de todos tus activos o del dólar. Volvé a intentar más tarde.'); setBenchmarkHistory({}); } });
         return () => controller.abort();
-    }, [page, historySignature]);
+    }, [page, historySignature, needsDollarHistory]);
     const benchmarkDate = new Date(today);
     benchmarkDate.setFullYear(benchmarkDate.getFullYear() - 1);
     const benchmarkStart = benchmarkDate.getTime();
     const benchmarkItems = items;
-    const historyAt = (points: HistoryPoint[] | undefined, target: number) => {
-        if (!points?.length) return undefined;
+    const historyAt = (points: HistoryPoint[] | undefined, target: number, fallback?: number) => {
+        if (!points?.length) return fallback;
+        const first = points[0], last = points[points.length - 1];
         let closest: HistoryPoint | undefined;
         for (const point of points) { if (point.time > target) break; closest = point; }
-        if (!closest && points[0].time - target <= 3 * 86400000) closest = points[0];
-        return closest && Math.abs(closest.time - target) <= 7 * 86400000 ? closest.price : undefined;
+        if (closest && target - closest.time <= 7 * 86400000) return closest.price;
+        // Para períodos sin historial, prolongar la variación diaria del último mes.
+        const reference = points.find(point => point.time >= last.time - 30 * 86400000);
+        const elapsed = reference ? last.time - reference.time : 0;
+        const boundary = target < first.time ? first : closest ?? last;
+        if (reference && elapsed >= 2 * 86400000 && reference.price > 0 && last.price > 0) {
+            const simulated = boundary.price * Math.exp(Math.log(last.price / reference.price) / elapsed * (target - boundary.time));
+            if (Number.isFinite(simulated) && simulated > 0) return simulated;
+        }
+        return boundary.price || fallback;
+    };
+    const benchmarkDollarAt = (t: number) => {
+        if (!fxRate) return NaN;
+        if (t >= today - 60000) return fxRate;
+        const latest = historyAt(benchmarkHistory?.['dollar:mep'], today, fxRate);
+        const historical = historyAt(benchmarkHistory?.['dollar:mep'], t, fxRate);
+        return latest && historical ? fxRate * historical / latest : NaN;
     };
     const benchmarkValue = (t: number) => benchmarkItems.reduce((sum, i) => {
         if (i.kind === 'rate') {
             const present = valueAt(i, today, prices, today, fxRate);
-            const currentArs = i.currency === 'ARS' ? present : present * (fxRate ?? NaN);
-            return sum + currentArs * Math.pow(1 + monthlyRate(i), (t - today) / MONTH_MS);
+            const historical = present * Math.pow(1 + monthlyRate(i), (t - today) / MONTH_MS);
+            return sum + (i.currency === 'ARS' ? historical : historical * benchmarkDollarAt(t));
         }
         const key = `${i.kind}:${i.coin}`;
         const currentPrice = prices[key];
-        const historicalPrice = t >= today - 60000 ? currentPrice : historyAt(benchmarkHistory?.[key], t);
+        const historicalPrice = t >= today - 60000 ? currentPrice : historyAt(benchmarkHistory?.[key], t, currentPrice);
         if (!currentPrice || !historicalPrice || !i.units) return NaN;
         if (i.kind === 'cedear') return sum + i.units * historicalPrice;
-        const latestDollar = historyAt(benchmarkHistory?.['dollar:mep'], today);
-        const historicDollar = t >= today - 60000 ? fxRate : historyAt(benchmarkHistory?.['dollar:mep'], t);
-        if (!latestDollar || !historicDollar || !fxRate) return NaN;
-        const conversion = t >= today - 60000 ? fxRate : historicDollar / latestDollar * fxRate;
-        return sum + i.units * historicalPrice * conversion;
+        return sum + i.units * historicalPrice * benchmarkDollarAt(t);
     }, 0);
     const chartPoint = chartIndex == null ? null : chart?.points[chartIndex] ?? null;
     const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); setCoin(k === 'cedear' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };

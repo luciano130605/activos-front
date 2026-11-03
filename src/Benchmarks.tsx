@@ -825,11 +825,12 @@ export default function Benchmarks({
             <div className="mt-5 border-t border-[var(--line)] pt-4">
                 <p className="mu text-[11px] leading-5">
                     Rendimiento comparativo con base 100 al inicio del período.
-                    Se simula la tenencia de las posiciones actuales durante todo el año, utilizando
-                    sus precios históricos. Los valores en pesos de criptomonedas usan la evolución
-                    histórica del dólar MEP y la cotización de conversión actual. Las inversiones con
-                    tasa se simulan con la tasa cargada. No representa los aportes o ventas reales;
-                    si faltan precios históricos suficientes, no se calcula la cartera. El dólar MEP y
+                    Se simula la tenencia de las posiciones actuales durante todo el año.
+                    Donde faltan precios históricos, se prolonga la variación diaria del último mes
+                    disponible; si no hay datos suficientes para calcularla, se mantiene el último precio.
+                    Las posiciones en dólares se expresan en pesos usando la evolución histórica del dólar MEP,
+                    ajustada a la cotización actual de conversión de la app. Las inversiones con tasa usan
+                    la tasa cargada. Es una simulación, no un historial real de aportes o ventas. El dólar MEP y
                     la UVA utilizan la última cotización disponible; la
                     inflación se acumula mensualmente y el plazo fijo se
                     simula mediante reinversiones. Las referencias pueden
