@@ -17,15 +17,19 @@ function historicalPoint(points: Point[], target: number): Point | undefined {
     }
     return best && Math.abs(best.time - target) <= 7 * DAY ? best : undefined;
 }
-function suspiciousRatio(points: Point[], from: number, to: number) {
-    for (let i = 1; i < points.length; i++) {
-        if (points[i].time < from || points[i].time > to || points[i].time - points[i - 1].time > 7 * DAY) continue;
+function adjustPossibleRatios(points: Point[]) {
+    const adjusted = points.map(point => ({ ...point }));
+    const changes: number[] = [];
+    let factor = 1;
+    for (let i = points.length - 1; i >= 0; i--) {
+        adjusted[i].price *= factor;
+        if (i === 0 || points[i].time - points[i - 1].time > 7 * DAY) continue;
         const ratio = points[i - 1].price / points[i].price;
         const multiple = ratio < 1 ? 1 / ratio : ratio;
         const rounded = Math.round(multiple);
-        if (rounded >= 2 && rounded <= 10 && Math.abs(multiple / rounded - 1) < 0.03) return true;
+        if (rounded >= 2 && rounded <= 10 && Math.abs(multiple / rounded - 1) < 0.02) { factor *= ratio > 1 ? 1 / rounded : rounded; changes.push(points[i].time); }
     }
-    return false;
+    return { points: adjusted, changes };
 }
 async function history(kind: 'cedear' | 'crypto', id: string, signal: AbortSignal): Promise<Point[]> {
     const key = `activos:asset-history:${kind}:${id}`;
@@ -49,7 +53,6 @@ async function history(kind: 'cedear' | 'crypto', id: string, signal: AbortSigna
 export default function AssetPerformance({ items, hidden }: { items: Investment[]; hidden: boolean }) {
     const [data, setData] = useState<Data>({});
     const [dollar, setDollar] = useState<Point[]>([]);
-    const [cedearCurrency, setCedearCurrency] = useState<'ARS' | 'USD'>('USD');
     const [loading, setLoading] = useState(false);
     const [retry, setRetry] = useState(0);
     const assets = items.filter(i => i.kind !== 'rate' && i.coin);
@@ -71,22 +74,41 @@ export default function AssetPerformance({ items, hidden }: { items: Investment[
         return () => controller.abort();
     }, [signature, retry]);
     if (!assets.length) return null;
-    return <section className="card mt-4 overflow-hidden" aria-label="Rendimiento histórico y proyección"><div className="p-5 sm:p-6"><p className="lb">RENDIMIENTO DE TUS ACTIVOS</p><p className="mu mt-2 text-[12px] leading-5">Variación del precio del activo en el último mes y año. La proyección supone que el rendimiento del último año se repite una vez; es una hipótesis, no una predicción confiable.</p>{assets.some(item => item.kind === 'cedear') && <div className="seg mt-4 inline-flex" role="group" aria-label="Moneda del rendimiento de CEDEARs"><button type="button" aria-pressed={cedearCurrency === 'USD'} onClick={() => setCedearCurrency('USD')}>Dólares MEP</button><button type="button" aria-pressed={cedearCurrency === 'ARS'} onClick={() => setCedearCurrency('ARS')}>Pesos</button></div>}</div>
-        {loading ? <p className="mu px-6 pb-6 text-[12px]" role="status">Consultando precios históricos…</p> : <div className="divide-y divide-[var(--line)]">{assets.map(item => {
+    return <section className="mt-5" aria-label="Rendimiento histórico y proyección">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-4"><div><p className="lb">ANÁLISIS DE TU CARTERA</p><h2 className="mt-2 text-[clamp(1.4rem,2.5vw,1.9rem)] font-light tracking-tight">Rendimiento de tus activos<span className="sig">.</span></h2><p className="mu mt-2 max-w-2xl text-[12px] leading-5">Una mirada al último mes y año, con un escenario sencillo para el próximo año.</p></div><div className="seg" role="group" aria-label="Moneda de análisis"><button type="button" aria-pressed="true">USD</button><button type="button" disabled title="Disponible próximamente" className="cursor-not-allowed opacity-35">ARS</button></div></div>
+        {loading ? <div className="card grid min-h-40 place-items-center text-[12px] text-[var(--muted)]" role="status">Consultando precios históricos…</div> : <div className="grid gap-3.5 xl:grid-cols-2">{assets.map(item => {
             const record = data[keyOf(item)]; const rawPoints = record?.points ?? [];
-            const points = item.kind === 'cedear' && cedearCurrency === 'USD' ? rawPoints.flatMap(point => { const fx = historicalPoint(dollar, point.time); return fx ? [{ time: point.time, price: point.price / fx.price }] : []; }) : rawPoints;
+            const adjusted = item.kind === 'cedear' ? adjustPossibleRatios(rawPoints) : { points: rawPoints, changes: [] };
+            const points = item.kind === 'cedear' ? adjusted.points.flatMap(point => { const fx = historicalPoint(dollar, point.time); return fx ? [{ time: point.time, price: point.price / fx.price }] : []; }) : adjusted.points;
             const end = points[points.length - 1];
-            const fresh = end && Date.now() - end.time <= 7 * DAY;
+            const fresh = !!end && Date.now() - end.time <= 7 * DAY;
             const month = end && historicalPoint(points, end.time - 30 * DAY);
             const year = end && historicalPoint(points, end.time - 365 * DAY);
-            const monthSplit = item.kind === 'cedear' && !!month && !!end && suspiciousRatio(rawPoints, month.time, end.time);
-            const yearSplit = item.kind === 'cedear' && !!year && !!end && suspiciousRatio(rawPoints, year.time, end.time);
-            const monthReturn = fresh && month && !monthSplit ? (end.price / month.price - 1) * 100 : null;
-            const yearReturn = fresh && year && !yearSplit ? (end.price / year.price - 1) * 100 : null;
-            const projection = end && yearReturn != null ? end.price * (1 + yearReturn / 100) : null;
-            const currency = item.kind === 'cedear' ? cedearCurrency : 'USD';
-            return <article key={item.id} className="px-5 py-4 sm:px-6"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[13px] font-medium">{item.name}</p><p className="mu mt-1 text-[11px]">{item.kind === 'cedear' ? `CEDEAR ${item.coin} · ${cedearCurrency === 'USD' ? 'equivalente en dólares MEP' : 'precios en pesos'} · Data912` : `${item.coin} · precios en dólares · CoinGecko`}{end ? ` · último cierre ${date(end.time)}` : ''}</p></div></div><dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"><div><dt className="mu text-[11px]">Últimos 30 días</dt><dd className="mt-1 text-[14px]">{monthReturn == null ? '—' : pct(monthReturn)}</dd></div><div><dt className="mu text-[11px]">Últimos 365 días</dt><dd className="mt-1 text-[14px]">{yearReturn == null ? '—' : pct(yearReturn)}</dd></div><div><dt className="mu text-[11px]">Escenario a 1 año / unidad</dt><dd className="mt-1 text-[14px]">{projection == null ? '—' : hidden ? '****' : money(projection, currency)}</dd></div></dl>{(record?.error || !fresh || !month || !year || monthSplit || yearSplit) && <p className="mu mt-3 text-[11px]">{record?.error || (item.kind === 'cedear' && cedearCurrency === 'USD' && !dollar.length ? 'No se pudo consultar el dólar MEP histórico.' : !fresh ? 'El último precio histórico está desactualizado.' : monthSplit || yearSplit ? 'Se detectó un salto que podría corresponder a un cambio de ratio; no se calcula ese período sin datos ajustados.' : 'No hay suficiente historial para todos los períodos.')}</p>}{yearReturn != null && <p className="mu mt-2 text-[10.5px]">Escenario: último cierre × (1 + rendimiento anual). No incluye dividendos, comisiones ni impuestos. Los dólares MEP son una conversión aproximada del CEDEAR, no el rendimiento del ETF en el exterior.</p>}</article>;
+            const earliest = points[0];
+            const availableDays = end && earliest ? Math.floor((end.time - earliest.time) / DAY) : 0;
+            const annualized = !year && availableDays >= 90 && !!earliest && !!end;
+            const monthReturn = fresh && month && end ? (end.price / month.price - 1) * 100 : null;
+            const yearReturn = !fresh || !end ? null : year ? (end.price / year.price - 1) * 100 : annualized ? (Math.pow(end.price / earliest.price, 365 / availableDays) - 1) * 100 : null;
+            const safeYearReturn = yearReturn != null && Number.isFinite(yearReturn) ? yearReturn : null;
+            const projection = end && safeYearReturn != null && Number.isFinite(end.price * (1 + safeYearReturn / 100)) ? end.price * (1 + safeYearReturn / 100) : null;
+            const adjustedYear = !!end && adjusted.changes.some(time => time > (year?.time ?? earliest?.time ?? end.time) && time <= end.time);
+            const estimated = annualized || adjustedYear;
+            const needsMessage = !!record?.error || !fresh || !month || safeYearReturn == null || estimated;
+            let message = record?.error ?? '';
+            if (!message && item.kind === 'cedear' && !dollar.length) message = 'No se pudo consultar el dólar MEP histórico.';
+            else if (!message && !fresh) message = 'El último precio histórico no está disponible o está desactualizado.';
+            else if (!message && safeYearReturn == null) message = 'Falta historial suficiente para estimar el rendimiento anual.';
+            else if (!message && !month) message = 'Falta historial suficiente para calcular el último mes.';
+            const ticker = item.kind === 'cedear' ? item.coin?.toUpperCase() : (item.coin ?? '').slice(0, 4).toUpperCase();
+            const positiveColor = (value: number | null) => value == null ? 'text-[var(--faint)]' : value < 0 ? 'text-[var(--neg)]' : 'text-[var(--sig)]';
+            return <article key={item.id} className="card flex min-w-0 flex-col p-5 sm:p-6">
+                <div className="flex items-start gap-3"><div className="grid h-11 min-w-11 shrink-0 place-items-center rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-1 font-mono text-[10px] font-medium text-[var(--sig)]">{ticker}</div><div className="min-w-0 flex-1"><p className="truncate text-[15px] font-medium">{item.name}</p><p className="mu mt-1 text-[11px]">{item.kind === 'cedear' ? 'CEDEAR · USD MEP' : 'Cripto · USD'} <span aria-hidden="true">·</span> {item.kind === 'cedear' ? 'Data912' : 'CoinGecko'}</p></div>{estimated && <span className="rounded-full border border-[var(--line2)] px-2.5 py-1 text-[10px] text-[var(--muted)]">Estimado</span>}</div>
+                <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3"><p className="mu text-[10px]">ÚLTIMO MES</p><p className={`mt-2 font-mono text-[clamp(1rem,2vw,1.25rem)] ${positiveColor(monthReturn)}`}>{monthReturn == null ? '—' : pct(monthReturn)}</p><p className="mu mt-1 text-[10px]">30 días</p></div><div className="rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3"><p className="mu text-[10px]">ÚLTIMO AÑO</p><p className={`mt-2 font-mono text-[clamp(1rem,2vw,1.25rem)] ${positiveColor(safeYearReturn)}`}>{safeYearReturn == null ? '—' : pct(safeYearReturn)}</p><p className="mu mt-1 text-[10px]">{annualized ? `Estimado · ${availableDays} días` : '365 días'}</p></div><div className="col-span-2 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3 sm:col-span-1"><p className="mu text-[10px]">ESCENARIO A 1 AÑO</p><p className="mt-2 break-all font-mono text-[clamp(1rem,2vw,1.25rem)]">{projection == null ? '—' : hidden ? '****' : money(projection, 'USD')}</p><p className="mu mt-1 text-[10px]">Por unidad · estimado</p></div></div>
+                <div className="mu mt-4 flex flex-wrap items-center justify-between gap-2 text-[10.5px]"><span>{end ? `Último dato · ${date(end.time)}` : 'Sin cotización histórica'}</span><span>{end && !hidden ? `Cierre ${money(end.price, 'USD')}` : ''}</span></div>
+                {needsMessage && <div className="mu mt-3 rounded-lg border border-[var(--line)] px-3 py-2 text-[11px] leading-5">{message && <p>{message}</p>}{annualized && <p>El anual es una proyección calculada con {availableDays} días disponibles, no un rendimiento real de 365 días.</p>}{adjustedYear && <p>Se ajustó un salto que podría ser un cambio de ratio del CEDEAR. La corrección es aproximada y requiere confirmación.</p>}</div>}
+            </article>;
         })}</div>}
-        {!loading && Object.values(data).some(row => row.error) && <button type="button" className="mu mx-6 mb-5 mt-4 text-[12px] underline" onClick={() => setRetry(value => value + 1)}>Reintentar historiales</button>}
+        {!loading && Object.values(data).some(row => row.error) && <button type="button" className="mu mt-4 text-[12px] underline" onClick={() => setRetry(value => value + 1)}>Reintentar historiales</button>}
+        <p className="mu mt-4 text-[10.5px] leading-5">El escenario supone que el rendimiento anual se repite y no garantiza resultados. No incluye dividendos, comisiones ni impuestos. Para CEDEARs se usa una conversión aproximada con dólar MEP, que puede diferir del precio del activo en el exterior.</p>
     </section>;
 }
