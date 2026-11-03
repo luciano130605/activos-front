@@ -316,43 +316,21 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     benchmarkDate.setFullYear(benchmarkDate.getFullYear() - 1);
     const benchmarkStart = benchmarkDate.getTime();
     const benchmarkItems = selectedBenchmark ? items.filter(i => (i.kind === 'rate' ? `rate:${i.id}` : `${i.kind}:${i.coin}`) === selectedBenchmark.value) : items;
-    const historyAt = (points: HistoryPoint[] | undefined, target: number, fallback?: number) => {
-        if (!points?.length) return fallback;
-        const first = points[0], last = points[points.length - 1];
-        let closest: HistoryPoint | undefined;
-        for (const point of points) { if (point.time > target) break; closest = point; }
-        if (closest && target - closest.time <= 7 * 86400000) return closest.price;
-        // Para períodos sin historial, prolongar la variación diaria del último mes.
-        const reference = points.find(point => point.time >= last.time - 30 * 86400000);
-        const elapsed = reference ? last.time - reference.time : 0;
-        const boundary = target < first.time ? first : closest ?? last;
-        if (reference && elapsed >= 2 * 86400000 && reference.price > 0 && last.price > 0) {
-            const simulated = boundary.price * Math.exp(Math.log(last.price / reference.price) / elapsed * (target - boundary.time));
-            if (Number.isFinite(simulated) && simulated > 0) return simulated;
-        }
-        return boundary.price || fallback;
+    const annualPriceAt = (points: HistoryPoint[] | undefined, t: number, currentPrice: number) => {
+        if (!points?.length) return NaN;
+        if (t >= today - 60000) return today - points[points.length - 1].time <= 7 * 86400000 ? currentPrice : NaN;
+        let previous: HistoryPoint | undefined;
+        for (const point of points) { if (point.time > t) break; previous = point; }
+        if (previous && t - previous.time <= 7 * 86400000) return previous.price;
+        if (!previous && points[0].time - t <= 3 * 86400000) return points[0].price;
+        return NaN;
     };
     const benchmarkDollarAt = (t: number) => {
         if (!fxRate) return NaN;
-        if (t >= today - 60000) return fxRate;
-        const latest = historyAt(benchmarkHistory?.['dollar:mep'], today, fxRate);
-        const historical = historyAt(benchmarkHistory?.['dollar:mep'], t, fxRate);
-        return latest && historical ? fxRate * historical / latest : NaN;
-    };
-    const needsAnnualSimulation = benchmarkItems.some(i => {
-        if (i.kind === 'rate') return false;
-        const points = benchmarkHistory?.[`${i.kind}:${i.coin}`];
-        return !points?.length || points[0].time > benchmarkStart + 7 * 86400000;
-    });
-    const annualPriceAt = (points: HistoryPoint[] | undefined, t: number, currentPrice: number) => {
-        if (!points?.length) return NaN;
-        if (t >= today - 60000) return currentPrice;
-        if (points[0].time <= benchmarkStart + 7 * 86400000) return historyAt(points, t, currentPrice) ?? NaN;
-        const last = points[points.length - 1];
-        const recent = points.find(p => p.time >= last.time - 30 * 86400000);
-        if (!recent || last.time - recent.time < 2 * 86400000 || today - last.time > 7 * 86400000) return NaN;
-        const growth = Math.log(last.price / recent.price) / (last.time - recent.time);
-        return currentPrice * Math.exp(growth * (t - today));
+        const points = benchmarkHistory?.['dollar:mep'];
+        const latest = points?.length && today - points[points.length - 1].time <= 7 * 86400000 ? points[points.length - 1].price : NaN;
+        const historical = t >= today - 60000 ? latest : annualPriceAt(points, t, fxRate);
+        return Number.isFinite(latest) && Number.isFinite(historical) ? fxRate * historical / latest : NaN;
     };
     const benchmarkValue = (t: number) => benchmarkItems.reduce((sum, i) => {
         if (i.kind === 'rate') {
@@ -391,7 +369,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const averageMonthlyReturn = monthlyValues.length === 13 && monthlyValues.every(v => Number.isFinite(v) && v > 0)
         ? monthlyValues.slice(1).reduce((sum, value, index) => sum + (value / monthlyValues[index] - 1) * 100, 0) / 12
         : null;
-    // El resultado de las posiciones abiertas usa la fecha de cada registro, no el período anual simulado.
+    // El resultado de las posiciones abiertas usa la fecha de cada registro.
     const costInPesos = benchmarkItems.reduce((sum, i) => {
         if (i.currency === 'ARS') return sum + i.amount;
         const points = benchmarkHistory?.['dollar:mep'];
@@ -699,7 +677,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={benchmarkOptions} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} annualSimulated={needsAnnualSimulation} averageMonthlyReturn={averageMonthlyReturn} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={benchmarkOptions} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}

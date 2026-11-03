@@ -160,45 +160,6 @@ const at = (rows: Point[], t: number) => {
 
 };
 
-// Simulación retrospectiva prudente: NO capitaliza una caída de 60 días
-// durante doce meses. Mantiene constante el valor del tramo sin historial.
-// No sustituye una serie de cotizaciones históricas del activo.
-const estimateFromRecent = (valueAt: (t: number) => number, end: number) => {
-    const latest = valueAt(end);
-    if (!Number.isFinite(latest) || latest <= 0) return null;
-
-    // Elegir el tramo más largo disponible, empezando por seis meses.
-    // Las lecturas deben ser positivas, finitas y estar en la misma moneda.
-    for (const days of [180, 120, 90, 60, 30]) {
-        const first = valueAt(end - days * DAY);
-        if (!Number.isFinite(first) || first <= 0) continue;
-        const ratio = latest / first;
-        if (!Number.isFinite(ratio) || ratio < 0.5 || ratio > 2) continue;
-
-        // Detectar cambios de escala, splits sin ajustar o valores corruptos.
-        let valid = true;
-        let previous = first;
-        for (let offset = days - 1; offset >= 0; offset--) {
-            const current = valueAt(end - offset * DAY);
-            if (!Number.isFinite(current) || current <= 0 ||
-                current / previous < 0.65 || current / previous > 1.55) {
-                valid = false;
-                break;
-            }
-            previous = current;
-        }
-        if (!valid) continue;
-
-        // El rendimiento del escenario de 12 meses es SOLO el del tramo
-        // observado; para los meses anteriores se supone un precio estable.
-        // Así una caída reciente NO se repite 12 veces.
-        const yearly = (ratio - 1) * 100;
-        const monthly = (Math.pow(ratio, 1 / 12) - 1) * 100;
-        return { monthly, yearly, days, first, latest };
-    }
-    return null;
-};
-
 const getValue = (points: Point[], t: number) => {
 
     if (!points.length || t < points[0].t) return null;
@@ -231,8 +192,6 @@ export default function Benchmarks({
 
     selectionLabel,
 
-    annualSimulated,
-
     averageMonthlyReturn,
 
 }: {
@@ -258,8 +217,6 @@ export default function Benchmarks({
     options: { value: string; label: string }[];
 
     selectionLabel: string;
-
-    annualSimulated: boolean;
 
     averageMonthlyReturn: number | null;
 
@@ -289,16 +246,8 @@ export default function Benchmarks({
 
     const to = end;
 
-    const simulation = useMemo(() => {
-        if (!available || !(to > from) || !annualSimulated) return null;
-        return estimateFromRecent(valueAt, to);
-    }, [available, from, to, valueAt, annualSimulated]);
-
-    // El padre calcula el promedio real cuando sí hay doce meses de datos.
-    const monthlyDisplay = annualSimulated
-        ? simulation?.monthly ?? null
-        : averageMonthlyReturn != null && Number.isFinite(averageMonthlyReturn)
-            ? averageMonthlyReturn : null;
+    const monthlyDisplay = averageMonthlyReturn != null && Number.isFinite(averageMonthlyReturn)
+        ? averageMonthlyReturn : null;
 
     useEffect(() => {
 
@@ -463,33 +412,12 @@ export default function Benchmarks({
 
         const lines: Line[] = [];
 
-        if (annualSimulated && simulation) {
-            const observedStart = to - simulation.days * DAY;
-            const points = times.map(t => {
-                // Parte sin datos: mantener constante el primer precio conocido.
-                if (t <= observedStart) return { t, value: 100 };
-                const current = valueAt(t);
-                const ratio = Number.isFinite(current) && current > 0
-                    ? current / simulation.first
-                    : 1;
-                return { t, value: 100 * ratio };
-            });
-            lines.push({
-                key: 'cartera', label: `${selectionLabel} · escenario parcial`,
-                points, lastDate: to,
-            });
-        } else if (!annualSimulated) {
+        if (available) {
             const initial = valueAt(from);
             if (Number.isFinite(initial) && initial > 0) {
-                const points = times.map(t => ({
-                    t,
-                    value: valueAt(t) / initial * 100,
-                }));
+                const points = times.map(t => ({ t, value: valueAt(t) / initial * 100 }));
                 if (points.every(p => Number.isFinite(p.value) && p.value > 0)) {
-                    lines.push({
-                        key: 'cartera', label: selectionLabel,
-                        points, lastDate: to,
-                    });
+                    lines.push({ key: 'cartera', label: selectionLabel, points, lastDate: to });
                 }
             }
         }
@@ -728,7 +656,7 @@ export default function Benchmarks({
 
         };
 
-    }, [data, available, from, to, valueAt, visible, selectionLabel, annualSimulated, simulation]);
+    }, [data, available, from, to, valueAt, visible, selectionLabel]);
 
     const handlePointerMove = (
 
@@ -880,30 +808,11 @@ export default function Benchmarks({
 
             </div>}
 
-            <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
-                <p className="mu text-[11px]">
-                    {annualSimulated ? 'Equivalente mensual del escenario parcial · ' : 'Promedio mensual de los últimos 12 meses · '}{selectionLabel}
-                </p>
-                <p className="mt-2 text-[24px] font-medium tabular-nums">
-                    {monthlyDisplay == null ? 'No disponible' : percent(monthlyDisplay)}
-                </p>
-                <p className="mu mt-2 text-[11px] leading-5">
-                    {annualSimulated
-                        ? simulation
-                            ? `Escenario retrospectivo parcial: se usa la variación de los últimos ${simulation.days} días y se mantiene constante el valor durante los meses sin datos. El equivalente mensual es la tasa compuesta del escenario de 12 meses, NO el promedio mensual real.`
-                            : 'No hay cotizaciones recientes comparables suficientes para construir un escenario. Revisá las monedas, los splits y valueAt.'
-                        : 'Promedio aritmético de las variaciones mensuales históricas disponibles. No es la variación acumulada anual.'}
-                </p>
-                {monthlyDisplay == null && <p className="mu mt-1 text-[11px]">No hay precios recientes comparables para calcular una estimación fiable. Revisá la función valueAt y las monedas de cada cotización.</p>}
-            </div>
-
-            {annualSimulated && (
-                <p className="mt-4 rounded-lg border border-[var(--line2)] bg-[var(--raised)] p-3 text-[12px] text-[var(--muted)]">
-                    {simulation
-                        ? `Escenario anual PARCIAL: ${simulation.days} días de evolución disponible y el resto del año sin cambios hipotéticos. No es un rendimiento anual histórico ni una predicción. Si la cotización está mal convertida, este escenario también será incorrecto.`
-                        : 'No es posible simular un año sin al menos dos cotizaciones recientes comparables. No se inventan rendimientos.'}
-                </p>
-            )}
+            {monthlyDisplay != null && <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
+                <p className="mu text-[11px]">Promedio mensual de los últimos 12 meses · {selectionLabel}</p>
+                <p className="mt-2 text-[24px] font-medium tabular-nums">{percent(monthlyDisplay)}</p>
+                <p className="mu mt-2 text-[11px] leading-5">Promedio aritmético de las variaciones mensuales históricas disponibles. No es la variación acumulada anual.</p>
+            </div>}
 
             {/* Portfolio return */}
 
@@ -915,7 +824,7 @@ export default function Benchmarks({
 
                         <p className="mu text-[11px]">
 
-                            {annualSimulated ? 'Escenario de 12 meses con datos parciales (NO histórico)' : 'Variación acumulada en 12 meses'} · {selectionLabel}
+                            Variación acumulada en 12 meses · {selectionLabel}
 
                         </p>
 
@@ -975,7 +884,7 @@ export default function Benchmarks({
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
 
-                <span className="mr-1 inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium">
+                {result?.lines.some(line => line.key === 'cartera') && <span className="mr-1 inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium">
 
                     <span
 
@@ -987,7 +896,7 @@ export default function Benchmarks({
 
                     {selectionLabel}
 
-                </span>
+                </span>}
 
                 {keys.map(key => (
 
@@ -1069,7 +978,7 @@ export default function Benchmarks({
 
                 <div className="mu flex h-[340px] items-center justify-center text-center text-[12px]">
 
-                    {historyError || 'No hay suficientes cotizaciones recientes para calcular o estimar una variación anual.'}
+                    {historyError || 'No hay suficientes cotizaciones recientes para calcular una variación anual.'}
 
                 </div>
 
@@ -1475,7 +1384,7 @@ export default function Benchmarks({
 
                                     <p className="mu mt-1 text-[10px]">
 
-                                        {dateLabel(from)} — {dateLabel(line.lastDate)}{line.key === 'cartera' && annualSimulated ? ' · estimado' : ''}
+                                        {dateLabel(from)} — {dateLabel(line.lastDate)}
 
                                     </p>
 
@@ -1548,8 +1457,6 @@ export default function Benchmarks({
                     Rendimiento comparativo con base 100 al inicio del período.
 
                     Se simula la tenencia de {selection === 'all' ? 'las posiciones actuales' : 'este activo'} durante todo el año.
-
-                    Si faltan 12 meses de historial, el escenario parcial conserva la variación del tramo disponible y mantiene un precio constante durante los meses sin datos. NO extrapola un rendimiento reciente doce veces, ni es una rentabilidad anual histórica.
 
                     Las posiciones en dólares se expresan en pesos usando la evolución histórica del dólar MEP,
 
