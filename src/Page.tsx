@@ -136,6 +136,14 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [priceError, setPriceError] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [theme, setTheme] = preference('theme');
+    const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
+    useEffect(() => {
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const update = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+        media.addEventListener('change', update);
+        return () => media.removeEventListener('change', update);
+    }, []);
+    const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
     const [modal, setModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [assetSearch, setAssetSearch] = useState<AssetKind | null>(null);
@@ -639,10 +647,10 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     }, []);
     const locked = !!assetSearch || !!sellItem || panelEditor || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
-    return <div data-theme={theme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
+    return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
-            <TopBar page={page} count={items.length} theme={theme} onTheme={() => setTheme(v => v === 'dark' ? 'light' : 'dark')} hidden={hidden} onHidden={() => setHidden(v => !v)}
+            <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onExport={exportJSON} onImport={() => fileRef.current?.click()}
                 email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} />
             <div className="ticker" role="group" aria-label="Cotizaciones de referencia">

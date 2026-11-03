@@ -29,7 +29,7 @@ export function cleanSale(raw: unknown): Sale | null {
 }
 
 export type Preferences = {
-    theme: 'dark' | 'light';
+    theme: 'dark' | 'light' | 'system';
     dollar: string;
     hidden: boolean;
     sidebarCollapsed: boolean;
@@ -54,7 +54,7 @@ const dollars = ['bolsa', 'contadoconliqui', 'blue', 'oficial', 'mayorista', 'cr
 export function cleanPreferences(raw: unknown): Preferences {
     const r = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
     return {
-        theme: r.theme === 'light' ? 'light' : 'dark',
+        theme: r.theme === 'light' || r.theme === 'system' ? r.theme : 'dark',
         dollar: typeof r.dollar === 'string' && dollars.includes(r.dollar) ? r.dollar : 'bolsa',
         hidden: r.hidden === true,
         sidebarCollapsed: r.sidebarCollapsed === true,

@@ -2,6 +2,22 @@
 
 @import "tailwindcss";
 
+.appearance-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: #000a; backdrop-filter: blur(7px); animation: appearance-in .2s ease-out; }
+.appearance-dialog { width: min(760px, 100%); max-height: min(90dvh, 780px); overflow-y: auto; border: 1px solid var(--line2); border-radius: 22px; background: var(--surface); box-shadow: 0 24px 80px #0007; animation: appearance-rise .3s cubic-bezier(.22,1,.36,1); }
+.appearance-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 24px 26px 20px; border-bottom: 1px solid var(--line); }
+.appearance-header h2 { margin-top: 6px; font-size: 24px; font-weight: 400; letter-spacing: -.03em; }
+.appearance-header p:not(.lb), .appearance-description { margin-top: 5px; color: var(--muted); font-size: 12px; }
+.appearance-body { display: grid; grid-template-columns: 1.1fr 1fr; }
+.appearance-preview { display: grid; place-items: center; min-height: 330px; padding: 30px; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--sig) 12%, var(--raised)), var(--raised) 70%); overflow: hidden; }
+.appearance-device { --preview-bg: #0a0a09; --preview-surface: #171716; --preview-ink: #ededea; --preview-muted: #85857f; width: 100%; max-width: 330px; border: 5px solid #343431; border-radius: 12px; background: var(--preview-bg); color: var(--preview-ink); box-shadow: 0 20px 35px #0005; transition: background .35s, color .35s, transform .35s; }
+.appearance-device[data-preview-theme=light] { --preview-bg: #f3f2ee; --preview-surface: #fff; --preview-ink: #252521; --preview-muted: #85857f; }
+.preview-top { display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 12px; border-bottom: 1px solid color-mix(in srgb, var(--preview-ink) 10%, transparent); }
+.preview-logo { color: #a7d951; font-weight: 700; font-size: 13px; }.preview-nav { width: 80px; height: 6px; border-radius: 9px; background: color-mix(in srgb, var(--preview-ink) 12%, transparent); }.preview-dot { margin-left: auto; width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--preview-ink) 15%, transparent); }
+.preview-content { padding: 20px; }.preview-caption, .preview-card span { color: var(--preview-muted); font: 7px monospace; letter-spacing: .08em; }.preview-title { margin: 5px 0 12px; font-size: 15px; }.preview-card { padding: 14px; border-radius: 10px; background: var(--preview-surface); transition: background .35s; }.preview-card strong, .preview-card small { display: block; }.preview-card strong { margin-top: 8px; font-size: 19px; font-weight: 400; }.preview-card small { margin-top: 5px; color: #8cbf45; font-size: 8px; }.preview-chart { height: 54px; display: flex; align-items: end; gap: 5px; margin-top: 8px; }.preview-chart i { flex: 1; height: 35%; border-radius: 3px 3px 0 0; background: #a5d95b; opacity: .7; }.preview-chart i:nth-child(3n) { height: 65%; }.preview-chart i:nth-child(4n) { height: 85%; }.preview-chart i:nth-child(5n) { height: 55%; }.preview-cards { display: flex; gap: 7px; margin-top: 8px; }.preview-cards div { height: 32px; flex: 1; border-radius: 7px; background: var(--preview-surface); }
+.appearance-options { padding: 30px 26px; }.appearance-choices { display: grid; gap: 9px; margin-top: 18px; }.appearance-choices button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; text-align: left; border: 1px solid var(--line2); border-radius: 12px; background: var(--surface); transition: border-color .2s, background .2s, transform .2s; }.appearance-choices button:hover { background: var(--raised); transform: translateY(-2px); }.appearance-choices button[aria-pressed=true] { border-color: var(--sig); background: var(--sigbg); }.appearance-choices button:focus-visible { outline: 2px solid var(--sig); outline-offset: 2px; }.appearance-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--raised); font-size: 19px; }.appearance-choice-text { display: grid; gap: 3px; flex: 1; }.appearance-choice-text strong { font-size: 13px; font-weight: 500; }.appearance-choice-text small { color: var(--muted); font-size: 11px; }.appearance-radio { width: 16px; height: 16px; border: 1px solid var(--muted); border-radius: 50%; }.appearance-choices button[aria-pressed=true] .appearance-radio { border: 5px solid var(--sig); }
+@keyframes appearance-in { from { opacity: 0; } } @keyframes appearance-rise { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+@media (max-width: 640px) { .appearance-overlay { align-items: end; padding: 0; }.appearance-dialog { max-height: 94dvh; border-radius: 22px 22px 0 0; }.appearance-header { padding: 20px; }.appearance-body { grid-template-columns: 1fr; }.appearance-preview { min-height: 230px; padding: 20px; }.appearance-device { width: 125px; border-width: 5px; border-radius: 19px; }.preview-top { height: 24px; padding: 0 8px; }.preview-nav { width: 32px; }.preview-content { padding: 12px 9px; }.preview-title { font-size: 11px; }.preview-card { padding: 8px; }.preview-card strong { font-size: 11px; }.preview-chart { height: 28px; gap: 2px; }.preview-cards div { height: 20px; }.appearance-options { padding: 20px 20px max(24px, env(safe-area-inset-bottom)); }.appearance-choices { margin-top: 12px; } }
+
 @theme {
   --font-sans: 'Geist', sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
@@ -242,19 +258,40 @@ input {
 .navpills a {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
+  gap: 0;
+  padding: 0 12px;
   min-height: 36px;
   border-radius: 999px;
   color: var(--muted);
   font-size: 13px;
   white-space: nowrap;
   text-decoration: none;
-  transition: color .15s;
+  transition: color .15s, gap .25s ease;
 }
 
-.navpills a:hover {
+.navpills a:hover, .navpills a:focus-visible {
   color: var(--ink);
+  gap: 8px;
+}
+
+.navpills-label {
+  display: grid;
+  grid-template-columns: 0fr;
+  opacity: 0;
+  transition: grid-template-columns .25s ease, opacity .2s ease;
+}
+
+.navpills-label > span {
+  overflow: hidden;
+}
+
+.navpills a:hover .navpills-label, .navpills a:focus-visible .navpills-label {
+  grid-template-columns: 1fr;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navpills a, .navpills-label { transition: none; }
 }
 
 .navpills a[aria-current=page] {
@@ -264,6 +301,7 @@ input {
 }
 
 .navpills a i {
+  margin-left: 8px;
   font: 400 10.5px 'Geist Mono', monospace;
   font-style: normal;
   opacity: .6;
