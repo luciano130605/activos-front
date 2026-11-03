@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { DarkModeFreeIcons, Download02Icon, LogoutCircle01Icon, PanelLeftCloseFreeIcons, PanelLeftOpenIcon, Search01Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, XIcon } from '@hugeicons/core-free-icons';
+import { DarkModeFreeIcons, Download02Icon, LogoutCircle01Icon, PanelLeftCloseFreeIcons, PanelLeftOpenIcon, Search01Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, Cancel01Icon } from '@hugeicons/core-free-icons';
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
 import PageIcon from './PageIcon';
@@ -84,7 +84,7 @@ export default function Sidebar(props: Props) {
     return <aside ref={ref} id={mobile ? 'mobile-navigation' : 'desktop-navigation'}
         role={mobile ? 'dialog' : undefined} aria-modal={mobile || undefined} aria-label={mobile ? 'Menú de navegación' : 'Barra lateral'}
         className={`shrink-0 border-r border-[var(--line)] bg-[var(--side)] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none ${mobile ? 'relative h-full w-[min(280px,85vw)] translate-x-0 transition-transform duration-[240ms] starting:-translate-x-full' : `sticky top-0 hidden h-dvh transition-[width] duration-[280ms] lg:block ${compact ? 'w-[78px]' : 'w-[250px]'}`}`}>
-        {mobile ? <button type="button" className={`absolute right-4 top-6 rounded-lg p-1 text-[var(--muted)] hover:bg-[var(--raised)] hover:text-[var(--ink)] ${focusClass}`} onClick={onClose} aria-label="Cerrar menú"><HugeiconsIcon icon={XIcon} size={20} /></button> :
+        {mobile ? <button type="button" className={`absolute right-4 top-6 rounded-lg p-1 text-[var(--muted)] hover:bg-[var(--raised)] hover:text-[var(--ink)] ${focusClass}`} onClick={onClose} aria-label="Cerrar menú"><HugeiconsIcon icon={Cancel01Icon} size={20} /></button> :
             <button type="button" className={`absolute -right-3.5 top-[30px] z-20 grid h-7 w-7 place-items-center rounded-[9px] border border-[var(--line2)] bg-[var(--surface)] text-[var(--muted)] transition-colors duration-[160ms] hover:bg-[var(--raised)] hover:text-[var(--ink)] motion-reduce:transition-none ${focusClass}`} onClick={onToggle} aria-expanded={!collapsed} aria-controls="desktop-navigation" aria-label={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'} title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}>
                 {collapsed ? <HugeiconsIcon icon={PanelLeftCloseFreeIcons} size={16} /> : <HugeiconsIcon icon={PanelLeftOpenIcon} size={16} />}
             </button>}

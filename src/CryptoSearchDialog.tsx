@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listCryptoAssets, type CryptoAsset } from './coingecko';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Bitcoin, ChevronRight, LoaderIcon, Refresh04Icon, Search02Icon, XIcon } from '@hugeicons/core-free-icons';
+import { Bitcoin, ChevronRight, LoaderIcon, Refresh04Icon, Search02Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 
 const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const commonIds = ['bitcoin', 'ethereum', 'solana', 'tether', 'usd-coin', 'ripple', 'binancecoin', 'dogecoin'];
@@ -45,7 +45,7 @@ export default function CryptoSearchDialog({ onClose, onSelect }: { onClose: () 
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
         }}>
             <div className="shrink-0 border-b border-[var(--line)] p-5 sm:p-6">
-                <div className="flex items-start justify-between gap-3"><div><h2 id="crypto-search-title" className="text-[23px] font-light tracking-tight">Buscar criptomoneda</h2><p className="mt-1 text-[12px] text-[var(--muted)]">Explorá el catálogo de CoinGecko sin conocer el ID.</p></div><button type="button" onClick={onClose} aria-label="Cerrar buscador" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={XIcon} size={19} /></button></div>
+                <div className="flex items-start justify-between gap-3"><div><h2 id="crypto-search-title" className="text-[23px] font-light tracking-tight">Buscar criptomoneda</h2><p className="mt-1 text-[12px] text-[var(--muted)]">Explorá el catálogo de CoinGecko sin conocer el ID.</p></div><button type="button" onClick={onClose} aria-label="Cerrar buscador" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
                 <label htmlFor="crypto-search" className="mb-1.5 mt-5 block text-[12px] text-[var(--muted)]">Nombre, símbolo o ID</label>
                 <div className="relative"><HugeiconsIcon icon={Search02Icon} size={17} className="pointer-events-none absolute left-3 top-3 text-[var(--muted)]" /><input ref={input} id="crypto-search" type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(40); }} placeholder="Ej: Bitcoin, BTC, Ethereum..." autoComplete="off" spellCheck={false} className="w-full rounded-[10px] border border-[var(--line2)] bg-[var(--raised)] py-2.5 pl-10 pr-3 text-[14px] outline-none focus:border-[var(--muted)]" /></div>
             </div>
