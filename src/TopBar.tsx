@@ -57,7 +57,7 @@ export default function TopBar(p: Props) {
         <div className="acts flex items-center gap-2">
             <div className="seg" role="group" aria-label="Moneda de visualización">{(['USD', 'ARS'] as const).map(c => <button key={c} type="button" aria-pressed={p.display === c} onClick={() => p.onDisplay(c)}>{c}</button>)}</div>
             <button type="button" className="ibtn" onClick={p.onHidden} aria-pressed={p.hidden} aria-label={p.hidden ? 'Mostrar montos' : 'Ocultar montos'} title={p.hidden ? 'Mostrar montos' : 'Ocultar montos'}><HugeiconsIcon icon={p.hidden ? ViewOffIcon : ViewIcon} size={18} /></button>
-            <button type="button" className="ibtn" onClick={() => p.onTheme(p.resolvedTheme === 'dark' ? 'light' : 'dark')} aria-label={`Cambiar a tema ${p.resolvedTheme === 'dark' ? 'claro' : 'oscuro'}`} title="Cambiar tema"> <ThemeIcon size={18} /></button>
+
             <button ref={more} type="button" className="ibtn" aria-haspopup="menu" aria-expanded={!!menu} aria-label="Más opciones" onClick={() => menu ? setMenu(null) : openMenu()}><HugeiconsIcon icon={MenuTwoLineIcon} size={18} /></button>
         </div>
         {menu && <ContextMenu x={menu.x} y={menu.y} title={`${p.email} · ${p.syncLabel}`} onClose={() => setMenu(null)} items={[
@@ -70,6 +70,6 @@ export default function TopBar(p: Props) {
             { sep: true },
             { label: p.leaving ? 'Cerrando sesión…' : 'Cerrar sesión', icon: LogoutCircle01Icon, onSelect: p.onLogout, danger: true },
         ]} />}
-        {appearance && <AppearanceDialog theme={p.theme} resolvedTheme={p.resolvedTheme} onTheme={p.onTheme} onClose={() => setAppearance(false)} />}
+        {appearance && <AppearanceDialog theme={p.theme} onTheme={p.onTheme} onClose={() => setAppearance(false)} />}
     </header>;
 }
