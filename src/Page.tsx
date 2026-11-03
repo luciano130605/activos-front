@@ -320,15 +320,24 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         return () => controller.abort();
     }, [page, historySignature, needsDollarHistory]);
     const [benchmarkSelection, setBenchmarkSelection] = useState('all');
+    const [benchmarkMonths, setBenchmarkMonths] = useState(12);
     const benchmarkOptions = [...new Map(items.map(i => {
         const key = i.kind === 'rate' ? `rate:${i.id}` : `${i.kind}:${i.coin}`;
         return [key, { value: key, label: i.kind === 'cedear' ? `${i.name} · ${i.coin}` : i.name }] as const;
     })).values()];
     const temporarySelected = benchmarkSelection === 'temporary' && temporaryBenchmark !== null;
     const selectedBenchmark = temporarySelected ? { value: 'temporary', label: temporaryBenchmark.name } : benchmarkOptions.find(option => option.value === benchmarkSelection);
-    const benchmarkDate = new Date(today);
-    benchmarkDate.setFullYear(benchmarkDate.getFullYear() - 1);
-    const benchmarkStart = benchmarkDate.getTime();
+    const startForMonths = (months: number) => {
+        const date = new Date(today);
+        const day = date.getDate();
+        date.setDate(1);
+        date.setMonth(date.getMonth() - months);
+        date.setDate(Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
+        return date.getTime();
+    };
+    const yearDate = new Date(today);
+    yearDate.setFullYear(yearDate.getFullYear() - 1);
+    const yearStart = yearDate.getTime();
     const selectTemporaryBenchmark = async (asset: PickedAsset) => {
         const requestId = ++benchmarkSearchRequest.current;
         setBenchmarkSearchOpen(false);
@@ -338,7 +347,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             const raw = await history(kind, asset.id, new AbortController().signal);
             const points = kind === 'cedear' ? adjustPossibleRatios(raw).points : raw;
             const last = points.at(-1);
-            const coversYear = !!last && today - last.time <= 7 * 86400000 && Array.from({ length: 241 }, (_, index) => benchmarkStart + (today - benchmarkStart) * index / 240).every(t => {
+            const coversYear = !!last && today - last.time <= 7 * 86400000 && Array.from({ length: 241 }, (_, index) => yearStart + (today - yearStart) * index / 240).every(t => {
                 const previous = points.filter(point => point.time <= t).at(-1);
                 return previous ? t - previous.time <= 7 * 86400000 : points[0].time - t <= 3 * 86400000;
             });
@@ -392,6 +401,16 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             return sum + i.units * historicalPrice * benchmarkDollarAt(t);
         }, 0);
     };
+    const periods = [1, 6, 12, 24, 36, 72];
+    const canCheckPeriods = benchmarkHistory !== null && !benchmarkHistoryError && (temporarySelected || benchmarkItems.length > 0);
+    const availablePeriods = canCheckPeriods ? periods.filter(months => {
+        const start = startForMonths(months);
+        return Array.from({ length: 241 }, (_, index) => benchmarkValue(start + (today - start) * index / 240))
+            .every(value => Number.isFinite(value) && value > 0);
+    }) : periods;
+    const effectiveMonths = availablePeriods.includes(benchmarkMonths) ? benchmarkMonths
+        : availablePeriods.filter(months => months < benchmarkMonths).at(-1) ?? availablePeriods[0] ?? 1;
+    const benchmarkStart = startForMonths(effectiveMonths);
     const monthlyDates = Array.from({ length: 13 }, (_, index) => {
         const endDate = new Date(today);
         const desiredDay = endDate.getDate();
@@ -726,7 +745,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? temporaryBenchmark.kind !== 'crypto' : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => { benchmarkSearchRequest.current++; setBenchmarkSearchStatus(''); setBenchmarkSearchOpen(true); }} searchStatus={benchmarkSearchStatus} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} months={benchmarkMonths} onMonthsChange={setBenchmarkMonths} valueAt={benchmarkValue} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? temporaryBenchmark.kind !== 'crypto' : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => { benchmarkSearchRequest.current++; setBenchmarkSearchStatus(''); setBenchmarkSearchOpen(true); }} searchStatus={benchmarkSearchStatus} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}

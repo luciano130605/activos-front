@@ -194,6 +194,10 @@ export default function Benchmarks({
 
     end,
 
+    months,
+
+    onMonthsChange,
+
     valueAt,
 
     available,
@@ -223,6 +227,10 @@ export default function Benchmarks({
     start: number;
 
     end: number;
+
+    months: number;
+
+    onMonthsChange: (months: number) => void;
 
     valueAt: (t: number) => number;
 
@@ -664,14 +672,10 @@ export default function Benchmarks({
 
         const startMonth = firstDate.getUTCMonth();
 
+        const step = months <= 6 ? 1 : months <= 12 ? 2 : months <= 36 ? 6 : 12;
         const monthTicks = Array.from(
-
-            { length: 14 },
-
-            (_, i) =>
-
-                Date.UTC(startYear, startMonth + i, 1, 12)
-
+            { length: Math.ceil(months / step) + 2 },
+            (_, i) => Date.UTC(startYear, startMonth + i * step, 1, 12)
         ).filter(t => t >= from && t <= to);
 
         return {
@@ -692,7 +696,7 @@ export default function Benchmarks({
 
         };
 
-    }, [data, available, from, to, valueAt, visible, selectionLabel]);
+    }, [data, available, from, to, valueAt, visible, selectionLabel, months]);
 
     const handlePointerMove = (
 
@@ -784,7 +788,7 @@ export default function Benchmarks({
 
                 <div>
 
-                    <p className="lb">RENDIMIENTO ANUAL</p>
+                    <p className="lb">RENDIMIENTO COMPARADO</p>
 
                     <h2
 
@@ -810,7 +814,7 @@ export default function Benchmarks({
 
                     <p className="mu text-[10px]">
 
-                        Últimos 12 meses
+                        Período seleccionado
 
                     </p>
 
@@ -822,6 +826,15 @@ export default function Benchmarks({
 
                 </div>
 
+            </div>
+
+            <div className="mt-5 max-w-sm">
+                <label htmlFor="benchmark-period" className="mb-2 block text-[11px] text-[var(--muted)]">Período</label>
+                <Select id="benchmark-period" label="Período de comparación" value={String(months)} onChange={value => onMonthsChange(Number(value))} options={[
+                    { value: '1', label: '1 mes' }, { value: '6', label: '6 meses' },
+                    { value: '12', label: '1 año' }, { value: '24', label: '2 años' },
+                    { value: '36', label: '3 años' }, { value: '72', label: '6 años' },
+                ]} />
             </div>
 
             <div className="mt-5 max-w-sm">
@@ -853,7 +866,8 @@ export default function Benchmarks({
                 <p className="mu mt-2 text-[11px] leading-5">Promedio aritmético de las variaciones mensuales históricas disponibles. No es la variación acumulada anual.</p>
             </div>}
 
-            {selection === 'temporary' && !historyLoading && !result?.lines.some(line => line.key === 'cartera') && <p role="status" className="mu mt-4 text-[12px]">No hay historial anual suficiente para comparar este activo.</p>}
+            {selection !== 'all' && !historyLoading && !result?.lines.some(line => line.key === 'cartera') && <p role="status" className="mu mt-4 text-[12px]">No hay historial suficiente para comparar este activo durante el período seleccionado.</p>}
+            {selection === 'all' && !historyLoading && !result?.lines.some(line => line.key === 'cartera') && <p role="status" className="mu mt-4 text-[12px]">No hay historial suficiente para comparar toda la cartera durante el período seleccionado.</p>}
 
             {/* Portfolio return */}
 
@@ -865,7 +879,7 @@ export default function Benchmarks({
 
                         <p className="mu text-[11px]">
 
-                            Variación acumulada en 12 meses · {selectionLabel}
+                            Variación acumulada en el período · {selectionLabel}
 
                         </p>
 
@@ -1019,7 +1033,7 @@ export default function Benchmarks({
 
                 <div className="mu flex h-[340px] items-center justify-center text-center text-[12px]">
 
-                    {historyError || 'No hay suficientes cotizaciones recientes para calcular una variación anual.'}
+                    {historyError || 'No hay suficientes cotizaciones para calcular la variación del período.'}
 
                 </div>
 
@@ -1039,7 +1053,7 @@ export default function Benchmarks({
 
                             role="img"
 
-                            aria-label="Gráfico anual de rendimiento comparado, base 100"
+                            aria-label="Gráfico de rendimiento comparado, base 100"
 
                             onPointerMove={handlePointerMove}
 
@@ -1113,7 +1127,7 @@ export default function Benchmarks({
 
                                 >
 
-                                    {i % 2 === 0 ? monthLabel(t) : ''}
+                                    {months > 12 ? new Date(t).toLocaleDateString('es-AR', { month: 'short', year: '2-digit', timeZone: 'UTC' }) : monthLabel(t)}
 
                                 </text>
 
@@ -1497,7 +1511,7 @@ export default function Benchmarks({
 
                     Rendimiento comparativo con base 100 al inicio del período.
 
-                    Se simula la tenencia de {selection === 'all' ? 'las posiciones actuales' : 'este activo'} durante todo el año.
+                    Se simula la tenencia de {selection === 'all' ? 'las posiciones actuales' : 'este activo'} durante el período seleccionado.
 
                     Las posiciones en dólares se expresan en pesos usando la evolución histórica del dólar MEP,
 

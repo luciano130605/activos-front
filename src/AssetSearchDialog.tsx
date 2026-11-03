@@ -27,6 +27,11 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
     const [filtering, setFiltering] = useState(false);
     const [filterStatus, setFilterStatus] = useState('');
     const [qualified, setQualified] = useState<Set<string> | null>(null);
+    const [eligible, setEligible] = useState<Set<string>>(new Set());
+    const [checkingHistory, setCheckingHistory] = useState(false);
+    const [historyFailures, setHistoryFailures] = useState(0);
+    const [historyAttempt, setHistoryAttempt] = useState(0);
+    const eligibilityCache = useRef(new Map<string, boolean>());
     const filterController = useRef<AbortController | null>(null);
     useEffect(() => () => filterController.current?.abort(), []);
     const dialog = useRef<HTMLDivElement>(null);
@@ -55,6 +60,49 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
         const common = (row: Row) => tab === 'crypto' && commonCrypto.includes(row.id) ? commonCrypto.indexOf(row.id) - commonCrypto.length : 0;
         return catalog.rows.filter(row => !term || normalize(`${row.title} ${row.sub} ${row.id}`).includes(term)).sort((a, b) => score(a) - score(b) || common(a) - common(b));
     }, [catalog, query, tab]);
+    useEffect(() => {
+        if (!benchmarkMode || catalog?.status !== 'ready') return;
+        const controller = new AbortController();
+        setEligible(new Set());
+        setCheckingHistory(true);
+        setHistoryFailures(0);
+        const timer = window.setTimeout(() => {
+            const candidates = matches.slice(0, limit);
+            const found = new Set<string>();
+            let next = 0, failures = 0;
+            const now = Date.now();
+            const startDate = new Date(now);
+            startDate.setFullYear(startDate.getFullYear() - 1);
+            const start = startDate.getTime(), day = 86400000;
+            const worker = async () => {
+                while (!controller.signal.aborted) {
+                    const row = candidates[next++];
+                    if (!row) return;
+                    const kind = tab === 'crypto' ? 'crypto' : 'cedear';
+                    const key = `${kind}:${row.id}`;
+                    try {
+                        let valid = eligibilityCache.current.get(key);
+                        if (valid === undefined) {
+                            const points = await history(kind, row.id, controller.signal);
+                            const last = points.at(-1);
+                            valid = !!last && now - last.time <= 7 * day && Array.from({ length: 53 }, (_, i) => {
+                                const t = start + (now - start) * i / 52;
+                                const previous = points.filter(point => point.time <= t).at(-1);
+                                return previous ? t - previous.time <= 7 * day : points[0].time - t <= 3 * day;
+                            }).every(Boolean);
+                            eligibilityCache.current.set(key, valid);
+                        }
+                        if (valid) found.add(row.id);
+                    } catch { if (!controller.signal.aborted) failures++; }
+                    if (!controller.signal.aborted) { setEligible(new Set(found)); setHistoryFailures(failures); }
+                }
+            };
+            void Promise.all(Array.from({ length: Math.min(4, candidates.length) }, worker)).then(() => {
+                if (!controller.signal.aborted) setCheckingHistory(false);
+            });
+        }, 350);
+        return () => { window.clearTimeout(timer); controller.abort(); };
+    }, [benchmarkMode, catalog, matches, limit, tab, historyAttempt]);
     const resetFilter = () => { filterController.current?.abort(); setFiltering(false); setQualified(null); setFilterStatus(''); };
     const filterByInflation = async () => {
         const controller = new AbortController();
@@ -92,8 +140,8 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
             const worker = async () => {
                 while (!controller.signal.aborted) {
                     const index = next++;
-                    if (index >= matches.length) return;
-                    const row = matches[index];
+                    if (index >= eligibleMatches.length) return;
+                    const row = eligibleMatches[index];
                     try {
                         const kind = tab === 'crypto' ? 'crypto' : 'cedear';
                         const raw = await history(kind, row.id, controller.signal);
@@ -102,16 +150,17 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                         const complete = !!recent && now - recent.time <= 7 * day && Array.from({ length: 53 }, (_, i) => quote(points, start + (now - start) * i / 52)).every(value => value > 0);
                         if (complete && first > 0 && last > 0 && (last * dollarEnd / (first * dollarStart) - 1) * 100 >= inflation - 5) found.add(row.id);
                     } catch { if (!controller.signal.aborted) failed++; }
-                    if (!controller.signal.aborted) { finished++; setQualified(new Set(found)); setFilterStatus(`Analizados ${finished} de ${matches.length}${failed ? ` · ${failed} sin consultar` : ''}.`); }
+                    if (!controller.signal.aborted) { finished++; setQualified(new Set(found)); setFilterStatus(`Analizados ${finished} de ${eligibleMatches.length}${failed ? ` · ${failed} sin consultar` : ''}.`); }
                 }
             };
-            await Promise.all(Array.from({ length: Math.min(4, matches.length) }, worker));
+            await Promise.all(Array.from({ length: Math.min(4, eligibleMatches.length) }, worker));
             if (!controller.signal.aborted) { setFiltering(false); setFilterStatus(`Análisis terminado: ${finished} activos${failed ? ` · ${failed} no se pudieron consultar` : ''}.`); }
         } catch {
             if (!controller.signal.aborted) { setFiltering(false); setQualified(null); setFilterStatus('No se pudo consultar la inflación o el dólar. Probá nuevamente.'); }
         }
     };
-    const displayed = qualified === null ? matches : matches.filter(row => qualified.has(row.id));
+    const eligibleMatches = benchmarkMode ? matches.slice(0, limit).filter(row => eligible.has(row.id)) : matches;
+    const displayed = qualified === null ? eligibleMatches : eligibleMatches.filter(row => qualified.has(row.id));
     const switchTab = (next: AssetKind) => { if (next === tab) return; resetFilter(); setCatalog(null); setQuery(''); setLimit(40); setTab(next); };
     return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 p-0 backdrop-blur-[5px] sm:items-center sm:p-4" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
         <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="asset-search-title" className="flex max-h-[90dvh] w-full flex-col rounded-t-[22px] border border-[var(--line2)] bg-[var(--surface)] shadow-2xl sm:max-w-[560px] sm:rounded-[22px]" onKeyDown={event => {
@@ -129,18 +178,20 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                 <div className="relative"><HugeiconsIcon icon={Search02Icon} size={17} className="pointer-events-none absolute left-3 top-3 text-[var(--muted)]" /><input ref={input} id="asset-search" type="search" value={query} onChange={event => { resetFilter(); setQuery(event.target.value); setLimit(40); }} placeholder={current.placeholder} autoComplete="off" spellCheck={false} className="w-full rounded-[10px] border border-[var(--line2)] bg-[var(--raised)] py-2.5 pl-10 pr-3 text-[14px] outline-none focus:border-[var(--muted)]" /></div>
             </div>
             {benchmarkMode && <div className="border-b border-[var(--line)] px-5 py-3">
-                <button type="button" disabled={filtering || catalog?.status !== 'ready'} onClick={qualified === null ? filterByInflation : resetFilter} className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] disabled:opacity-50">{qualified === null ? 'Mostrar los que igualaron o superaron la inflación' : filtering ? 'Consultando…' : 'Mostrar todos'}</button>
+                <button type="button" disabled={filtering || checkingHistory || catalog?.status !== 'ready'} onClick={qualified === null ? filterByInflation : resetFilter} className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] disabled:opacity-50">{qualified === null ? 'Mostrar los que igualaron o superaron la inflación' : filtering ? 'Consultando…' : 'Mostrar todos'}</button>
                 <p className="mu mt-2 text-[11px]">Analiza los resultados de la búsqueda; admite hasta 5 puntos porcentuales por debajo de la inflación. Puede tardar y algunos proveedores limitan las consultas.</p>
                 {filterStatus && <p role="status" className="mu mt-1 text-[11px]">{filterStatus}</p>}
+                <p role="status" className="mu mt-1 text-[11px]">{checkingHistory ? 'Verificando que los activos tengan al menos un año de historial…' : 'Se muestran activos con al menos un año de historial verificable.'} {historyFailures > 0 && `${historyFailures} no se pudieron verificar.`}</p>
+                {historyFailures > 0 && !checkingHistory && <button type="button" onClick={() => setHistoryAttempt(value => value + 1)} className="mt-1 text-[11px] underline">Reintentar verificación</button>}
             </div>}
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:px-4">
                 {!catalog ? <p role="status" className="flex items-center justify-center gap-2 py-12 text-[13px] text-[var(--muted)]"><HugeiconsIcon icon={LoaderIcon} size={17} className="animate-spin" />Cargando {current.label.toLowerCase()}…</p> : catalog.status === 'error' ? <div className="p-4"><p role="alert" className="text-[13px] text-[var(--neg)]">{catalog.message}</p><button type="button" onClick={() => { setCatalog(null); setAttempt(value => value + 1); }} className="mt-4 inline-flex items-center gap-2 text-[12px] underline"><HugeiconsIcon icon={Refresh04Icon} size={14} />Reintentar</button></div> : <>
                     <p role="status" className="mu px-2 pb-2 text-[10px]">{displayed.length.toLocaleString('es-AR')} {query.trim() ? 'resultados' : 'disponibles'} · {current.source}</p>
-                    {displayed.length === 0 ? <p className="px-2 py-10 text-center text-[13px] text-[var(--muted)]">No encontramos coincidencias. Probá otro nombre o ticker.</p> : displayed.slice(0, limit).map(row => <button key={row.id} type="button" onClick={() => onSelect({ kind: tab, id: row.id, name: tab === 'cedear' ? (cedearName(row.id) || row.id) : tab === 'index' ? `${row.title} (${row.id})` : row.title })} className="group flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-[var(--raised)] focus-visible:bg-[var(--raised)]">
+                    {displayed.length === 0 ? <p className="px-2 py-10 text-center text-[13px] text-[var(--muted)]">{checkingHistory ? 'Verificando historiales…' : 'No encontramos activos disponibles. Probá otro nombre o ticker.'}</p> : displayed.slice(0, limit).map(row => <button key={row.id} type="button" onClick={() => onSelect({ kind: tab, id: row.id, name: tab === 'cedear' ? (cedearName(row.id) || row.id) : tab === 'index' ? `${row.title} (${row.id})` : row.title })} className="group flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-[var(--raised)] focus-visible:bg-[var(--raised)]">
                         <span className="tk !h-9 !w-9 !rounded-[10px] !text-[9.5px]" style={{ ['--c' as string]: current.color }}>{(tab === 'crypto' ? row.sub.split(' ')[0] : row.id).slice(0, 5)}</span>
                         <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-medium">{row.title}</span><span className="mu mt-1 block truncate text-[10px]">{row.sub}</span></span><HugeiconsIcon icon={ChevronRight} size={16} className="shrink-0 text-[var(--muted)] group-hover:text-[var(--ink)]" />
                     </button>)}
-                    {displayed.length > limit && <button type="button" onClick={() => setLimit(value => value + 40)} className="my-3 w-full rounded-lg border border-[var(--line2)] py-2.5 text-[12px]">Mostrar más</button>}
+                    {(benchmarkMode ? matches.length > limit && qualified === null : displayed.length > limit) && <button type="button" disabled={benchmarkMode && checkingHistory} onClick={() => setLimit(value => value + 40)} className="my-3 w-full rounded-lg border border-[var(--line2)] py-2.5 text-[12px] disabled:opacity-50">Mostrar más</button>}
                 </>}
             </div>
             <p className="shrink-0 border-t border-[var(--line)] px-5 py-4 text-[11px] text-[var(--muted)]">{footer}</p>
