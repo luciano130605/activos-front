@@ -1,9 +1,25 @@
 {
   "framework": "vite",
   "rewrites": [
-    { "source": "/resumen", "destination": "/index.html" },
-    { "source": "/evolucion", "destination": "/index.html" },
-    { "source": "/simulacion", "destination": "/index.html" },
-    { "source": "/mis-inversiones", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://activos-back-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/resumen",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/evolucion",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/simulacion",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mis-inversiones",
+      "destination": "/index.html"
+    }
   ]
 }
