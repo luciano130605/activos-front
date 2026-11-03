@@ -1,4 +1,4 @@
-import { createPasskey, supportsPasskeys } from './passkeys';
+import { createPasskey, passkeyStatus, preparePasskey, supportsPasskeys, type RegistrationOptions } from './passkeys';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { coinPriceOn, coinPricesNow, usdcArsNow } from './coingecko';
 import { cedearPriceOn, cedearPricesNow } from './cedears';
@@ -87,10 +87,34 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             return data.investments.length ? data : null;
         } catch { return null; }
     });
+    const [passkeyCount, setPasskeyCount] = useState<number | null>(null);
+    const [passkeyDialog, setPasskeyDialog] = useState(false);
+    const [passkeyOptions, setPasskeyOptions] = useState<RegistrationOptions | null>(null);
+    const [passkeyMessage, setPasskeyMessage] = useState('');
+    const [passkeyBusy, setPasskeyBusy] = useState(false);
+    useEffect(() => { void passkeyStatus().then(result => setPasskeyCount(result.count)).catch(() => setPasskeyCount(null)); }, []);
+    async function preparePasskeyDialog() {
+        setPasskeyDialog(true); setPasskeyOptions(null); setPasskeyMessage('');
+        if (!supportsPasskeys()) { setPasskeyMessage('Este dispositivo o navegador no admite passkeys. Abrí la app en Safari con HTTPS.'); return; }
+        setPasskeyBusy(true);
+        try { setPasskeyOptions(await preparePasskey()); }
+        catch (error) { setPasskeyMessage(error instanceof Error ? error.message : 'No se pudo preparar la passkey.'); }
+        finally { setPasskeyBusy(false); }
+    }
     async function enablePasskey() {
-        if (!supportsPasskeys()) { setNotice('Este dispositivo o navegador no admite passkeys.'); return; }
-        try { await createPasskey(); setNotice('Passkey activada. Ya podés usarla para ingresar.'); }
-        catch { setNotice('No se pudo activar la passkey. Volvé a intentar.'); }
+        if (!passkeyOptions || passkeyBusy) return;
+        setPasskeyBusy(true); setPasskeyMessage('');
+        try {
+            await createPasskey(passkeyOptions);
+            setPasskeyOptions(null);
+            setPasskeyCount(count => count === null ? 1 : count + 1);
+            void passkeyStatus().then(result => setPasskeyCount(result.count)).catch(() => {});
+            setPasskeyMessage('Passkey activada. Ya podés usarla para ingresar.');
+        } catch (error) {
+            setPasskeyOptions(null);
+            const name = error instanceof Error ? error.name : '';
+            setPasskeyMessage(name === 'NotAllowedError' ? 'La operación se canceló o venció. Volvé a intentar.' : name === 'InvalidStateError' ? 'Esta passkey ya está registrada en este dispositivo.' : error instanceof Error && error.message ? error.message : 'No se pudo activar la passkey. Volvé a intentar.');
+        } finally { setPasskeyBusy(false); }
     }
     const page = usePage();
     const pageInfo = pages[page];
@@ -446,7 +470,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} onTheme={() => setTheme(v => v === 'dark' ? 'light' : 'dark')} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onExport={exportJSON} onImport={() => fileRef.current?.click()}
-                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void enablePasskey()} />
+                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} />
             <div className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
@@ -551,6 +575,15 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         </div>
         <button inert={locked} onClick={openModal} aria-label="Nueva inversión" className="fixed bottom-6 right-5 z-20 grid h-14 w-14 place-items-center rounded-full bg-[var(--ink)] text-[var(--bg)] shadow-[0_6px_24px_rgba(0,0,0,.38)] sm:hidden"><HugeiconsIcon icon={PlusIcon} size={24} /></button>
         {ctx && ctxItem && <ContextMenu x={ctx.x} y={ctx.y} title={ctxItem.name} items={menuFor(ctxItem)} onClose={closeCtx} />}
+        {passkeyDialog && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !passkeyBusy) setPasskeyDialog(false); }}>
+            <section role="dialog" aria-modal="true" aria-labelledby="passkey-title" className="card w-full max-w-md p-6 shadow-2xl">
+                <h2 id="passkey-title" className="text-xl font-light">Passkeys y llaves de seguridad</h2>
+                <p className="mu mt-3 text-[13px] leading-6">{passkeyCount === null ? 'No se pudo consultar el estado de tus passkeys.' : passkeyCount ? `Tenés ${passkeyCount} ${passkeyCount === 1 ? 'passkey registrada' : 'passkeys registradas'} en tu cuenta.` : 'Todavía no tenés passkeys registradas.'}</p>
+                <p className="mu mt-2 text-[12px] leading-5">Podés agregar una passkey para ingresar con Face ID, otro dispositivo o una llave de seguridad.</p>
+                {passkeyMessage && <p role="status" className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3 text-[12px]">{passkeyMessage}</p>}
+                <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" className="btn-ghost" disabled={passkeyBusy} onClick={() => setPasskeyDialog(false)}>Cerrar</button>{passkeyOptions ? <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void enablePasskey()}>{passkeyBusy ? 'Activando…' : 'Crear passkey'}</button> : <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void preparePasskeyDialog()}>{passkeyBusy ? 'Preparando…' : 'Agregar passkey'}</button>}</div>
+            </section>
+        </div>}
         {panelEditor && <PanelEditor selected={visiblePanels} onClose={closePanelEditor} onSave={next => { setPanels(next); setPanelEditor(false); if (page !== 'summary') goTo('/'); }} />}
         {sellItem && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setSellId(null); }}>
             <section role="dialog" aria-modal="true" aria-label="Registrar venta" className="card w-full max-w-md p-6">

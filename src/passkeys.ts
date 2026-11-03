@@ -3,8 +3,10 @@ import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequest
 import { request, type Account } from './account';
 
 export const supportsPasskeys = () => browserSupportsWebAuthn() && window.isSecureContext;
-export async function createPasskey() {
-    const { options, challengeId } = await request<{ options: PublicKeyCredentialCreationOptionsJSON; challengeId: string }>('passkey/register/options', 'POST', {});
+export type RegistrationOptions = { options: PublicKeyCredentialCreationOptionsJSON; challengeId: string };
+export const preparePasskey = () => request<RegistrationOptions>('passkey/register/options', 'POST', {});
+export const passkeyStatus = () => request<{ count: number }>('passkey/status');
+export async function createPasskey({ options, challengeId }: RegistrationOptions) {
     const response = await startRegistration({ optionsJSON: options });
     await request('passkey/register/verify', 'POST', { challengeId, response });
 }

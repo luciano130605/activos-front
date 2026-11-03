@@ -11,7 +11,7 @@ type Props = {
     page: PageId; count: number; theme: 'light' | 'dark'; onTheme: () => void; hidden: boolean; onHidden: () => void;
     display: Currency; onDisplay: (c: Currency) => void; onSearch: () => void; onExport: () => void; onImport: () => void;
     email: string; syncLabel: string; onLogout: () => void; leaving: boolean;
-    onCustomize: () => void; onPasskey: () => void;
+    onCustomize: () => void; onPasskey: () => void; passkeyCount: number | null;
 };
 
 function ThemeIcon({ size = 18 }: { size?: number }) {
@@ -61,7 +61,7 @@ export default function TopBar(p: Props) {
         {menu && <ContextMenu x={menu.x} y={menu.y} title={`${p.email} · ${p.syncLabel}`} onClose={() => setMenu(null)} items={[
             { label: 'Buscar activos', icon: Search01Icon, onSelect: p.onSearch, hint: '/' },
             { label: 'Personalizar panel', icon: DashboardCircleEditIcon, onSelect: p.onCustomize },
-            { label: 'Activar passkey o llave de seguridad', icon: ScanFaceIcon, onSelect: p.onPasskey },
+            { label: p.passkeyCount === null ? 'Passkeys y llaves de seguridad' : p.passkeyCount > 0 ? `Passkeys activadas (${p.passkeyCount})` : 'Activar passkey o llave de seguridad', icon: ScanFaceIcon, onSelect: p.onPasskey },
             { label: 'Exportar datos', icon: Download02Icon, onSelect: p.onExport },
             { label: 'Importar datos', icon: Upload06Icon, onSelect: p.onImport },
             { sep: true },
