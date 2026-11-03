@@ -6,6 +6,7 @@ import AssetSearchDialog, { type AssetKind, type PickedAsset } from './AssetSear
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { INDEXES, indexName, isIndexTicker } from './assets';
 import Distribution from './Distribution';
+import ContributionStreak from './ContributionStreak';
 import Benchmarks from './Benchmarks';
 import Dividends from './Dividends';
 import Inflation from './Inflation';
@@ -124,7 +125,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [filter, setFilter] = useState<Filter>('all');
     const [search, setSearch] = useState('');
     const [display, setDisplay] = preference('display');
-    const [range, setRange] = useState<'7d' | '1m' | '6m' | '1a' | 'todo'>('1m');
+    const [range, setRange] = useState<'7d' | '1m' | '6m' | '1a' | 'todo'>('1a');
     const [chartIndex, setChartIndex] = useState<number | null>(null);
     const [prices, setPrices] = useState<Record<string, number>>({});
     const [rates, setRates] = useState<Rates>({});
@@ -557,6 +558,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div>
                         </section>
                     </div>
+
+                    <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}><ContributionStreak items={items} /></div>
 
                     <div style={{ order: panelOrder('evolution') }} hidden={page !== 'evolution' && (page !== 'summary' || !visiblePanels.includes('evolution'))}>
                         <section className="card mb-3.5 p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">04 — EVOLUCIÓN</p><p className="mu mt-2 text-[11.5px]">Estimada · no es un historial real de precios</p></div><div role="group" aria-label="Período de evolución" className="seg">{([['7d', '7D'], ['1m', '1M'], ['6m', '6M'], ['1a', '1A'], ['todo', 'Todo']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => setRange(id)} aria-pressed={range === id}>{text}</button>)}</div></div>
