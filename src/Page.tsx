@@ -12,6 +12,7 @@ import Benchmarks from './Benchmarks';
 import Dividends from './Dividends';
 import Inflation from './Inflation';
 import AssetPerformance, { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
+import MarketChat from './MarketChat';
 import PanelEditor from './PanelEditor';
 import TopBar from './TopBar';
 import Select from './Select';
@@ -667,6 +668,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const locked = !!assetSearch || !!sellItem || panelEditor || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
     return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
+        <MarketChat items={items} />
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
