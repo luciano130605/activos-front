@@ -105,11 +105,15 @@ export default function Benchmarks({
     end,
     valueAt,
     available,
+    historyLoading,
+    historyError,
 }: {
     start: number;
     end: number;
     valueAt: (t: number) => number;
     available: boolean;
+    historyLoading: boolean;
+    historyError: string;
 }) {
     const [data, setData] = useState<Partial<Series> | null>(null);
     const [retry, setRetry] = useState(0);
@@ -238,6 +242,8 @@ export default function Benchmarks({
                 value: valueAt(t) / initial * 100,
             }))
             .filter(p => Number.isFinite(p.value));
+
+        if (portfolio.length !== times.length) return null;
 
         if (portfolio.length > 1) {
             lines.push({
@@ -554,7 +560,7 @@ export default function Benchmarks({
             </div>
 
             {/* Chart */}
-            {!data ? (
+            {!data || historyLoading ? (
                 <div
                     className="mu flex h-[340px] items-center justify-center text-[12px]"
                     role="status"
@@ -563,7 +569,7 @@ export default function Benchmarks({
                 </div>
             ) : !result ? (
                 <div className="mu flex h-[340px] items-center justify-center text-center text-[12px]">
-                    No hay datos suficientes para comparar este período.
+                    {historyError || 'No hay precios históricos suficientes para todos los activos durante este período.'}
                 </div>
             ) : (
                 <>
@@ -819,11 +825,11 @@ export default function Benchmarks({
             <div className="mt-5 border-t border-[var(--line)] pt-4">
                 <p className="mu text-[11px] leading-5">
                     Rendimiento comparativo con base 100 al inicio del período.
-                    Se simula que las posiciones actuales estuvieron presentes durante todo el año.
-                    Antes de la fecha de carga, CEDEARs y criptomonedas conservan el monto registrado
-                    y las inversiones con tasa se calculan hacia atrás con esa tasa. Después de esa
-                    fecha, la evolución sigue siendo estimada; no es un historial real ni una
-                    rentabilidad ajustada por aportes o ventas. La conversión usa el dólar actual. El dólar MEP y
+                    Se simula la tenencia de las posiciones actuales durante todo el año, utilizando
+                    sus precios históricos. Los valores en pesos de criptomonedas usan la evolución
+                    histórica del dólar MEP y la cotización de conversión actual. Las inversiones con
+                    tasa se simulan con la tasa cargada. No representa los aportes o ventas reales;
+                    si faltan precios históricos suficientes, no se calcula la cartera. El dólar MEP y
                     la UVA utilizan la última cotización disponible; la
                     inflación se acumula mensualmente y el plazo fijo se
                     simula mediante reinversiones. Las referencias pueden

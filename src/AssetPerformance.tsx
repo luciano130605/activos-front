@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Investment } from './portfolio';
 
-type Point = { time: number; price: number };
+export type HistoryPoint = { time: number; price: number };
+type Point = HistoryPoint;
 type Data = Record<string, { points: Point[]; error?: string }>;
 const DAY = 86400000;
 const pct = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
@@ -17,7 +18,7 @@ function historicalPoint(points: Point[], target: number): Point | undefined {
     }
     return best && Math.abs(best.time - target) <= 7 * DAY ? best : undefined;
 }
-function adjustPossibleRatios(points: Point[]) {
+export function adjustPossibleRatios(points: Point[]) {
     const adjusted = points.map(point => ({ ...point }));
     const changes: number[] = [];
     let factor = 1;
@@ -31,7 +32,7 @@ function adjustPossibleRatios(points: Point[]) {
     }
     return { points: adjusted, changes };
 }
-async function history(kind: 'cedear' | 'crypto', id: string, signal: AbortSignal): Promise<Point[]> {
+export async function history(kind: 'cedear' | 'crypto', id: string, signal: AbortSignal): Promise<Point[]> {
     const key = `activos:asset-history:${kind}:${id}`;
     try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return cache.points; } catch { /* Sin caché. */ }
     const url = kind === 'cedear' ? `https://data912.com/historical/cedears/${encodeURIComponent(id)}` : `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`;

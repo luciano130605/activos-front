@@ -78,6 +78,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 18px;
   position: relative;
+  margin-bottom: 10px;
 }
 
 .lb {

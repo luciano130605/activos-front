@@ -11,7 +11,7 @@ import ContributionStreak from './ContributionStreak';
 import Benchmarks from './Benchmarks';
 import Dividends from './Dividends';
 import Inflation from './Inflation';
-import AssetPerformance from './AssetPerformance';
+import AssetPerformance, { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
 import PanelEditor from './PanelEditor';
 import TopBar from './TopBar';
 import Select from './Select';
@@ -274,16 +274,62 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const nowX = Math.min(w - pad, px(today));
         return { w, h, line, area, nowX, nowY: py(current), first: chartDate(start), points: samples.map(sample => ({ ...sample, x: px(sample.t), y: py(sample.value) })) };
     }, [items, prices, range, display, fxRate, officialRate, today, current]);
+    const [benchmarkHistory, setBenchmarkHistory] = useState<Record<string, HistoryPoint[]> | null>(null);
+    const [benchmarkHistoryError, setBenchmarkHistoryError] = useState('');
+    const historySignature = [...new Set(items.filter(i => i.kind !== 'rate' && i.coin).map(i => `${i.kind}:${i.coin}`))].sort().join('|');
+    useEffect(() => {
+        if (page !== 'evolution') return;
+        const controller = new AbortController();
+        setBenchmarkHistory(null); setBenchmarkHistoryError('');
+        const keys = historySignature ? historySignature.split('|') : [];
+        const assetRequests = keys.map(async key => {
+            const [assetKind, id] = key.split(':');
+            const points = await history(assetKind as 'cedear' | 'crypto', id, controller.signal);
+            return [key, assetKind === 'cedear' ? adjustPossibleRatios(points).points : points] as const;
+        });
+        const dollarRequest = keys.some(key => key.startsWith('crypto:')) ? fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) }).then(async response => {
+            if (!response.ok) throw new Error('No se pudo consultar el historial del dólar MEP.');
+            const rows: unknown = await response.json();
+            if (!Array.isArray(rows)) throw new Error('El historial del dólar no está disponible.');
+            const points: HistoryPoint[] = rows.flatMap(row => {
+                const time = Date.parse(`${String(row?.fecha ?? '').slice(0, 10)}T12:00:00Z`), price = Number(row?.venta);
+                return Number.isFinite(time) && Number.isFinite(price) && price > 0 ? [{ time, price }] : [];
+            }).sort((a, b) => a.time - b.time);
+            if (!points.length) throw new Error('El historial del dólar no está disponible.');
+            return ['dollar:mep', points] as const;
+        }) : Promise.resolve(null);
+        void Promise.all([Promise.all(assetRequests), dollarRequest]).then(([entries, dollar]) => {
+            if (!controller.signal.aborted) setBenchmarkHistory(Object.fromEntries(dollar ? [...entries, dollar] : entries));
+        }).catch(() => { if (!controller.signal.aborted) { setBenchmarkHistoryError('No se pudo obtener el historial de todos tus activos o del dólar. Volvé a intentar más tarde.'); setBenchmarkHistory({}); } });
+        return () => controller.abort();
+    }, [page, historySignature]);
     const benchmarkDate = new Date(today);
     benchmarkDate.setFullYear(benchmarkDate.getFullYear() - 1);
     const benchmarkStart = benchmarkDate.getTime();
     const benchmarkItems = items;
+    const historyAt = (points: HistoryPoint[] | undefined, target: number) => {
+        if (!points?.length) return undefined;
+        let closest: HistoryPoint | undefined;
+        for (const point of points) { if (point.time > target) break; closest = point; }
+        if (!closest && points[0].time - target <= 3 * 86400000) closest = points[0];
+        return closest && Math.abs(closest.time - target) <= 7 * 86400000 ? closest.price : undefined;
+    };
     const benchmarkValue = (t: number) => benchmarkItems.reduce((sum, i) => {
-        const purchaseTime = dateMillis(i.date);
-        const v = t < purchaseTime
-            ? i.kind === 'rate' ? i.amount * Math.pow(1 + monthlyRate(i), (t - purchaseTime) / MONTH_MS) : i.amount
-            : valueAt(i, t, prices, today, fxRate);
-        return sum + (i.currency === 'ARS' ? v : v * (fxRate ?? NaN));
+        if (i.kind === 'rate') {
+            const present = valueAt(i, today, prices, today, fxRate);
+            const currentArs = i.currency === 'ARS' ? present : present * (fxRate ?? NaN);
+            return sum + currentArs * Math.pow(1 + monthlyRate(i), (t - today) / MONTH_MS);
+        }
+        const key = `${i.kind}:${i.coin}`;
+        const currentPrice = prices[key];
+        const historicalPrice = t >= today - 60000 ? currentPrice : historyAt(benchmarkHistory?.[key], t);
+        if (!currentPrice || !historicalPrice || !i.units) return NaN;
+        if (i.kind === 'cedear') return sum + i.units * historicalPrice;
+        const latestDollar = historyAt(benchmarkHistory?.['dollar:mep'], today);
+        const historicDollar = t >= today - 60000 ? fxRate : historyAt(benchmarkHistory?.['dollar:mep'], t);
+        if (!latestDollar || !historicDollar || !fxRate) return NaN;
+        const conversion = t >= today - 60000 ? fxRate : historicDollar / latestDollar * fxRate;
+        return sum + i.units * historicalPrice * conversion;
     }, 0);
     const chartPoint = chartIndex == null ? null : chart?.points[chartIndex] ?? null;
     const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); setCoin(k === 'cedear' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
@@ -578,7 +624,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}
