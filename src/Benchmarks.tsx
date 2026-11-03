@@ -18,6 +18,10 @@ type Series = {
 
     dollar: Row[];
 
+    official: Row[];
+
+    merval: Row[];
+
     uva: Row[];
 
     inflation: Row[];
@@ -64,6 +68,10 @@ const endpoints = {
 
     dollar: 'cotizaciones/dolares/bolsa',
 
+    official: 'cotizaciones/dolares/oficial',
+
+    merval: '/api/benchmarks/merval',
+
     uva: 'finanzas/indices/uva',
 
     inflation: 'finanzas/indices/inflacion',
@@ -77,6 +85,10 @@ const labels = {
     cartera: 'Mi cartera',
 
     dollar: 'Dólar MEP',
+
+    official: 'Dólar oficial',
+
+    merval: 'Merval',
 
     uva: 'UVA',
 
@@ -92,6 +104,10 @@ const colors = {
 
     dollar: '#e3b76a',
 
+    official: '#f28e5b',
+
+    merval: '#50c5cb',
+
     uva: '#79aef2',
 
     inflation: '#e38da4',
@@ -103,6 +119,10 @@ const colors = {
 const keys: (keyof Series)[] = [
 
     'dollar',
+
+    'official',
+
+    'merval',
 
     'uva',
 
@@ -240,6 +260,10 @@ export default function Benchmarks({
 
         dollar: true,
 
+        official: true,
+
+        merval: true,
+
         uva: true,
 
         inflation: true,
@@ -269,7 +293,7 @@ export default function Benchmarks({
 
                 const response = await fetch(
 
-                    `https://api.argentinadatos.com/v1/${path}`,
+                    path.startsWith('/api/') ? path : `https://api.argentinadatos.com/v1/${path}`,
 
                     { signal: controller.signal }
 
@@ -297,7 +321,7 @@ export default function Benchmarks({
 
                         Number.isFinite(
 
-                            key === 'dollar' ? x.venta : x.valor
+                            key === 'dollar' || key === 'official' ? x.venta : x.valor
 
                         )
 
@@ -337,7 +361,7 @@ export default function Benchmarks({
 
     const result = useMemo(() => {
 
-        if (!data || !available || from >= to) return null;
+        if (!data || from >= to) return null;
 
         const convert = (
 
@@ -432,15 +456,15 @@ export default function Benchmarks({
 
         const addRatio = (
 
-            key: 'dollar' | 'uva',
+            key: 'dollar' | 'official' | 'merval' | 'uva',
 
             rows: Point[]
 
         ) => {
 
-            const base = at(rows, from);
+            const base = at(rows, from) ?? (rows[0] && rows[0].t - from <= 3 * DAY ? rows[0] : undefined);
 
-            if (!base || !rows.length) return;
+            if (!base || !rows.length || (base.t <= from && from - base.t > 7 * DAY) || to - rows[rows.length - 1].t > 7 * DAY) return;
 
             const last = rows[rows.length - 1].t;
 
@@ -450,7 +474,7 @@ export default function Benchmarks({
 
                 .flatMap(t => {
 
-                    const p = at(rows, t);
+                    const p = at(rows, t) ?? (base.t > t && base.t - t <= 3 * DAY ? base : undefined);
 
                     return p
 
@@ -479,6 +503,10 @@ export default function Benchmarks({
         };
 
         if (visible.dollar) addRatio('dollar', dollar);
+
+        if (visible.official) addRatio('official', convert(data.official, 'venta'));
+
+        if (visible.merval) addRatio('merval', convert(data.merval, 'valor'));
 
         if (visible.uva) addRatio('uva', uva);
 
@@ -1483,7 +1511,7 @@ export default function Benchmarks({
 
                     simula mediante reinversiones. Las referencias pueden
 
-                    tener distintas fechas de actualización.
+                    tener distintas fechas de actualización. El Merval utiliza la serie de Rosario Finanzas, que enlaza el MSCI Merval con el S&P Merval reescalado.
 
                 </p>
 
