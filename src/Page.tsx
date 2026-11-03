@@ -276,6 +276,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     }, [items, prices, range, display, fxRate, officialRate, today, current]);
     const [temporaryBenchmark, setTemporaryBenchmark] = useState<PickedAsset | null>(null);
     const [benchmarkSearchOpen, setBenchmarkSearchOpen] = useState(false);
+    const [benchmarkSearchStatus, setBenchmarkSearchStatus] = useState('');
+    const benchmarkSearchRequest = useRef(0);
     const [benchmarkHistory, setBenchmarkHistory] = useState<Record<string, HistoryPoint[]> | null>(null);
     const [benchmarkHistoryError, setBenchmarkHistoryError] = useState('');
     const temporaryKey = temporaryBenchmark ? `${temporaryBenchmark.kind === 'index' ? 'cedear' : temporaryBenchmark.kind}:${temporaryBenchmark.id}` : '';
@@ -319,6 +321,31 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const benchmarkDate = new Date(today);
     benchmarkDate.setFullYear(benchmarkDate.getFullYear() - 1);
     const benchmarkStart = benchmarkDate.getTime();
+    const selectTemporaryBenchmark = async (asset: PickedAsset) => {
+        const requestId = ++benchmarkSearchRequest.current;
+        setBenchmarkSearchOpen(false);
+        setBenchmarkSearchStatus(`Consultando el historial de ${asset.name}…`);
+        try {
+            const kind = asset.kind === 'index' ? 'cedear' : asset.kind;
+            const raw = await history(kind, asset.id, new AbortController().signal);
+            const points = kind === 'cedear' ? adjustPossibleRatios(raw).points : raw;
+            const last = points.at(-1);
+            const coversYear = !!last && today - last.time <= 7 * 86400000 && Array.from({ length: 241 }, (_, index) => benchmarkStart + (today - benchmarkStart) * index / 240).every(t => {
+                const previous = points.filter(point => point.time <= t).at(-1);
+                return previous ? t - previous.time <= 7 * 86400000 : points[0].time - t <= 3 * 86400000;
+            });
+            if (requestId !== benchmarkSearchRequest.current) return;
+            if (!coversYear) {
+                setBenchmarkSearchStatus(`${asset.name} no tiene historial anual suficiente para compararlo.`);
+                return;
+            }
+            setTemporaryBenchmark(asset);
+            setBenchmarkSelection('temporary');
+            setBenchmarkSearchStatus('');
+        } catch {
+            if (requestId === benchmarkSearchRequest.current) setBenchmarkSearchStatus(`No se pudo consultar el historial de ${asset.name}. Probá nuevamente.`);
+        }
+    };
     const benchmarkItems = selectedBenchmark ? items.filter(i => (i.kind === 'rate' ? `rate:${i.id}` : `${i.kind}:${i.coin}`) === selectedBenchmark.value) : items;
     const annualPriceAt = (points: HistoryPoint[] | undefined, t: number, currentPrice: number) => {
         if (!points?.length) return NaN;
@@ -691,7 +718,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? temporaryBenchmark.kind !== 'crypto' : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => setBenchmarkSearchOpen(true)} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? temporaryBenchmark.kind !== 'crypto' : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => { benchmarkSearchRequest.current++; setBenchmarkSearchStatus(''); setBenchmarkSearchOpen(true); }} searchStatus={benchmarkSearchStatus} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}
@@ -780,7 +807,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 </form>
             </div>
         </div>}
-        {benchmarkSearchOpen && <AssetSearchDialog onClose={() => setBenchmarkSearchOpen(false)} footer="El activo se usa solo para esta comparación y no se guarda en tu cartera." onSelect={asset => { setTemporaryBenchmark(asset); setBenchmarkSelection('temporary'); setBenchmarkSearchOpen(false); }} />}
+        {benchmarkSearchOpen && <AssetSearchDialog onClose={() => setBenchmarkSearchOpen(false)} footer="El activo se usa solo para esta comparación y no se guarda en tu cartera." onSelect={selectTemporaryBenchmark} />}
         {assetSearch && <AssetSearchDialog initial={assetSearch} onClose={() => setAssetSearch(null)} onSelect={selectAsset} />}
         {confirmDelete && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/65 p-4 backdrop-blur-sm"><div role="alertdialog" aria-modal="true" aria-labelledby="delete-title" className={`${panel} w-full max-w-[390px] p-6 shadow-2xl`}><h2 id="delete-title" className="text-[20px] font-medium">Eliminar inversión</h2><p className="mt-2 text-[13px] text-[var(--muted)]">Esta acción no se puede deshacer. ¿Querés eliminar esta posición de tu cartera?</p><div className="mt-6 flex justify-end gap-2"><button onClick={() => setConfirmDelete(null)} className="rounded-lg border border-[var(--line2)] px-4 py-2.5 text-[13px]">Cancelar</button><button onClick={() => { setItems(prev => prev.filter(i => i.id !== confirmDelete)); setConfirmDelete(null) }} className="rounded-lg bg-[var(--neg)] px-4 py-2.5 text-[13px] font-medium text-white">Eliminar</button></div></div></div>}
         {importPreview && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/65 p-4 backdrop-blur-sm"><div role="alertdialog" aria-modal="true" aria-labelledby="import-title" className={`${panel} w-full max-w-[430px] p-6 shadow-2xl`}><h2 id="import-title" className="text-[20px] font-medium">Importar inversiones</h2><p className="mt-2 text-[13px] text-[var(--muted)]">Se encontraron <strong className="font-medium text-[var(--ink)]">{importPreview.items.length}</strong> inversiones válidas{importPreview.skipped > 0 ? ` (${importPreview.skipped} inválidas se van a omitir)` : ''}. Tenés {items.length} cargadas ahora.</p><ul className="mt-4 space-y-1.5 text-[12px] text-[var(--muted)]"><li><strong className="font-medium text-[var(--ink)]">Combinar:</strong> suma las nuevas y omite las que ya existen.</li><li><strong className="font-medium text-[var(--ink)]">Reemplazar:</strong> borra tu cartera actual y deja solo el archivo.</li></ul><div className="mt-6 flex flex-wrap justify-end gap-2"><button onClick={() => setImportPreview(null)} className="rounded-lg border border-[var(--line2)] px-4 py-2.5 text-[13px]">Cancelar</button><button onClick={() => applyImport('replace')} className="rounded-lg border border-[var(--neg)]/40 px-4 py-2.5 text-[13px] text-[var(--neg)]">Reemplazar</button><button onClick={() => applyImport('merge')} className="rounded-lg bg-[var(--ink)] px-4 py-2.5 text-[13px] font-medium text-[var(--bg)]">Combinar</button></div></div></div>}

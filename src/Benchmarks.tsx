@@ -190,6 +190,8 @@ export default function Benchmarks({
 
     onSearch,
 
+    searchStatus,
+
     options,
 
     selectionLabel,
@@ -217,6 +219,8 @@ export default function Benchmarks({
     onSelectionChange: (value: string) => void;
 
     onSearch: () => void;
+
+    searchStatus: string;
 
     options: { value: string; label: string }[];
 
@@ -799,6 +803,7 @@ export default function Benchmarks({
                 <Select id="benchmark-selection" label="Seleccionar cartera o activo" value={selection} onChange={onSelectionChange} options={[{ value: 'all', label: 'Mi cartera completa' }, ...options]} />
                 <button type="button" onClick={onSearch} className="mt-3 rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] hover:bg-[var(--raised)]">Buscar otro activo</button>
                 <p className="mu mt-2 text-[11px]">El activo buscado se usa solo para comparar y no se guarda en tu cartera.</p>
+                {searchStatus && <p role="status" className="mu mt-2 text-[12px]">{searchStatus}</p>}
 
             </div>
 
