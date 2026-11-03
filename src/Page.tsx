@@ -379,18 +379,18 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             return temporaryBenchmark.kind === 'crypto' ? price * benchmarkDollarAt(t) : price;
         }
         return benchmarkItems.reduce((sum, i) => {
-        if (i.kind === 'rate') {
-            const present = valueAt(i, today, prices, today, fxRate);
-            const historical = present * Math.pow(1 + monthlyRate(i), (t - today) / MONTH_MS);
-            return sum + (i.currency === 'ARS' ? historical : historical * benchmarkDollarAt(t));
-        }
-        const key = `${i.kind}:${i.coin}`;
-        const currentPrice = prices[key];
-        const historicalPrice = currentPrice ? annualPriceAt(benchmarkHistory?.[key], t, currentPrice) : NaN;
-        if (!currentPrice || !historicalPrice || !i.units) return NaN;
-        if (i.kind === 'cedear') return sum + i.units * historicalPrice;
-        return sum + i.units * historicalPrice * benchmarkDollarAt(t);
-    }, 0);
+            if (i.kind === 'rate') {
+                const present = valueAt(i, today, prices, today, fxRate);
+                const historical = present * Math.pow(1 + monthlyRate(i), (t - today) / MONTH_MS);
+                return sum + (i.currency === 'ARS' ? historical : historical * benchmarkDollarAt(t));
+            }
+            const key = `${i.kind}:${i.coin}`;
+            const currentPrice = prices[key];
+            const historicalPrice = currentPrice ? annualPriceAt(benchmarkHistory?.[key], t, currentPrice) : NaN;
+            if (!currentPrice || !historicalPrice || !i.units) return NaN;
+            if (i.kind === 'cedear') return sum + i.units * historicalPrice;
+            return sum + i.units * historicalPrice * benchmarkDollarAt(t);
+        }, 0);
     };
     const monthlyDates = Array.from({ length: 13 }, (_, index) => {
         const endDate = new Date(today);
@@ -410,10 +410,10 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const monthlyHistoryAvailable = temporarySelected
         ? monthlyDates.every(t => hasObservation(benchmarkHistory?.[temporaryKey], t)) && (temporaryBenchmark.kind !== 'crypto' || monthlyDates.every(t => hasObservation(benchmarkHistory?.['dollar:mep'], t)))
         : benchmarkItems.length > 0 && benchmarkItems.every(i => {
-        if (i.kind === 'rate' || !i.coin) return false;
-        const points = benchmarkHistory?.[`${i.kind}:${i.coin}`];
-        return monthlyDates.every(t => hasObservation(points, t)) && (i.kind !== 'crypto' || monthlyDates.every(t => hasObservation(benchmarkHistory?.['dollar:mep'], t)));
-    });
+            if (i.kind === 'rate' || !i.coin) return false;
+            const points = benchmarkHistory?.[`${i.kind}:${i.coin}`];
+            return monthlyDates.every(t => hasObservation(points, t)) && (i.kind !== 'crypto' || monthlyDates.every(t => hasObservation(benchmarkHistory?.['dollar:mep'], t)));
+        });
     const monthlyValues = monthlyHistoryAvailable ? monthlyDates.map(benchmarkValue) : [];
     const averageMonthlyReturn = monthlyValues.length === 13 && monthlyValues.every(v => Number.isFinite(v) && v > 0)
         ? monthlyValues.slice(1).reduce((sum, value, index) => sum + (value / monthlyValues[index] - 1) * 100, 0) / 12
@@ -675,7 +675,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}>
                         <section className="mb-3.5 grid gap-3.5 lg:grid-cols-[1.5fr_1fr]" aria-label="Valor de la cartera">
                             <article className="card hero-glow flex min-h-[360px] flex-col overflow-hidden p-6">
-                                <div className="flex items-center justify-between"><span className="lb">01 — VALOR ACTUAL</span><span className="lb sig">● {priceError ? 'parcial' : 'en vivo'}</span></div>
+                                <div className="flex items-center justify-between"><span className="lb">VALOR ACTUAL</span> </div>
                                 <p className="big mt-6" aria-label={hidden ? 'Monto oculto' : undefined}>{big.cur && <span className="cur">{big.cur}</span>}{big.int}{big.dec && <span className="dec">{big.dec}</span>}</p>
                                 <div className="mt-4 flex flex-wrap items-center gap-3"><span className={`pill ${gain >= 0 ? '' : 'neg'}`}>
                                     <HugeiconsIcon
@@ -690,13 +690,13 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </article>
                             <div className="grid gap-3.5">
                                 <article className="card p-6">
-                                    <p className="lb">02 — CAPITAL Y RESULTADO</p>
+                                    <p className="lb">CAPITAL Y RESULTADO</p>
                                     <div className="mt-4 grid grid-cols-2 gap-4"><div><p className="mu">Aportado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight">{fmt(invested)}</p></div><div><p className="mu">Resultado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight" style={{ color: gain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{fmt(gain)}</p></div></div>
                                     <div className="trk mt-5" role="img" aria-label={`Capital ${(capShare * 100).toFixed(0)}% del valor actual`}><i style={{ width: `${Math.min(100, capShare * 100)}%` }} /><b style={{ width: `${Math.max(0, 100 - capShare * 100)}%`, background: gain >= 0 ? 'var(--sig)' : 'var(--neg)' }} /></div>
                                     <div className="mu mt-2 flex justify-between text-[11px]"><span>capital</span><span style={{ color: gain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{gain >= 0 ? 'ganancia' : 'pérdida'}</span></div>
                                 </article>
                                 <article className="card side-glow p-6">
-                                    <div className="flex items-center justify-between"><p className="lb">03 — REFERENCIA USDC</p><button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Actualizar cotizaciones" title="Actualizar" className="text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div>
+                                    <div className="flex items-center justify-between"><p className="lb">REFERENCIA USDC</p><button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Actualizar cotizaciones" title="Actualizar" className="text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div>
                                     <p className="mt-3 text-[clamp(1.6rem,3vw,2.2rem)] font-light leading-none tracking-tight tabular-nums">{fxRate ? money(fxRate, 'ARS') : 'No disponible'}</p>
                                     <p className="mu mt-2 flex items-center gap-1 text-[11px]">
                                         1 USDC en pesos · convierte USD
@@ -719,7 +719,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     <div style={{ order: panelOrder('streak') }} hidden={page !== 'summary' || !visiblePanels.includes('streak')}><ContributionStreak items={items} hidden={hidden} /></div>
 
                     <div style={{ order: panelOrder('evolution') }} hidden={page !== 'evolution' && (page !== 'summary' || !visiblePanels.includes('evolution'))}>
-                        <section className="card mb-3.5 p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">04 — EVOLUCIÓN</p><p className="mu mt-2 text-[11.5px]">Estimada · no es un historial real de precios</p></div><div role="group" aria-label="Período de evolución" className="seg">{([['7d', '7D'], ['1m', '1M'], ['6m', '6M'], ['1a', '1A'], ['todo', 'Todo']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => setRange(id)} aria-pressed={range === id}>{text}</button>)}</div></div>
+                        <section className="card mb-3.5 p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">EVOLUCIÓN</p><p className="mu mt-2 text-[11.5px]">Estimada · no es un historial real de precios</p></div><div role="group" aria-label="Período de evolución" className="seg">{([['7d', '7D'], ['1m', '1M'], ['6m', '6M'], ['1a', '1A'], ['todo', 'Todo']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => setRange(id)} aria-pressed={range === id}>{text}</button>)}</div></div>
                             {chart ? <><div className="relative mt-7 touch-pan-y" role="slider" tabIndex={0} aria-label="Explorar evolución estimada con las flechas" aria-valuemin={0} aria-valuemax={chart.points.length - 1} aria-valuenow={chartIndex ?? chart.points.length - 1} aria-valuetext={chartPoint ? `${chartDate(chartPoint.t)}: ${fmt(chartPoint.value)}` : `Hoy: ${fmt(current)}`} onBlur={() => setChartIndex(null)} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setChartIndex(index => Math.max(0, Math.min(chart.points.length - 1, (index ?? chart.points.length - 1) + (event.key === 'ArrowRight' ? 1 : -1)))); } }} onPointerMove={event => { const rect = event.currentTarget.getBoundingClientRect(); const x = (event.clientX - rect.left) / rect.width * chart.w; setChartIndex(Math.max(0, Math.min(chart.points.length - 1, Math.round((x - 12) / (chart.w - 24) * (chart.points.length - 1))))); }} onPointerLeave={() => setChartIndex(null)}>
                                 <svg viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" className="h-[230px] w-full overflow-visible" aria-hidden="true"><defs><linearGradient id="invest-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .24 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs>{[.25, .5, .75, 1].map(n => <line key={n} x1="12" x2={chart.w - 12} y1={chart.h * n - 5} y2={chart.h * n - 5} stroke="var(--line2)" strokeDasharray="4 6" />)}<path d={chart.area} fill="url(#invest-fill)" /><path d={chart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />{chartPoint ? <><line x1={chartPoint.x} x2={chartPoint.x} y1="4" y2={chart.h - 12} stroke="var(--muted)" strokeOpacity=".7" strokeDasharray="4 5" /><circle cx={chartPoint.x} cy={chartPoint.y} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" /></> : <circle cx={chart.nowX} cy={chart.nowY} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" />}</svg>
                                 {chartPoint && <div className="pointer-events-none absolute top-2 z-10 rounded-lg border border-[var(--line2)] bg-[var(--raised)] px-3 py-2 shadow-lg" style={{ left: `${Math.max(2, Math.min(98, chartPoint.x / chart.w * 100))}%`, transform: chartPoint.x > chart.w / 2 ? 'translateX(-100%)' : 'none' }}><p className="mu whitespace-nowrap text-[10px]">{chartDate(chartPoint.t)}</p><p className="mt-1 whitespace-nowrap font-mono text-[12px]">{fmt(chartPoint.value)}</p><p className="mu mt-0.5 text-[10px]">Estimado</p></div>}
@@ -734,7 +734,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
 
                     <div style={{ order: panelOrder('investments') }} hidden={page !== 'investments' && (page !== 'summary' || !visiblePanels.includes('investments'))}>
                         <section className="card overflow-hidden" aria-label="Mis inversiones">
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">05 — MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Clic derecho o ⋯ en una fila para editar, duplicar o eliminar</p></div>
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Clic derecho o ⋯ en una fila para editar, duplicar o eliminar</p></div>
                                 <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><button onClick={() => void refresh()} disabled={refreshing} title="Actualizar precios" aria-label="Actualizar precios" className="ibtn !h-[38px] !w-[38px] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div></div>
                             <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
                             <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
