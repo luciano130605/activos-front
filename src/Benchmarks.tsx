@@ -113,6 +113,7 @@ export default function Benchmarks({
     onSelectionChange,
     options,
     selectionLabel,
+    annualSimulated,
 }: {
     start: number;
     end: number;
@@ -125,6 +126,7 @@ export default function Benchmarks({
     onSelectionChange: (value: string) => void;
     options: { value: string; label: string }[];
     selectionLabel: string;
+    annualSimulated: boolean;
 }) {
     const [data, setData] = useState<Partial<Series> | null>(null);
     const [retry, setRetry] = useState(0);
@@ -507,7 +509,7 @@ export default function Benchmarks({
                 <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b border-[var(--line)] pb-5">
                     <div>
                         <p className="mu text-[11px]">
-                            Rendimiento de los últimos 12 meses · {selectionLabel}
+                            {annualSimulated ? 'Proyección anual a partir de la tendencia reciente' : 'Variación acumulada en 12 meses'} · {selectionLabel}
                         </p>
 
                         <div className="mt-2 flex items-center gap-3">
@@ -591,7 +593,7 @@ export default function Benchmarks({
                 </div>
             ) : !result ? (
                 <div className="mu flex h-[340px] items-center justify-center text-center text-[12px]">
-                    {historyError || 'No hay precios históricos suficientes para todos los activos durante este período.'}
+                    {historyError || 'No hay suficientes cotizaciones recientes para calcular o estimar una variación anual.'}
                 </div>
             ) : (
                 <>
@@ -848,8 +850,8 @@ export default function Benchmarks({
                 <p className="mu text-[11px] leading-5">
                     Rendimiento comparativo con base 100 al inicio del período.
                     Se simula la tenencia de {selection === 'all' ? 'las posiciones actuales' : 'este activo'} durante todo el año.
-                    Donde faltan precios históricos, se prolonga la variación diaria del último mes
-                    disponible; si no hay datos suficientes para calcularla, se mantiene el último precio.
+                    Cuando no hay un año de precios históricos, se proyecta durante 12 meses la variación diaria
+                    del último mes disponible. Esa proyección no es el rendimiento anual histórico y puede diferir mucho del resultado real.
                     Las posiciones en dólares se expresan en pesos usando la evolución histórica del dólar MEP,
                     ajustada a la cotización actual de conversión de la app. Las inversiones con tasa usan
                     la tasa cargada. Es una simulación, no un historial real de aportes o ventas. El dólar MEP y
