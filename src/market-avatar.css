@@ -1,0 +1,5 @@
+@keyframes avatar-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-3px) rotate(2deg); } }
+@keyframes avatar-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
+.market-avatar .avatar-body { transform-origin: 40px 45px; animation: avatar-float 4s ease-in-out infinite; }
+.market-avatar .avatar-eyes { transform-origin: 40px 38px; animation: avatar-blink 5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .market-avatar .avatar-body, .market-avatar .avatar-eyes { animation: none; } }
