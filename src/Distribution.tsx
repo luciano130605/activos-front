@@ -34,7 +34,7 @@ export default function Distribution({ byKind, byCurrency, byAsset, bySector, by
             <div className="card p-5 sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <p className="lb">06 — DISTRIBUCIÓN</p>
+                        <p className="lb">DISTRIBUCIÓN</p>
                         <h2 id="dist-title" className="mt-2 text-[20px] font-light tracking-tight">Distribución de la cartera</h2>
                     </div>
                     <div className="seg flex-wrap" role="group" aria-label="Agrupar por">
