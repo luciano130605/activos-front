@@ -7,7 +7,7 @@ import { EyeClosedFreeIcons,  LoaderIcon,  ViewIcon } from '@hugeicons/core-free
 type Props = { onLogin: (account: Account) => void; initialError?: string; fixedEmail?: string; onCancel?: () => void };
 
 export default function Login({ onLogin, initialError = '', fixedEmail, onCancel }: Props) {
-    const [mode, setMode] = useState<'logi|n' | 'register'>('login');
+    const [mode, setMode] = useState<'login' | 'register'>('login');
     const [email, setEmail] = useState(fixedEmail ?? '@gmail.com');
     const [pin, setPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
