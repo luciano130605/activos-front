@@ -166,7 +166,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [panelEditor, setPanelEditor] = useState(false);
     const closePanelEditor = useCallback(() => setPanelEditor(false), []);
     const [panels, setPanels] = preference('panels');
-    const visiblePanels = panels ?? ['value', 'evolution', 'distribution', 'investments', 'inflation'];
+    const visiblePanels = panels ? (panels.includes('panel-v2') ? panels.filter(id => id !== 'panel-v2') : [...panels.filter(id => id !== 'inflation'), ...(panels.includes('value') ? ['macro', 'streak'] : [])]) : ['value', 'macro', 'streak', 'evolution', 'distribution', 'investments'];
     const today = Date.now();
     const fxRate = usdc?.price; // 1 USDC en pesos: referencia única de conversión
     const fxSource = usdc?.source === 'mep' ? 'DolarAPI · MEP (CoinGecko no respondió)' : 'CoinGecko · USDC/ARS';
@@ -560,9 +560,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                         </section>
                     </div>
 
-                    <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}>{page === 'summary' && <MacroDashboard rates={rates} refreshDollars={() => void refresh()} dollarLoading={refreshing} />}</div>
+                    <div style={{ order: panelOrder('macro') }} hidden={page !== 'summary' || !visiblePanels.includes('macro')}>{page === 'summary' && visiblePanels.includes('macro') && <MacroDashboard rates={rates} refreshDollars={() => void refresh()} dollarLoading={refreshing} />}</div>
 
-                    <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}><ContributionStreak items={items} hidden={hidden} /></div>
+                    <div style={{ order: panelOrder('streak') }} hidden={page !== 'summary' || !visiblePanels.includes('streak')}><ContributionStreak items={items} hidden={hidden} /></div>
 
                     <div style={{ order: panelOrder('evolution') }} hidden={page !== 'evolution' && (page !== 'summary' || !visiblePanels.includes('evolution'))}>
                         <section className="card mb-3.5 p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">04 — EVOLUCIÓN</p><p className="mu mt-2 text-[11.5px]">Estimada · no es un historial real de precios</p></div><div role="group" aria-label="Período de evolución" className="seg">{([['7d', '7D'], ['1m', '1M'], ['6m', '6M'], ['1a', '1A'], ['todo', 'Todo']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => setRange(id)} aria-pressed={range === id}>{text}</button>)}</div></div>
@@ -617,7 +617,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" className="btn-ghost" disabled={passkeyBusy} onClick={() => setPasskeyDialog(false)}>Cerrar</button>{passkeyOptions ? <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void enablePasskey()}>{passkeyBusy ? 'Activando…' : 'Crear passkey'}</button> : <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void preparePasskeyDialog()}>{passkeyBusy ? 'Preparando…' : 'Agregar passkey'}</button>}</div>
             </section>
         </div>}
-        {panelEditor && <PanelEditor selected={visiblePanels} onClose={closePanelEditor} onSave={next => { setPanels(next); setPanelEditor(false); if (page !== 'summary') goTo('/'); }} />}
+        {panelEditor && <PanelEditor selected={visiblePanels} onClose={closePanelEditor} onSave={next => { setPanels([...next, 'panel-v2']); setPanelEditor(false); if (page !== 'summary') goTo('/'); }} />}
         {sellItem && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setSellId(null); }}>
             <section role="dialog" aria-modal="true" aria-label="Registrar venta" className="card w-full max-w-md p-6">
                 <h2 className="text-xl">Registrar venta</h2>
