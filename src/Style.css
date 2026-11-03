@@ -16,6 +16,7 @@ input {
   --bg: #0a0a09;
   --side: #0c0c0b;
   --surface: #121211;
+  --surface-transp: rgb(18, 18, 17, 0.8);
   --raised: #1b1b19;
   --ink: #ededea;
   --muted: #9a9a94;
@@ -39,6 +40,7 @@ input {
   --bg: #f3f2ee;
   --side: #f7f6f2;
   --surface: #fff;
+  --surface-transp: rgba(255, 255, 255, 0.8);
   --raised: #eeede8;
   --ink: #161614;
   --muted: #66665f;
@@ -228,8 +230,9 @@ input {
   gap: 2px;
   padding: 4px;
   border: 1px solid var(--line);
+  backdrop-filter: blur(12px);
   border-radius: 999px;
-  background: var(--surface);
+  background: var(--surface-transp);
   overflow-x: auto;
   scrollbar-width: none;
   max-width: 100%;
