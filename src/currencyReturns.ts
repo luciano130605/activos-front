@@ -3,3 +3,7 @@ export function portfolioReturns(startArs: number, endArs: number, startDollar?:
     const dollars = startDollar && endDollar ? ((endArs / endDollar) / (startArs / startDollar) - 1) * 100 : null;
     return { pesos, dollars };
 }
+
+export function estimatedPesos(purchaseUsd: number, currentUsd: number, fraction: number, dollar: number) {
+    return (purchaseUsd + (currentUsd - purchaseUsd) * fraction) * dollar;
+}

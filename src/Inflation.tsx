@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Investment, Sale } from './portfolio';
 import { approximateSplitAdjustment } from './splitAdjustment';
-import { portfolioReturns } from './currencyReturns';
+import { estimatedPesos, portfolioReturns } from './currencyReturns';
 
 type Point = { date: string; value: number };
 type Series = Record<string, Point[]>;
@@ -109,7 +109,7 @@ export default function Inflation({ items, sales, prices, fxRate, hidden }: { it
         const useUva = !!uvaBase && dates.every(d => at(data.uva, d) != null);
         if (!useUva && !annual) return null;
         if (!useUva) reasons.add('Se estima la inflación diaria a partir de la última tasa interanual disponible, suponiendo un ritmo constante.');
-        const needsDollar = items.some(i => i.kind === 'crypto' || (i.kind === 'rate' && i.currency === 'USD'));
+        const needsDollar = items.some(i => i.kind === 'crypto' || (i.kind === 'rate' && i.currency === 'USD') || (i.kind === 'cedear' && dates.some(d => at(data.assets[`cedear:${i.coin}`] ?? [], d) == null)));
         const dollarSeries = dates.map(d => historicalDollar(data.fx, d));
         if (needsDollar && dollarSeries.some(dollar => !dollar)) return null;
         if (needsDollar && dollarSeries.some(dollar => dollar?.estimated)) reasons.add('Se interpoló el dólar MEP en fechas sin cotización histórica cercana.');
@@ -119,17 +119,17 @@ export default function Inflation({ items, sales, prices, fxRate, hidden }: { it
                 if (i.kind === 'rate') { const r = (i.rate ?? 0) / 100; const monthly = i.period === 'month' ? r : Math.pow(1 + r, 1 / 12) - 1; return i.amount * Math.pow(1 + monthly, (ms(d) - ms(i.date)) / (day * 30.4375)) * (i.currency === 'USD' ? (dollar ?? NaN) : 1); }
                 const price = at(data.assets[`${i.kind}:${i.coin}`] ?? [], d);
                 if (price != null) return (i.units ?? NaN) * price * (i.kind === 'crypto' ? (dollar ?? NaN) : 1);
-                // Estimar en la moneda del activo y convertir cada fecha por separado evita mezclar dólares y pesos.
+                // Cuando faltan precios de mercado, estimar el activo en USD y convertir
+                // cada fecha a pesos conserva la variación del tipo de cambio.
                 const purchaseFx = at(data.fx, i.date) ?? fxRate;
-                const quoteCurrency = i.kind === 'crypto' ? 'USD' : 'ARS';
-                const purchase = i.currency === quoteCurrency ? i.amount : i.currency === 'USD' ? i.amount * (purchaseFx ?? NaN) : i.amount / (purchaseFx ?? NaN);
+                const purchase = i.currency === 'USD' ? i.amount : i.amount / (purchaseFx ?? NaN);
                 const live = prices[`${i.kind}:${i.coin}`];
-                const currentValue = live != null && i.units ? i.units * live : purchase;
-                if (i.currency !== quoteCurrency && !at(data.fx, i.date) && fxRate) reasons.add('Los costos sin cambio histórico usan la cotización actual de USDC.');
+                const currentValue = live != null && i.units ? i.units * live / (i.kind === 'cedear' ? (fxRate ?? NaN) : 1) : purchase;
+                if (i.currency === 'ARS' && !at(data.fx, i.date) && fxRate) reasons.add('Los costos en pesos sin cambio histórico usan la cotización actual de USDC.');
                 if (live == null) reasons.add('Las posiciones sin precio actual ni histórico se estiman usando su costo de compra.');
-                reasons.add('Los precios históricos faltantes se aproximan entre el costo de compra y el precio actual; antes de la compra se usa el costo.');
+                reasons.add('Los precios históricos faltantes se aproximan en dólares entre el costo de compra y el precio actual; luego se convierten a pesos con el dólar de cada fecha. Antes de la compra se usa el costo.');
                 const k = Math.max(0, Math.min(1, (ms(d) - ms(i.date)) / Math.max(day, Date.now() - ms(i.date))));
-                return (purchase + (currentValue - purchase) * k) * (quoteCurrency === 'USD' ? (dollar ?? NaN) : 1);
+                return estimatedPesos(purchase, currentValue, k, dollar ?? NaN);
             });
             const total = perAsset.reduce((sum, value) => sum + value, 0);
             const inflation = useUva ? (at(data.uva, d)! / uvaBase! - 1) * 100 : (Math.pow(1 + annual!.value / 100, (ms(d) - startTime) / (365 * day)) - 1) * 100;
