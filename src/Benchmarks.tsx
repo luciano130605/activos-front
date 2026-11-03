@@ -234,8 +234,6 @@ export default function Benchmarks({
 
     const [retry, setRetry] = useState(0);
 
-    const [showInflationComparison, setShowInflationComparison] = useState(false);
-
     const [hoverT, setHoverT] = useState<number | null>(null);
 
     const [visible, setVisible] = useState<Record<keyof Series, boolean>>({
@@ -742,26 +740,6 @@ export default function Benchmarks({
 
         : null;
 
-    const inflationComparison = useMemo(() => {
-        if (!data?.inflation?.length || !result?.lines.length) return null;
-        const monthly = data.inflation.map(row => {
-            const [year, month] = row.fecha.slice(0, 7).split('-').map(Number);
-            return { t: Date.UTC(year, month, 0, 12), value: Number(row.valor) };
-        }).filter(point => Number.isFinite(point.t) && Number.isFinite(point.value) && point.value > -100).sort((a, b) => a.t - b.t);
-        if (!at(monthly, from)) return null;
-        const lastInflation = monthly.at(-1);
-        if (!lastInflation || lastInflation.t <= from) return null;
-        const comparisons = result.lines.filter(line => line.key !== 'inflation').flatMap(line => {
-            const end = Math.min(lastInflation.t, line.lastDate, to);
-            const value = getValue(line.points, end);
-            if (value == null || end <= from || end - line.points[0].t < 30 * DAY) return [];
-            const inflation = (monthly.filter(point => point.t > from && point.t <= end).reduce((total, point) => total * (1 + point.value / 100), 1) - 1) * 100;
-            const change = value - 100;
-            return change >= inflation - 5 ? [{ key: line.key, label: line.label, change, inflation, end }] : [];
-        });
-        return comparisons;
-    }, [data, result, from, to]);
-
     return (
 
         <section
@@ -914,14 +892,6 @@ export default function Benchmarks({
                 </div>
 
             )}
-
-            <div className="mt-5">
-                <button type="button" aria-expanded={showInflationComparison} onClick={() => setShowInflationComparison(value => !value)} className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] hover:bg-[var(--raised)]">{showInflationComparison ? 'Ocultar comparación con inflación' : 'Ver cuáles igualaron o superaron la inflación'}</button>
-                {showInflationComparison && <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4" role="status">
-                    <p className="mu text-[11px] leading-5">Incluye las series visibles que superaron la inflación o quedaron hasta 5 puntos porcentuales por debajo. Se comparan hasta la última fecha disponible para ambas series.</p>
-                    {inflationComparison === null ? <p className="mu mt-3 text-[12px]">No hay datos suficientes para comparar con la inflación.</p> : inflationComparison.length === 0 ? <p className="mu mt-3 text-[12px]">Ninguna de las series visibles alcanzó ese margen.</p> : <ul className="mt-3 space-y-2">{inflationComparison.map(item => <li key={item.key} className="text-[12px]"><span className="font-medium">{item.label}</span> · {percent(item.change)} vs. inflación {percent(item.inflation)} · hasta {dateLabel(item.end)}</li>)}</ul>}
-                </div>}
-            </div>
 
             {/* Controls */}
 
