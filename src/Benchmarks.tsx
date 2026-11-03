@@ -495,19 +495,19 @@ export default function Benchmarks({
                 <label htmlFor="benchmark-selection" className="mb-2 block text-[11px] text-[var(--muted)]">Comparar</label>
                 <Select id="benchmark-selection" label="Seleccionar cartera o activo" value={selection} onChange={onSelectionChange} options={[{ value: 'all', label: 'Mi cartera completa' }, ...options]} />
             </div>
-            <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
+            {selection === 'all' && <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
                 <p className="mu text-[11px]">Resultado en pesos · {selection === 'all' ? 'posiciones abiertas' : selectionLabel}</p>
                 <p className="mt-2 text-[24px] font-medium tabular-nums" style={{ color: actualReturnArs == null ? 'var(--muted)' : actualReturnArs >= 0 ? '#39a967' : 'var(--neg)' }}>{actualReturnArs == null ? 'No disponible' : percent(actualReturnArs)}</p>
                 <p className="mu mt-2 text-[11px] leading-5">Compara el monto registrado de cada posición con su valor actual. Para montos en dólares usa el MEP de la fecha registrada y la cotización actual de conversión. Las fechas pueden ser distintas; no es necesariamente un rendimiento de 12 meses. Excluye ventas cerradas y dividendos.</p>
                 {actualReturnArs == null && <p className="mu mt-1 text-[11px]">Se necesitan precios actuales y cotizaciones históricas para las fechas de registro.</p>}
-            </div>
+            </div>}
 
             {/* Portfolio return */}
             {portfolioReturn !== null && (
                 <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b border-[var(--line)] pb-5">
                     <div>
                         <p className="mu text-[11px]">
-                            Variación anual simulada · {selectionLabel}
+                            Rendimiento de los últimos 12 meses · {selectionLabel}
                         </p>
 
                         <div className="mt-2 flex items-center gap-3">
@@ -808,7 +808,7 @@ export default function Benchmarks({
                                     </p>
 
                                     <p className="mu mt-1 text-[10px]">
-                                        Al {dateLabel(line.lastDate)}
+                                        {dateLabel(from)} — {dateLabel(line.lastDate)}
                                     </p>
                                 </div>
                             );
