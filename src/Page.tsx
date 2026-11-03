@@ -442,7 +442,6 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onExport={exportJSON} onImport={() => fileRef.current?.click()}
                 email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} />
             <div className="ticker" role="group" aria-label="Cotizaciones de referencia">
-                <span className={priceError ? 'live warn' : 'live'} aria-hidden="true" />
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
                 <span role="status">{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
