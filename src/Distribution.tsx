@@ -42,7 +42,7 @@ export default function Distribution({ byKind, byCurrency, byAsset, bySector, by
                     </div>
                 </div>
 
-                {(view === 'sector' || view === 'country') && <p className="mu mt-3 text-[11px]">Clasificación orientativa de CEDEARs conocidos; fondos y activos sin datos figuran como Sin clasificar.</p>}
+                {(view === 'sector' || view === 'country') && <p className="mu mt-3 text-[11px]">Clasificación orientativa según el emisor o el mercado del ETF. Los activos sin datos figuran como Sin clasificar.</p>}
                 {slices.length ? (
                     <div ref={box} className="relative mt-6" onPointerLeave={() => setActive(null)}>
                         <div className="dm" role="img" aria-label={`Distribución: ${sorted.map(s => `${s.label} ${pct(s)}%`).join(', ')}`}>
