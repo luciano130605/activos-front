@@ -17,7 +17,7 @@ const tabs: { id: AssetKind; label: string; color: string; hint: string; placeho
     { id: 'index', label: 'Índices', color: 'var(--c-index)', hint: 'Índice o ticker', placeholder: 'Ej: S&P 500, QQQ…', source: 'Data912' },
 ];
 
-export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelect }: { initial?: AssetKind; onClose: () => void; onSelect: (asset: PickedAsset) => void }) {
+export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelect, footer = 'Elegí un activo para consultar su precio y cargar la inversión.' }: { initial?: AssetKind; onClose: () => void; onSelect: (asset: PickedAsset) => void; footer?: string }) {
     const [tab, setTab] = useState<AssetKind>(initial);
     const [catalog, setCatalog] = useState<Catalog | null>(null);
     const [query, setQuery] = useState('');
@@ -75,7 +75,7 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                     {matches.length > limit && <button type="button" onClick={() => setLimit(value => value + 40)} className="my-3 w-full rounded-lg border border-[var(--line2)] py-2.5 text-[12px]">Mostrar más</button>}
                 </>}
             </div>
-            <p className="shrink-0 border-t border-[var(--line)] px-5 py-4 text-[11px] text-[var(--muted)]">Elegí un activo para consultar su precio y cargar la inversión.</p>
+            <p className="shrink-0 border-t border-[var(--line)] px-5 py-4 text-[11px] text-[var(--muted)]">{footer}</p>
         </div>
     </div>;
 }

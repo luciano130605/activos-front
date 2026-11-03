@@ -188,6 +188,8 @@ export default function Benchmarks({
 
     onSelectionChange,
 
+    onSearch,
+
     options,
 
     selectionLabel,
@@ -213,6 +215,8 @@ export default function Benchmarks({
     selection: string;
 
     onSelectionChange: (value: string) => void;
+
+    onSearch: () => void;
 
     options: { value: string; label: string }[];
 
@@ -793,6 +797,8 @@ export default function Benchmarks({
                 <label htmlFor="benchmark-selection" className="mb-2 block text-[11px] text-[var(--muted)]">Comparar</label>
 
                 <Select id="benchmark-selection" label="Seleccionar cartera o activo" value={selection} onChange={onSelectionChange} options={[{ value: 'all', label: 'Mi cartera completa' }, ...options]} />
+                <button type="button" onClick={onSearch} className="mt-3 rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] hover:bg-[var(--raised)]">Buscar otro activo</button>
+                <p className="mu mt-2 text-[11px]">El activo buscado se usa solo para comparar y no se guarda en tu cartera.</p>
 
             </div>
 
@@ -813,6 +819,8 @@ export default function Benchmarks({
                 <p className="mt-2 text-[24px] font-medium tabular-nums">{percent(monthlyDisplay)}</p>
                 <p className="mu mt-2 text-[11px] leading-5">Promedio aritmético de las variaciones mensuales históricas disponibles. No es la variación acumulada anual.</p>
             </div>}
+
+            {selection === 'temporary' && !historyLoading && !result?.lines.some(line => line.key === 'cartera') && <p role="status" className="mu mt-4 text-[12px]">No hay historial anual suficiente para comparar este activo.</p>}
 
             {/* Portfolio return */}
 
