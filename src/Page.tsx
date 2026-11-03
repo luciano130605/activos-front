@@ -6,6 +6,7 @@ import AssetSearchDialog, { type AssetKind, type PickedAsset } from './AssetSear
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { INDEXES, indexName, isIndexTicker } from './assets';
 import Distribution from './Distribution';
+import Benchmarks from './Benchmarks';
 import Dividends from './Dividends';
 import Inflation from './Inflation';
 import AssetPerformance from './AssetPerformance';
@@ -271,6 +272,11 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const nowX = Math.min(w - pad, px(today));
         return { w, h, line, area, nowX, nowY: py(current), first: chartDate(start), points: samples.map(sample => ({ ...sample, x: px(sample.t), y: py(sample.value) })) };
     }, [items, prices, range, display, fxRate, officialRate, today, current]);
+    const benchmarkDays = { '7d': 7, '1m': 30, '6m': 182, '1a': 365 };
+    const firstInvestment = items.length ? Math.min(...items.map(i => dateMillis(i.date))) : today;
+    const benchmarkStart = Math.max(firstInvestment, range === 'todo' ? firstInvestment : today - benchmarkDays[range] * 86400000);
+    const benchmarkItems = items.filter(i => dateMillis(i.date) <= benchmarkStart);
+    const benchmarkValue = (t: number) => benchmarkItems.reduce((sum, i) => { const v = valueAt(i, t, prices, today, fxRate); return sum + (i.currency === 'ARS' ? v : v * (fxRate ?? NaN)); }, 0);
     const chartPoint = chartIndex == null ? null : chart?.points[chartIndex] ?? null;
     const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); setCoin(k === 'cedear' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
     function openModal() {
@@ -560,6 +566,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}
