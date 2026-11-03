@@ -1,3 +1,4 @@
+import Select from './Select';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
@@ -108,6 +109,10 @@ export default function Benchmarks({
     historyLoading,
     historyError,
     actualReturnArs,
+    selection,
+    onSelectionChange,
+    options,
+    selectionLabel,
 }: {
     start: number;
     end: number;
@@ -116,6 +121,10 @@ export default function Benchmarks({
     historyLoading: boolean;
     historyError: string;
     actualReturnArs: number | null;
+    selection: string;
+    onSelectionChange: (value: string) => void;
+    options: { value: string; label: string }[];
+    selectionLabel: string;
 }) {
     const [data, setData] = useState<Partial<Series> | null>(null);
     const [retry, setRetry] = useState(0);
@@ -250,7 +259,7 @@ export default function Benchmarks({
         if (portfolio.length > 1) {
             lines.push({
                 key: 'cartera',
-                label: labels.cartera,
+                label: selectionLabel,
                 points: portfolio,
                 lastDate: to,
             });
@@ -400,7 +409,7 @@ export default function Benchmarks({
             min,
             max,
         };
-    }, [data, available, from, to, valueAt, visible]);
+    }, [data, available, from, to, valueAt, visible, selectionLabel]);
 
     const handlePointerMove = (
         e: PointerEvent<SVGSVGElement>
@@ -464,7 +473,7 @@ export default function Benchmarks({
                         id="benchmark-title"
                         className="mt-2 text-[20px] font-light tracking-tight"
                     >
-                        Cartera vs. mercado
+                        Cartera y activos vs. mercado
                     </h2>
 
                     <p className="mu mt-2 text-[12px]">
@@ -482,8 +491,12 @@ export default function Benchmarks({
                 </div>
             </div>
 
+            <div className="mt-5 max-w-sm">
+                <label htmlFor="benchmark-selection" className="mb-2 block text-[11px] text-[var(--muted)]">Comparar</label>
+                <Select id="benchmark-selection" label="Seleccionar cartera o activo" value={selection} onChange={onSelectionChange} options={[{ value: 'all', label: 'Mi cartera completa' }, ...options]} />
+            </div>
             <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
-                <p className="mu text-[11px]">Resultado de tus posiciones abiertas en pesos</p>
+                <p className="mu text-[11px]">Resultado en pesos · {selection === 'all' ? 'posiciones abiertas' : selectionLabel}</p>
                 <p className="mt-2 text-[24px] font-medium tabular-nums" style={{ color: actualReturnArs == null ? 'var(--muted)' : actualReturnArs >= 0 ? '#39a967' : 'var(--neg)' }}>{actualReturnArs == null ? 'No disponible' : percent(actualReturnArs)}</p>
                 <p className="mu mt-2 text-[11px] leading-5">Compara el monto registrado de cada posición con su valor actual. Para montos en dólares usa el MEP de la fecha registrada y la cotización actual de conversión. Las fechas pueden ser distintas; no es necesariamente un rendimiento de 12 meses. Excluye ventas cerradas y dividendos.</p>
                 {actualReturnArs == null && <p className="mu mt-1 text-[11px]">Se necesitan precios actuales y cotizaciones históricas para las fechas de registro.</p>}
@@ -494,7 +507,7 @@ export default function Benchmarks({
                 <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b border-[var(--line)] pb-5">
                     <div>
                         <p className="mu text-[11px]">
-                            Variación anual simulada de tu cartera
+                            Variación anual simulada · {selectionLabel}
                         </p>
 
                         <div className="mt-2 flex items-center gap-3">
@@ -534,7 +547,7 @@ export default function Benchmarks({
                         className="h-2 w-2 rounded-full"
                         style={{ background: colors.cartera }}
                     />
-                    Mi cartera
+                    {selectionLabel}
                 </span>
 
                 {keys.map(key => (
@@ -834,7 +847,7 @@ export default function Benchmarks({
             <div className="mt-5 border-t border-[var(--line)] pt-4">
                 <p className="mu text-[11px] leading-5">
                     Rendimiento comparativo con base 100 al inicio del período.
-                    Se simula la tenencia de las posiciones actuales durante todo el año.
+                    Se simula la tenencia de {selection === 'all' ? 'las posiciones actuales' : 'este activo'} durante todo el año.
                     Donde faltan precios históricos, se prolonga la variación diaria del último mes
                     disponible; si no hay datos suficientes para calcularla, se mantiene el último precio.
                     Las posiciones en dólares se expresan en pesos usando la evolución histórica del dólar MEP,

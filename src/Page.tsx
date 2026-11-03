@@ -306,10 +306,16 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         }).catch(() => { if (!controller.signal.aborted) { setBenchmarkHistoryError('No se pudo obtener el historial de todos tus activos o del dólar. Volvé a intentar más tarde.'); setBenchmarkHistory({}); } });
         return () => controller.abort();
     }, [page, historySignature, needsDollarHistory]);
+    const [benchmarkSelection, setBenchmarkSelection] = useState('all');
+    const benchmarkOptions = [...new Map(items.map(i => {
+        const key = i.kind === 'rate' ? `rate:${i.id}` : `${i.kind}:${i.coin}`;
+        return [key, { value: key, label: i.kind === 'cedear' ? `${i.name} · ${i.coin}` : i.name }] as const;
+    })).values()];
+    const selectedBenchmark = benchmarkOptions.find(option => option.value === benchmarkSelection);
     const benchmarkDate = new Date(today);
     benchmarkDate.setFullYear(benchmarkDate.getFullYear() - 1);
     const benchmarkStart = benchmarkDate.getTime();
-    const benchmarkItems = items;
+    const benchmarkItems = selectedBenchmark ? items.filter(i => (i.kind === 'rate' ? `rate:${i.id}` : `${i.kind}:${i.coin}`) === selectedBenchmark.value) : items;
     const historyAt = (points: HistoryPoint[] | undefined, target: number, fallback?: number) => {
         if (!points?.length) return fallback;
         const first = points[0], last = points[points.length - 1];
@@ -654,7 +660,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={benchmarkOptions} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}
