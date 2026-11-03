@@ -252,8 +252,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         return [...groups].map(([label, list], index) => ({ label, color: palette[index % palette.length], value: valueOf(list), count: list.length }));
     };
     const byAsset = groupDistribution(i => i.kind === 'rate' ? i.name : `${i.kind === 'cedear' ? 'CEDEAR' : 'Cripto'} · ${i.coin}`);
-    const bySector = groupDistribution(i => i.kind === 'cedear' ? classifications[i.coin ?? '']?.[0] ?? 'Sin clasificar' : 'Sin clasificar');
-    const byCountry = groupDistribution(i => i.kind === 'cedear' ? classifications[i.coin ?? '']?.[1] ?? 'Sin clasificar' : 'Sin clasificar');
+    const bySector = groupDistribution(i => i.kind === 'crypto' ? 'Criptomonedas' : i.kind === 'cedear' ? classifications[i.coin ?? '']?.[0] ?? 'Sin clasificar' : 'Sin clasificar');
+    const byCountry = groupDistribution(i => i.kind === 'crypto' ? 'Sin país asociado' : i.kind === 'cedear' ? classifications[i.coin ?? '']?.[1] ?? 'Sin clasificar' : 'Sin clasificar');
     const chart = useMemo(() => {
         if (!items.length || !Number.isFinite(current) || !fxRate && items.some(i => i.currency !== display)) return null;
         const earliest = Math.min(today, ...items.map(i => dateMillis(i.date)));
