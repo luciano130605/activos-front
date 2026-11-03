@@ -2,16 +2,19 @@ import { useRef, useState } from 'react';
 
 export type Slice = { label: string; color: string; value: number; count: number };
 
-export default function Distribution({ byKind, byCurrency, format }: {
+export default function Distribution({ byKind, byCurrency, byAsset, bySector, byCountry, format }: {
     byKind: Slice[];
     byCurrency: Slice[];
+    byAsset: Slice[];
+    bySector: Slice[];
+    byCountry: Slice[];
     format: (n: number) => string; // ya respeta el modo "ocultar montos"
 }) {
-    const [view, setView] = useState<'kind' | 'currency'>('kind');
+    const [view, setView] = useState<'kind' | 'currency' | 'asset' | 'sector' | 'country'>('kind');
     const [active, setActive] = useState<string | null>(null);
     const [at, setAt] = useState({ x: 0, y: 0 });
     const box = useRef<HTMLDivElement>(null);
-    const slices = (view === 'kind' ? byKind : byCurrency).filter(s => Number.isFinite(s.value) && s.value > 0);
+    const slices = ({ kind: byKind, currency: byCurrency, asset: byAsset, sector: bySector, country: byCountry }[view]).filter(s => Number.isFinite(s.value) && s.value > 0);
     const total = slices.reduce((s, x) => s + x.value, 0);
     const sorted = [...slices].sort((a, b) => b.value - a.value);
     const hovered = sorted.find(s => s.label === active) ?? null;
@@ -34,11 +37,12 @@ export default function Distribution({ byKind, byCurrency, format }: {
                         <p className="lb">06 — DISTRIBUCIÓN</p>
                         <h2 id="dist-title" className="mt-2 text-[20px] font-light tracking-tight">Distribución de la cartera</h2>
                     </div>
-                    <div className="seg" role="group" aria-label="Agrupar por">
-                        {([['kind', 'Por tipo'], ['currency', 'Por moneda']] as const).map(([id, text]) => <button key={id} type="button" aria-pressed={view === id} onClick={() => { setView(id); setActive(null); }}>{text}</button>)}
+                    <div className="seg flex-wrap" role="group" aria-label="Agrupar por">
+                        {([['kind', 'Tipo'], ['currency', 'Moneda'], ['asset', 'Activo'], ['sector', 'Sector'], ['country', 'País']] as const).map(([id, text]) => <button key={id} type="button" aria-pressed={view === id} onClick={() => { setView(id); setActive(null); }}>{text}</button>)}
                     </div>
                 </div>
 
+                {(view === 'sector' || view === 'country') && <p className="mu mt-3 text-[11px]">Clasificación orientativa de CEDEARs conocidos; fondos y activos sin datos figuran como Sin clasificar.</p>}
                 {slices.length ? (
                     <div ref={box} className="relative mt-6" onPointerLeave={() => setActive(null)}>
                         <div className="dm" role="img" aria-label={`Distribución: ${sorted.map(s => `${s.label} ${pct(s)}%`).join(', ')}`}>

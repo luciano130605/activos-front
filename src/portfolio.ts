@@ -12,6 +12,8 @@ export type Investment = {
     period?: Period;
     coin?: string;
     units?: number;
+    purchasePrice?: number;
+    purchaseFx?: number;
 };
 
 export type Sale = { id: string; name: string; date: string; fraction: number; proceeds: number; currency: Currency; cost: number; costCurrency: Currency };
@@ -112,6 +114,12 @@ export function cleanInvestment(raw: unknown): Investment | null {
         if (typeof r.coin !== 'string' || !r.coin.trim() || !Number.isFinite(units) || units <= 0) return null;
         inv.coin = kind === 'cedear' ? r.coin.trim().toUpperCase() : r.coin.trim().toLowerCase();
         inv.units = units;
+        for (const key of ['purchasePrice', 'purchaseFx'] as const) {
+            if (r[key] != null) {
+                if (typeof r[key] !== 'number' || !Number.isFinite(r[key]) || r[key] <= 0) return null;
+                inv[key] = r[key];
+            }
+        }
     }
     return inv;
 }
