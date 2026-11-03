@@ -1,3 +1,4 @@
+import { createPasskey, supportsPasskeys } from './passkeys';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { coinPriceOn, coinPricesNow, usdcArsNow } from './coingecko';
 import { cedearPriceOn, cedearPricesNow } from './cedears';
@@ -86,6 +87,11 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             return data.investments.length ? data : null;
         } catch { return null; }
     });
+    async function enablePasskey() {
+        if (!supportsPasskeys()) { setNotice('Este dispositivo o navegador no admite passkeys.'); return; }
+        try { await createPasskey(); setNotice('Passkey activada. Ya podés usarla para ingresar.'); }
+        catch { setNotice('No se pudo activar la passkey. Volvé a intentar.'); }
+    }
     const page = usePage();
     const pageInfo = pages[page];
     const titleRef = useRef<HTMLHeadingElement>(null);
@@ -440,7 +446,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} onTheme={() => setTheme(v => v === 'dark' ? 'light' : 'dark')} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onExport={exportJSON} onImport={() => fileRef.current?.click()}
-                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} />
+                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void enablePasskey()} />
             <div className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
