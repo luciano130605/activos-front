@@ -114,6 +114,7 @@ export default function Benchmarks({
     options,
     selectionLabel,
     annualSimulated,
+    averageMonthlyReturn,
 }: {
     start: number;
     end: number;
@@ -127,6 +128,7 @@ export default function Benchmarks({
     options: { value: string; label: string }[];
     selectionLabel: string;
     annualSimulated: boolean;
+    averageMonthlyReturn: number | null;
 }) {
     const [data, setData] = useState<Partial<Series> | null>(null);
     const [retry, setRetry] = useState(0);
@@ -503,6 +505,13 @@ export default function Benchmarks({
                 <p className="mu mt-2 text-[11px] leading-5">Compara el monto registrado de cada posición con su valor actual. Para montos en dólares usa el MEP de la fecha registrada y la cotización actual de conversión. Las fechas pueden ser distintas; no es necesariamente un rendimiento de 12 meses. Excluye ventas cerradas y dividendos.</p>
                 {actualReturnArs == null && <p className="mu mt-1 text-[11px]">Se necesitan precios actuales y cotizaciones históricas para las fechas de registro.</p>}
             </div>}
+
+            <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
+                <p className="mu text-[11px]">Promedio mensual de los últimos 12 meses · {selectionLabel}</p>
+                <p className="mt-2 text-[24px] font-medium tabular-nums">{averageMonthlyReturn == null ? 'No disponible' : percent(averageMonthlyReturn)}</p>
+                <p className="mu mt-2 text-[11px] leading-5">Suma de las 12 variaciones mensuales dividida por 12, calculada con cotizaciones históricas disponibles. Es un promedio por mes, no la variación acumulada del año.</p>
+                {averageMonthlyReturn == null && <p className="mu mt-1 text-[11px]">Se necesitan cotizaciones históricas suficientes para los 12 meses; las inversiones con tasa no tienen una serie de precios de mercado.</p>}
+            </div>
 
             {/* Portfolio return */}
             {portfolioReturn !== null && (

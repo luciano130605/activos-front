@@ -367,6 +367,30 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         if (i.kind === 'cedear') return sum + i.units * historicalPrice;
         return sum + i.units * historicalPrice * benchmarkDollarAt(t);
     }, 0);
+    const monthlyDates = Array.from({ length: 13 }, (_, index) => {
+        const endDate = new Date(today);
+        const desiredDay = endDate.getDate();
+        endDate.setDate(1);
+        endDate.setMonth(endDate.getMonth() - (12 - index));
+        const daysInMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+        endDate.setDate(Math.min(desiredDay, daysInMonth));
+        return endDate.getTime();
+    });
+    const hasObservation = (points: HistoryPoint[] | undefined, timestamp: number) => {
+        if (!points?.length) return false;
+        const previous = points.filter(point => point.time <= timestamp).at(-1);
+        if (previous && timestamp - previous.time <= 7 * 86400000) return true;
+        return !previous && points[0].time - timestamp <= 3 * 86400000;
+    };
+    const monthlyHistoryAvailable = benchmarkItems.length > 0 && benchmarkItems.every(i => {
+        if (i.kind === 'rate' || !i.coin) return false;
+        const points = benchmarkHistory?.[`${i.kind}:${i.coin}`];
+        return monthlyDates.every(t => hasObservation(points, t)) && (i.kind !== 'crypto' || monthlyDates.every(t => hasObservation(benchmarkHistory?.['dollar:mep'], t)));
+    });
+    const monthlyValues = monthlyHistoryAvailable ? monthlyDates.map(benchmarkValue) : [];
+    const averageMonthlyReturn = monthlyValues.length === 13 && monthlyValues.every(v => Number.isFinite(v) && v > 0)
+        ? monthlyValues.slice(1).reduce((sum, value, index) => sum + (value / monthlyValues[index] - 1) * 100, 0) / 12
+        : null;
     // El resultado de las posiciones abiertas usa la fecha de cada registro, no el período anual simulado.
     const costInPesos = benchmarkItems.reduce((sum, i) => {
         if (i.currency === 'ARS') return sum + i.amount;
@@ -675,7 +699,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={benchmarkOptions} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} annualSimulated={needsAnnualSimulation} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} valueAt={benchmarkValue} available={benchmarkItems.length > 0 && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto'))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={benchmarkOptions} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} annualSimulated={needsAnnualSimulation} averageMonthlyReturn={averageMonthlyReturn} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}
