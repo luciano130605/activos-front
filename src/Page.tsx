@@ -6,6 +6,7 @@ import AssetSearchDialog, { type AssetKind, type PickedAsset } from './AssetSear
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { INDEXES, indexName, isIndexTicker } from './assets';
 import Distribution from './Distribution';
+import MacroDashboard from './MacroDashboard';
 import ContributionStreak from './ContributionStreak';
 import Benchmarks from './Benchmarks';
 import Dividends from './Dividends';
@@ -558,6 +559,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div>
                         </section>
                     </div>
+
+                    <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}>{page === 'summary' && <MacroDashboard rates={rates} refreshDollars={() => void refresh()} dollarLoading={refreshing} />}</div>
 
                     <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}><ContributionStreak items={items} hidden={hidden} /></div>
 
