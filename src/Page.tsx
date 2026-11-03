@@ -7,6 +7,7 @@ import { INDEXES, indexName, isIndexTicker } from './assets';
 import Distribution from './Distribution';
 import Dividends from './Dividends';
 import Inflation from './Inflation';
+import AssetPerformance from './AssetPerformance';
 import PanelEditor from './PanelEditor';
 import TopBar from './TopBar';
 import Select from './Select';
@@ -535,6 +536,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     </section>
                 </div>
                 </div>
+                {page === 'investments' && <AssetPerformance items={items} hidden={hidden} />}
                 {page === 'investments' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>{mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}</span></div>)}</div></section>}
                 <footer className="mu mt-8 space-y-2 text-[10px]">
                     <div className="flex flex-wrap items-center justify-between gap-2"><span>ACTIVOS / PANEL PERSONAL</span><span>Precios orientativos · No es asesoramiento financiero.</span></div>
