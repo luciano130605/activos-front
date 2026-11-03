@@ -512,7 +512,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     </section>
                 </div>
 
-                {page === 'inflation' && <Inflation items={items} sales={view.portfolio.sales ?? []} prices={prices} fxRate={fxRate} hidden={hidden} />}
+                {page === 'inflation' && <Inflation />}
                 <div style={{ order: panelOrder('distribution') }} hidden={page !== 'summary' || !visiblePanels.includes('distribution')}>{items.length > 0 && <Distribution byKind={byKind} byCurrency={byCurrency} format={fmt} />}</div>
 
                 <div style={{ order: panelOrder('investments') }} hidden={page !== 'investments' && (page !== 'summary' || !visiblePanels.includes('investments'))}>
