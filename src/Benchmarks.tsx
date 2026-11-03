@@ -26,7 +26,6 @@ type Line = {
 };
 
 const DAY = 86400000;
-const YEAR = 365 * DAY;
 
 const W = 860;
 const H = 300;
@@ -125,8 +124,7 @@ export default function Benchmarks({
 
     const svgRef = useRef<SVGSVGElement>(null);
 
-    // Siempre mostrar como máximo los últimos 12 meses.
-    const from = Math.max(start, end - YEAR);
+    const from = start;
     const to = end;
 
     useEffect(() => {
@@ -821,8 +819,11 @@ export default function Benchmarks({
             <div className="mt-5 border-t border-[var(--line)] pt-4">
                 <p className="mu text-[11px] leading-5">
                     Rendimiento comparativo con base 100 al inicio del período.
-                    La cartera utiliza una estimación de valor, no una
-                    rentabilidad ajustada por flujos de dinero. El dólar MEP y
+                    Se simula que las posiciones actuales estuvieron presentes durante todo el año.
+                    Antes de la fecha de carga, CEDEARs y criptomonedas conservan el monto registrado
+                    y las inversiones con tasa se calculan hacia atrás con esa tasa. Después de esa
+                    fecha, la evolución sigue siendo estimada; no es un historial real ni una
+                    rentabilidad ajustada por aportes o ventas. La conversión usa el dólar actual. El dólar MEP y
                     la UVA utilizan la última cotización disponible; la
                     inflación se acumula mensualmente y el plazo fijo se
                     simula mediante reinversiones. Las referencias pueden

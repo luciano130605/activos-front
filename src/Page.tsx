@@ -274,11 +274,17 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const nowX = Math.min(w - pad, px(today));
         return { w, h, line, area, nowX, nowY: py(current), first: chartDate(start), points: samples.map(sample => ({ ...sample, x: px(sample.t), y: py(sample.value) })) };
     }, [items, prices, range, display, fxRate, officialRate, today, current]);
-    const benchmarkDays = { '7d': 7, '1m': 30, '6m': 182, '1a': 365 };
-    const firstInvestment = items.length ? Math.min(...items.map(i => dateMillis(i.date))) : today;
-    const benchmarkStart = Math.max(firstInvestment, range === 'todo' ? firstInvestment : today - benchmarkDays[range] * 86400000);
-    const benchmarkItems = items.filter(i => dateMillis(i.date) <= benchmarkStart);
-    const benchmarkValue = (t: number) => benchmarkItems.reduce((sum, i) => { const v = valueAt(i, t, prices, today, fxRate); return sum + (i.currency === 'ARS' ? v : v * (fxRate ?? NaN)); }, 0);
+    const benchmarkDate = new Date(today);
+    benchmarkDate.setFullYear(benchmarkDate.getFullYear() - 1);
+    const benchmarkStart = benchmarkDate.getTime();
+    const benchmarkItems = items;
+    const benchmarkValue = (t: number) => benchmarkItems.reduce((sum, i) => {
+        const purchaseTime = dateMillis(i.date);
+        const v = t < purchaseTime
+            ? i.kind === 'rate' ? i.amount * Math.pow(1 + monthlyRate(i), (t - purchaseTime) / MONTH_MS) : i.amount
+            : valueAt(i, t, prices, today, fxRate);
+        return sum + (i.currency === 'ARS' ? v : v * (fxRate ?? NaN));
+    }, 0);
     const chartPoint = chartIndex == null ? null : chart?.points[chartIndex] ?? null;
     const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); setCoin(k === 'cedear' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
     function openModal() {
