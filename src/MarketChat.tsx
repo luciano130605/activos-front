@@ -8,12 +8,17 @@ type Message = { role: 'user' | 'assistant'; content: string; citations?: { url:
 const labels: Record<Provider, string> = { openai: 'OpenAI', claude: 'Claude', gemini: 'Gemini' };
 const suggestions = ['¿Qué pasó hoy en los mercados?', 'Analizá los riesgos de mi cartera', '¿Cómo afecta el dólar MEP a mis CEDEARs?'];
 
-export default function MarketChat({ items }: { items: Investment[] }) {
+function Avatar() {
+    return <svg viewBox="0 0 80 80" className="h-full w-full" aria-hidden="true"><defs><linearGradient id="avatar-lime" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#e5ff91" /><stop offset="1" stopColor="#91c92c" /></linearGradient></defs><path d="M40 7c19 0 30 11 30 30v6c0 19-11 30-30 30S10 62 10 43v-6C10 18 21 7 40 7Z" fill="url(#avatar-lime)" /><path d="M20 25c3-8 10-12 17-13" fill="none" stroke="#f3ffc5" strokeWidth="3" strokeLinecap="round" opacity=".7" /><ellipse cx="29" cy="38" rx="4" ry="6" fill="#25320d" /><ellipse cx="51" cy="38" rx="4" ry="6" fill="#25320d" /><path d="M33 51c4 4 10 4 14 0" fill="none" stroke="#25320d" strokeWidth="2.5" strokeLinecap="round" /></svg>;
+}
+
+export default function MarketChat({ items, settingsRequest }: { items: Investment[]; settingsRequest: number }) {
     const [open, setOpen] = useState(false), [settings, setSettings] = useState(false);
     const [provider, setProvider] = useState<Provider>('openai'), [configured, setConfigured] = useState<Provider[]>([]);
     const [key, setKey] = useState(''), [input, setInput] = useState(''), [messages, setMessages] = useState<Message[]>([]);
     const [busy, setBusy] = useState(false), [error, setError] = useState('');
     const end = useRef<HTMLDivElement>(null);
+    useEffect(() => { if (settingsRequest) { setOpen(true); setSettings(true); setError(''); } }, [settingsRequest]);
     useEffect(() => { if (open) void request<{ providers: Provider[] }>('ai/keys').then(result => { setConfigured(result.providers); setProvider(current => result.providers.includes(current) ? current : result.providers[0] ?? current); }).catch(() => setError('No se pudo consultar la configuración.')); }, [open]);
     useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
     async function saveKey(remove = false) {
@@ -34,7 +39,7 @@ export default function MarketChat({ items }: { items: Investment[] }) {
     }
     function submit(e: FormEvent) { e.preventDefault(); void send(input); }
     return <>
-        {!open && <button type="button" onClick={() => setOpen(true)} className="fixed bottom-6 right-5 z-40 flex items-center gap-2.5 rounded-full bg-[var(--ink)] px-5 py-3.5 text-[13px] font-medium text-[var(--bg)] shadow-[0_12px_40px_rgba(0,0,0,.28)] transition-transform hover:-translate-y-1" aria-label="Abrir asistente de mercado"><Sparkles size={17} /> <span>Preguntale a la IA</span></button>}
+        {!open && <button type="button" onClick={() => { setSettings(false); setOpen(true); }} className="fixed bottom-5 right-5 z-40 h-[72px] w-[72px] rounded-[26px] border border-[var(--line2)] bg-[var(--surface)] p-1 shadow-[0_12px_40px_rgba(0,0,0,.28)] transition-transform hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-[var(--sig)]" aria-label="Abrir asistente de mercado" title="Abrir asistente de mercado"><Avatar /></button>}
         {open && <section role="dialog" aria-label="Asistente de mercado" className="fixed bottom-0 right-0 z-50 flex h-[min(720px,100dvh)] w-full flex-col overflow-hidden border border-[var(--line2)] bg-[var(--surface)] shadow-[0_20px_80px_rgba(0,0,0,.35)] sm:bottom-5 sm:right-5 sm:h-[min(720px,calc(100dvh-40px))] sm:w-[420px] sm:rounded-[24px]">
             <header className="flex items-center gap-3 border-b border-[var(--line)] px-5 py-4"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--sig)]/15 text-[var(--sig)]"><Sparkles size={19} /></div><div className="min-w-0 flex-1"><h2 className="text-[15px] font-medium">Asistente de mercado</h2><p className="mu mt-0.5 text-[11px]">Tu espacio para entender e investigar</p></div><button type="button" title="Nueva conversación" aria-label="Nueva conversación" onClick={() => { setMessages([]); setError(''); }} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><Plus size={18} /></button><button type="button" title="Configurar API key" aria-label="Configurar API key" onClick={() => { setSettings(!settings); setError(''); }} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><KeyRound size={17} /></button><button type="button" aria-label="Cerrar chat" onClick={() => setOpen(false)} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><X size={19} /></button></header>
             {configured.length > 0 && <div className="flex items-center gap-2 border-b border-[var(--line)] px-5 py-3"><span className="mu mr-1 text-[11px]">Proveedor</span>{configured.map(p => <button key={p} type="button" onClick={() => { setProvider(p); setError(''); }} aria-pressed={provider === p} className={`rounded-full border px-3 py-1.5 text-[11px] ${provider === p ? 'border-[var(--sig)] text-[var(--sig)]' : 'border-[var(--line)] text-[var(--muted)]'}`}>{labels[p]}</button>)}</div>}

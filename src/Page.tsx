@@ -82,6 +82,7 @@ const label = 'mb-1.5 block text-[12px] text-[var(--muted)]';
 const panel = 'rounded-[20px] border border-[var(--line)] bg-[var(--surface)]';
 
 export default function Page({ account, onLogout }: { account: Account; onLogout: () => void }) {
+    const [aiSettingsRequest, setAiSettingsRequest] = useState(0);
     const { sync, view, preference, items, setItems } = usePortfolio(account);
     const [leaving, setLeaving] = useState(false);
     const [legacy, setLegacy] = useState(() => {
@@ -668,12 +669,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const locked = !!assetSearch || !!sellItem || panelEditor || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
     return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
-        <MarketChat items={items} />
+        <MarketChat items={items} settingsRequest={aiSettingsRequest} />
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onExport={exportJSON} onImport={() => fileRef.current?.click()}
-                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} />
+                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} onAiSettings={() => setAiSettingsRequest(value => value + 1)} />
             <div className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
