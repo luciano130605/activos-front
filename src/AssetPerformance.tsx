@@ -33,7 +33,7 @@ export function adjustPossibleRatios(points: Point[]) {
     return { points: adjusted, changes };
 }
 export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock', id: string, signal: AbortSignal): Promise<Point[]> {
-    const key = `activos:asset-history:${kind}:${id}`;
+    const key = `activos:asset-history:${kind === 'stock' ? 'stock-v2' : kind}:${id}`;
     try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return cache.points; } catch { /* Sin caché. */ }
     const url = kind === 'stock' ? `/api/stocks/history?symbol=${encodeURIComponent(id)}` : kind === 'cedear' || kind === 'arg-stock' ? `https://data912.com/historical/${kind === 'arg-stock' ? 'stocks' : 'cedears'}/${encodeURIComponent(id)}` : `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`;
     const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]) });
