@@ -1,4 +1,5 @@
 import EmailSettingsDialog from './EmailSettingsDialog';
+import { localQuotes, isLocal } from './local-market';
 import { fixedTermValue } from './fixed-term';
 import RefreshButton from './RefreshButton';
 import { isAiProvider, type AiProvider } from './ai-provider';
@@ -49,13 +50,16 @@ const kinds: { id: Filter; label: string; color: string }[] = [
     { id: 'index', label: 'Índices', color: 'var(--c-index)' },
     { id: 'stock', label: 'Acciones', color: '#9b8cff' },
     { id: 'crypto', label: 'Criptomonedas', color: 'var(--c-crypto)' },
+    { id: 'arg-stock', label: 'Acciones argentinas', color: '#7bb5d5' },
+    { id: 'bond', label: 'Bonos', color: '#e1b77b' },
+    { id: 'fund', label: 'Fondos comunes', color: '#b8d8a3' },
 ];
 // Nombres de los tipos de dólar que devuelve dolarapi.com (campo "casa")
 const dollarLabels: Record<string, string> = { bolsa: 'MEP', contadoconliqui: 'CCL', blue: 'Blue', oficial: 'Oficial', mayorista: 'Mayorista', cripto: 'Cripto', tarjeta: 'Tarjeta' };
 // Dólares que se comparan contra USDC (la referencia de conversión de la app)
 const compareOrder = ['oficial', 'bolsa', 'contadoconliqui', 'blue'];
 type Usdc = { price: number; source: 'coingecko' | 'mep' };
-const titleFor = (kind: Kind) => kind === 'rate' ? 'Con tasa' : kind === 'cedear' ? 'CEDEAR' : kind === 'stock' ? 'Acción' : 'Cripto';
+const titleFor = (kind: Kind) => kind === 'arg-stock' ? 'Acción argentina' : kind === 'bond' ? 'Bono' : kind === 'fund' ? 'Fondo común' : kind === 'rate' ? 'Con tasa' : kind === 'cedear' ? 'CEDEAR' : kind === 'stock' ? 'Acción' : 'Cripto';
 const categoryOf = (investment: Investment): Exclude<Filter, 'all'> => (investment.kind === 'cedear' || investment.kind === 'stock') && isIndexTicker(investment.coin) ? 'index' : investment.kind;
 const localISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const dateMillis = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
@@ -72,7 +76,7 @@ function valueAt(i: Investment, t: number, prices: Record<string, number>, now: 
         return i.amount * Math.pow(1 + monthlyRate(i), (t - start) / MONTH_MS);
     }
     const price = i.coin ? prices[`${i.kind}:${i.coin}`] : undefined;
-    const quoteCurrency = i.kind === 'cedear' ? 'ARS' : 'USD';
+    const quoteCurrency = i.kind === 'cedear' || isLocal(i) ? 'ARS' : 'USD';
     const quotedValue = i.units != null && price != null ? i.units * price : null;
     const current = quotedValue == null ? i.amount : quoteCurrency === i.currency ? quotedValue : !officialRate ? NaN : i.currency === 'ARS' ? quotedValue * officialRate : quotedValue / officialRate;
     if (t >= now) return current; // Sin inventar un pronóstico de mercado.
@@ -225,6 +229,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const fxSource = usdc?.source === 'mep' ? 'DolarAPI · MEP (CoinGecko no respondió)' : 'CoinGecko · USDC/ARS';
     const cryptos = useMemo(() => [...new Set(items.filter(i => i.kind === 'crypto' && i.coin).map(i => i.coin!))], [items]);
     const cedears = useMemo(() => [...new Set(items.filter(i => i.kind === 'cedear' && i.coin).map(i => i.coin!))], [items]);
+    const localItems = useMemo(() => items.filter(isLocal), [items]);
     const stocks = useMemo(() => [...new Set(items.filter(i => i.kind === 'stock' && i.coin).map(i => i.coin!))], [items]);
     const assetId = kind !== 'crypto' && kind !== 'rate' ? coin.trim().toUpperCase() : coin.trim().toLowerCase();
     const quoteSource = kind === 'crypto' ? 'CoinGecko' : kind === 'stock' ? 'Data912 o Yahoo Finance' : 'Data912';
@@ -237,7 +242,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const selectedPrice = priceMode === 'purchase' ? Number(purchasePrice) : quotePrice;
     const previewUnits = selectedPrice && Number.isFinite(selectedPrice) && selectedPrice > 0 && Number.isFinite(convertedAmount) && convertedAmount > 0 ? convertedAmount / selectedPrice : undefined;
     useEffect(() => {
-        if (!modal || kind === 'rate' || !assetId) {
+        if (!modal || kind === 'rate' || kind === 'arg-stock' || kind === 'bond' || kind === 'fund' || !assetId) {
             return;
         }
         const controller = new AbortController();
@@ -262,17 +267,17 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     }, [page, pageInfo.label]);
     const refresh = useCallback(async () => {
         setRefreshing(true); setPriceError(false);
-        const results = await Promise.allSettled([coinPricesNow(cryptos), cedearPricesNow(cedears), dollarsNow(), usdcArsNow(), stockPricesNow(stocks)]);
-        const [cryptoResult, cedearResult, dollarResult, usdcResult, stockResult] = results;
-        setPrices(prev => ({ ...prev, ...(cryptoResult.status === 'fulfilled' ? cryptoResult.value : {}), ...(cedearResult.status === 'fulfilled' ? cedearResult.value : {}), ...(stockResult.status === 'fulfilled' ? stockResult.value : {}) }));
+        const results = await Promise.allSettled([coinPricesNow(cryptos), cedearPricesNow(cedears), dollarsNow(), usdcArsNow(), stockPricesNow(stocks), localQuotes(localItems)]);
+        const [cryptoResult, cedearResult, dollarResult, usdcResult, stockResult, localResult] = results;
+        setPrices(prev => ({ ...prev, ...(cryptoResult.status === 'fulfilled' ? cryptoResult.value : {}), ...(cedearResult.status === 'fulfilled' ? cedearResult.value : {}), ...(stockResult.status === 'fulfilled' ? stockResult.value : {}), ...(localResult.status === 'fulfilled' ? localResult.value : {}) }));
         const gotDollars = dollarResult.status === 'fulfilled' && Object.keys(dollarResult.value).length > 0;
         if (dollarResult.status === 'fulfilled' && gotDollars) setRates(prev => ({ ...prev, ...dollarResult.value }));
         if (usdcResult.status === 'fulfilled') setUsdc({ price: usdcResult.value, source: 'coingecko' });
         else if (dollarResult.status === 'fulfilled' && dollarResult.value.bolsa) setUsdc({ price: dollarResult.value.bolsa.venta, source: 'mep' });
-        setPriceError(results.some(r => r.status === 'rejected') || (dollarResult.status === 'fulfilled' && !gotDollars));
+        setPriceError(results.some(r => r.status === 'rejected') || (dollarResult.status === 'fulfilled' && !gotDollars) || (localResult.status === 'fulfilled' && localItems.some(item => !localResult.value[`${item.kind}:${item.coin}`])));
         setUpdated(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
         setRefreshing(false);
-    }, [cryptos, cedears, stocks]);
+    }, [cryptos, cedears, stocks, localItems]);
     useEffect(() => { void refresh(); }, [refresh]);
     const fx = (v: number, from: Currency) => from === display ? v : !fxRate ? NaN : display === 'USD' ? v / fxRate : v * fxRate;
     // Con "ocultar montos" activo, todo importe se muestra como ****
@@ -291,7 +296,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const alerts = view.portfolio.alerts ?? [];
     const alertStatuses = usePriceAlerts(alerts, items.map(item => ({ kind: item.kind, id: item.coin ?? '', value: fx(valueAt(item, today, prices, today, officialRate), item.currency) })));
     const triggeredAlerts = alerts.filter(alert => alertStatuses[alert.id]?.state === 'triggered');
-    const byKind = (['rate', 'cedear', 'index', 'stock', 'crypto'] as const).map(k => { const list = items.filter(i => categoryOf(i) === k); return { id: k, label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(list), count: list.length }; });
+    const byKind = (['rate', 'cedear', 'index', 'stock', 'crypto', 'arg-stock', 'bond', 'fund'] as const).map(k => { const list = items.filter(i => categoryOf(i) === k); return { id: k, label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(list), count: list.length }; });
     const byCurrency = [
         { label: 'Dólares (USD)', color: 'var(--sig)', value: valueOf(items.filter(i => i.currency === 'USD')), count: items.filter(i => i.currency === 'USD').length },
         { label: 'Pesos (ARS)', color: 'var(--c-rate)', value: valueOf(items.filter(i => i.currency === 'ARS')), count: items.filter(i => i.currency === 'ARS').length },
@@ -314,7 +319,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         items.forEach(i => { const label = key(i); groups.set(label, [...(groups.get(label) ?? []), i]); });
         return [...groups].map(([label, list], index) => ({ label, color: palette[index % palette.length], value: valueOf(list), count: list.length }));
     };
-    const byAsset = groupDistribution(i => i.kind === 'rate' ? i.name : `${i.kind === 'cedear' ? 'CEDEAR' : kind === 'stock' ? 'Acción' : 'Cripto'} · ${i.coin}`);
+    const byAsset = groupDistribution(i => i.kind === 'rate' ? i.name : `${titleFor(i.kind)} · ${i.coin?.split('~')[0]}`);
     const bySector = groupDistribution(i => i.kind === 'crypto' ? 'Criptomonedas' : i.kind === 'cedear' || i.kind === 'stock' ? classifications[i.coin ?? '']?.[0] ?? 'Sin clasificar' : 'Sin clasificar');
     const countryOf = (i: Investment) => i.kind === 'crypto' ? 'Sin país asociado' : i.kind === 'cedear' || i.kind === 'stock' ? classifications[i.coin ?? '']?.[1] ?? 'Sin clasificar' : 'Sin clasificar';
     const byCountry = groupDistribution(countryOf);
@@ -355,7 +360,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const assetRequests = keys.map(async key => {
             const [assetKind, id] = key.split(':');
             try {
-                const points = await history(assetKind as 'cedear' | 'crypto' | 'stock' | 'arg-stock', id, controller.signal);
+                const points = await history(assetKind as 'cedear' | 'crypto' | 'stock' | 'arg-stock' | 'bond' | 'fund', id, controller.signal);
                 return [key, (assetKind === 'cedear' || assetKind === 'arg-stock') ? adjustPossibleRatios(points).points : points] as const;
             } catch { return [key, []] as const; }
         });
@@ -453,7 +458,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             const currentPrice = prices[key];
             const historicalPrice = currentPrice ? annualPriceAt(benchmarkHistory?.[key], t, currentPrice) : NaN;
             if (!currentPrice || !historicalPrice || !i.units) return NaN;
-            if (i.kind === 'cedear') return sum + i.units * historicalPrice;
+            if (i.kind === 'cedear' || isLocal(i)) return sum + i.units * historicalPrice;
             return sum + i.units * historicalPrice * benchmarkDollarAt(t);
         }, 0);
     };
@@ -687,7 +692,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const copySummary = async (i: Investment) => { try { await navigator.clipboard.writeText(summaryOf(i)); setNotice('Resumen copiado al portapapeles.'); } catch { setNotice('No se pudo copiar. Tu navegador bloqueó el portapapeles.'); } };
     const menuFor = (i: Investment): MenuItem[] => [
         { label: 'Registrar venta', icon: Estimate01Icon, onSelect: () => openSale(i) },
-        { label: 'Editar', icon: Edit01Icon, onSelect: () => openEdit(i) },
+        ...(!isLocal(i) ? [{ label: 'Editar', icon: Edit01Icon, onSelect: () => openEdit(i) }] : []),
         { label: 'Duplicar', icon: CopyPlusIcon, onSelect: () => duplicate(i) },
         { label: 'Copiar resumen', icon: Copy01Icon, onSelect: () => void copySummary(i) },
         ...(i.kind === 'crypto' && i.coin ? [{ label: 'Ver en CoinGecko', icon: LinkSquare02Icon, href: `https://www.coingecko.com/en/coins/${encodeURIComponent(i.coin)}` }] : []),
@@ -767,7 +772,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {triggeredAlerts.length > 0 && page !== 'prices' && <div role="status" className="mb-4 rounded-xl border border-[var(--sig)] bg-[var(--sigbg)] px-4 py-3 text-[12px]"><span>{triggeredAlerts.length === 1 ? `Tenés una alerta activa: ${triggeredAlerts[0].assetName} · ${alertStatuses[triggeredAlerts[0].id].message}` : `Tenés ${triggeredAlerts.length} alertas activas.`}</span> <PageLink page="prices" className="ml-2 underline">Ver alertas</PageLink></div>}
                 <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={openSale} />
                 {page === 'goals' && <Suspense fallback={<p role="status" className="mu p-5">Cargando objetivos…</p>}><Goals categories={byKind} targets={view.portfolio.preferences.allocationTargets} format={fmt} incompleteQuotes={items.some(item => item.kind !== 'rate' && !!item.coin && prices[`${item.kind}:${item.coin}`] == null)} onSave={targets => sync.update(current => ({ ...current, preferences: { ...current.preferences, allocationTargets: targets } }))} /></Suspense>}
-                {page === 'prices' && <Suspense fallback={<p role="status" className="mu p-5">Cargando precios…</p>}><PricesPage items={items} alerts={alerts} statuses={alertStatuses} onAdd={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} onDelete={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} /></Suspense>}
+                {page === 'prices' && <Suspense fallback={<p role="status" className="mu p-5">Cargando precios…</p>}><PricesPage items={items} onAddLocal={investment => setItems(prev => [...prev, investment])} alerts={alerts} statuses={alertStatuses} onAdd={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} onDelete={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} /></Suspense>}
                 {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} onMailSettings={() => setEmailSettings(true)} mailRevision={emailSettingsRevision} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
@@ -843,12 +848,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
                             <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
                             <div className="mt-3">{filtered.length ? filtered.map(i => {
-                                const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : i.kind === 'stock' ? `Acción · ${i.coin}` : `Cripto · ${i.coin}`;
+                                const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = isLocal(i) ? `${titleFor(i.kind)} · ${i.coin?.split('~')[0]}` : i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : i.kind === 'stock' ? `Acción · ${i.coin}` : `Cripto · ${i.coin}`;
                                 return <div key={i.id} className={`li cursor-pointer ${ctx?.id === i.id ? 'menu-open' : ''}`} onClick={e => { if ((e.target as HTMLElement).closest('button, a')) return; detailOpenerRef.current = e.currentTarget.querySelector('button[data-detail]'); setDetailId(i.id); }} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
                                     <div className="tk" style={{ ['--c' as string]: colorOf(cat) }} aria-hidden="true">{tickerOf(i)}</div>
                                     <div className="min-w-0"><button type="button" data-detail onClick={e => { detailOpenerRef.current = e.currentTarget; setDetailId(i.id); }} className="block max-w-full truncate text-left text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2" aria-label={`Ver detalle de ${i.name}`}>{i.name}</button><p className="mu mt-1 truncate text-[11.5px]">{sub} <span className="hidden sm:inline">· {formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">Sin precio · se muestra el monto original</p>}</div>
                                     <div className="r hid"><p>{mny(i.amount, i.currency)}</p><p className="mu mt-1 text-[10px]">Invertido</p></div>
-                                    <div className="r hid"><p>{mny(v, i.currency)}</p><div className="mt-1 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada por vos</span> : <QuoteSource source={i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
+                                    <div className="r hid"><p>{mny(v, i.currency)}</p><div className="mt-1 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada por vos</span> : <QuoteSource source={i.kind === 'fund' ? 'fund' : i.kind === 'arg-stock' || i.kind === 'bond' ? 'local' : i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
                                     <div className="r"><span className={`pill ${change >= 0 ? '' : 'neg'}`}>{missing ? '—' : percent(change)}</span><p className="mu mt-1 text-[10px] min-[861px]:hidden">{mny(v, i.currency)}</p></div>
                                     <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setCtx(ctx?.id === i.id ? null : { x: r.right - 220, y: r.bottom + 6, id: i.id }); }} aria-haspopup="menu" aria-expanded={ctx?.id === i.id} aria-label={`Acciones de ${i.name}`} className="ibtn !h-9 !w-9 !border-transparent !bg-transparent"><HugeiconsIcon icon={MoreHorizontalIcon} size={17} /></button>
                                 </div>;
@@ -868,7 +873,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         {detailItem && (() => {
             const item = detailItem;
             const quoted = item.kind === 'rate' || !item.coin ? undefined : prices[`${item.kind}:${item.coin}`];
-            const quoteCurrency: Currency = item.kind === 'cedear' ? 'ARS' : 'USD';
+            const quoteCurrency: Currency = item.kind === 'cedear' || isLocal(item) ? 'ARS' : 'USD';
             const available = item.kind === 'rate' || (quoted != null && Number.isFinite(quoted) && quoted > 0 && item.units != null && (quoteCurrency === item.currency || !!fxRate));
             const currentValue = available ? valueAt(item, today, prices, today, officialRate) : NaN;
             const result = currentValue - item.amount;
@@ -882,7 +887,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     {item.kind === 'rate' && item.maturityDate && <p className="mu mt-4 text-[12px]">Vencimiento: {formatDate(item.maturityDate)} · cobro estimado {mny(valueAt(item, dateMillis(item.maturityDate), prices, today, officialRate), item.currency)} (capital e interés).</p>}
                     {item.kind !== 'rate' && item.purchasePrice == null && <p className="mu mt-5 text-[11px] leading-5">No se guardó un precio de compra para esta posición. El monto registrado puede ser un valor actual ingresado al cargarla.</p>}
                     <p className="mu mt-3 text-[11px] leading-5">Las unidades y el monto corresponden a la posición que conservás; pueden haber cambiado si registraste ventas.</p>
-                    <button type="button" onClick={() => { setDetailId(null); openEdit(item); }} className="btn-ghost mt-5 w-full">Editar inversión</button>
+                    {!isLocal(item) && <button type="button" onClick={() => { setDetailId(null); openEdit(item); }} className="btn-ghost mt-5 w-full">Editar inversión</button>}
                 </section>
             </div>;
         })()}

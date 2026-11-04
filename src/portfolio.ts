@@ -1,4 +1,4 @@
-export type Kind = 'rate' | 'crypto' | 'cedear' | 'stock';
+export type Kind = 'rate' | 'crypto' | 'cedear' | 'stock' | 'arg-stock' | 'bond' | 'fund';
 export type Period = 'year' | 'month';
 export type Currency = 'USD' | 'ARS';
 export type Investment = {
@@ -29,7 +29,7 @@ export function cleanSale(raw: unknown): Sale | null {
     return { id: s.id, name: s.name, date: s.date, fraction: s.fraction, proceeds: s.proceeds, cost: s.cost, currency: s.currency, costCurrency: s.costCurrency };
 }
 
-export type AllocationCategory = 'rate' | 'cedear' | 'index' | 'stock' | 'crypto';
+export type AllocationCategory = 'rate' | 'cedear' | 'index' | 'stock' | 'crypto' | 'arg-stock' | 'bond' | 'fund';
 export type AllocationTargets = Record<AllocationCategory, number>;
 
 export type Preferences = {
@@ -113,9 +113,9 @@ export function cleanInvestment(raw: unknown): Investment | null {
     if (!raw || typeof raw !== 'object') return null;
     const r = raw as Record<string, unknown>;
     const kind = r.kind, currency = r.currency, period = r.period, date = r.date;
-    if (kind !== 'rate' && kind !== 'crypto' && kind !== 'cedear' && kind !== 'stock') return null;
+    if (kind !== 'rate' && kind !== 'crypto' && kind !== 'cedear' && kind !== 'stock' && kind !== 'arg-stock' && kind !== 'bond' && kind !== 'fund') return null;
     if (currency !== 'USD' && currency !== 'ARS') return null;
-    if (kind === 'stock' && currency !== 'USD') return null;
+    if ((kind === 'stock' && currency !== 'USD') || (['arg-stock', 'bond', 'fund'].includes(kind) && currency !== 'ARS')) return null;
     if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
     const parsedDate = new Date(`${date}T12:00:00Z`);
     if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) return null;
@@ -138,7 +138,7 @@ export function cleanInvestment(raw: unknown): Investment | null {
     } else {
         const units = Number(r.units);
         if (typeof r.coin !== 'string' || !r.coin.trim() || !Number.isFinite(units) || units <= 0) return null;
-        inv.coin = kind !== 'crypto' ? r.coin.trim().toUpperCase() : r.coin.trim().toLowerCase();
+        inv.coin = kind === 'crypto' || kind === 'fund' ? r.coin.trim().toLowerCase() : r.coin.trim().toUpperCase();
         inv.units = units;
         for (const key of ['purchasePrice', 'purchaseFx'] as const) {
             if (r[key] != null) {

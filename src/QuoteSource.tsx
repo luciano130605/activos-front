@@ -1,5 +1,7 @@
 
 const sources = {
+    local: { name: 'Data912', url: 'https://data912.com/' },
+    fund: { name: 'ArgentinaDatos · CNV', url: 'https://argentinadatos.com/docs/operations/get-finanzas-fci-fondos' },
     dollar: { name: 'DolarAPI', url: 'https://dolarapi.com/v1/dolares' },
     usdc: { name: 'CoinGecko · USDC/ARS', url: 'https://www.coingecko.com/en/coins/usd-coin' },
     crypto: { name: 'CoinGecko', url: 'https://www.coingecko.com/' },
