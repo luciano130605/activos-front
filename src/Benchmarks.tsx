@@ -190,11 +190,11 @@ const getValue = (points: Point[], t: number) => {
 
 };
 
-function Explanation({ label, children, content }: { label: string; children: ReactNode; content: ReactNode }) {
+function Explanation({ label, children, content, inside = false }: { label: string; children: ReactNode; content: ReactNode; inside?: boolean }) {
     const [open, setOpen] = useState(false);
     return <span className="group relative inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); (event.currentTarget.querySelector('button') as HTMLButtonElement | null)?.blur(); } }}>
-        <button type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen(true)} onFocus={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--muted)]">{children}</button>
-        {open && <span role="tooltip" className="absolute left-0 top-full z-40 mt-2 block w-[min(260px,75vw)] rounded-xl border border-[var(--line2)] bg-[var(--surface)] p-3 text-left text-[11px] font-normal leading-5 text-[var(--muted)] shadow-xl">{content}</span>}
+        <button type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen(true)} onFocus={() => setOpen(true)} className={`inline-flex items-center gap-2 rounded-md text-[11px] font-medium hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--muted)] ${inside ? 'px-1.5 py-2 text-[var(--muted)]' : 'border border-[var(--line2)] px-3 py-2'}`}>{children}</button>
+        {open && <span role="tooltip" className={`absolute top-full z-40 mt-2 block w-[min(260px,75vw)] rounded-xl border border-[var(--line2)] bg-[var(--surface)] p-3 text-left text-[11px] font-normal leading-5 text-[var(--muted)] shadow-xl ${inside ? 'right-0' : 'left-0'}`}>{content}</span>}
     </span>;
 }
 
@@ -290,6 +290,8 @@ export default function Benchmarks({
     const [retry, setRetry] = useState(0);
     const [exportPreview, setExportPreview] = useState<string | null>(null);
     const [exportError, setExportError] = useState('');
+    const [copyMessage, setCopyMessage] = useState('');
+    const [copying, setCopying] = useState(false);
     const [exporting, setExporting] = useState(false);
 
     const [hoverT, setHoverT] = useState<number | null>(null);
@@ -810,7 +812,7 @@ export default function Benchmarks({
     const prepareExport = async () => {
         if (!result?.lines.length || exporting) return;
         setExporting(true);
-        setExportError('');
+        setExportError(''); setCopyMessage('');
         try {
             await document.fonts.ready;
             const width = 1000;
@@ -897,6 +899,19 @@ export default function Benchmarks({
         }
     };
 
+    async function copyExport() {
+        if (!exportPreview || copying) return;
+        if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') { setCopyMessage('Tu navegador no permite copiar imágenes. Podés descargar el PNG.'); return; }
+        setCopying(true); setCopyMessage('');
+        try {
+            const image = fetch(exportPreview).then(response => { if (!response.ok) throw new Error('No se pudo leer la imagen.'); return response.blob(); });
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': image })]);
+            setCopyMessage('Imagen copiada al portapapeles.');
+        } catch {
+            setCopyMessage('No se pudo copiar la imagen. Revisá los permisos o descargá el PNG.');
+        } finally { setCopying(false); }
+    }
+
     return (
 
         <section
@@ -960,7 +975,8 @@ export default function Benchmarks({
                 <div role="dialog" aria-modal="true" aria-labelledby="benchmark-export-title" className="card max-h-[90dvh] w-full max-w-[900px] overflow-y-auto p-5 shadow-2xl">
                     <div className="flex items-start justify-between gap-3"><div><h3 id="benchmark-export-title" className="text-[20px] font-medium">Vista previa</h3><p className="mu mt-1 text-[12px]">Así se verá tu comparación en PNG.</p></div><button type="button" autoFocus onClick={() => setExportPreview(null)} aria-label="Cerrar vista previa" className="btn-ghost text-[18px]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
                     <img src={exportPreview} alt="Vista previa de la comparación de rendimiento" className="mt-4 w-full rounded-lg border border-[var(--line)]" />
-                    <div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setExportPreview(null)} className="btn-ghost text-[12px]">Cancelar</button><a href={exportPreview} download="cartera-vs-mercado.png" className="rounded-lg bg-[var(--ink)] px-4 py-2.5 text-[12px] font-medium text-[var(--bg)]">Descargar PNG</a></div>
+                    {copyMessage && <p role="status" className="mu mt-3 text-[12px]">{copyMessage}</p>}
+                    <div className="mt-4 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setExportPreview(null)} className="btn-ghost text-[12px]">Cancelar</button><button type="button" onClick={() => void copyExport()} disabled={copying} className="btn-ghost text-[12px] disabled:opacity-50">{copying ? 'Copiando…' : 'Copiar imagen'}</button><a href={exportPreview} download="cartera-vs-mercado.png" className="rounded-lg bg-[var(--ink)] px-4 py-2.5 text-[12px] font-medium text-[var(--bg)]">Descargar PNG</a></div>
                 </div>
             </div>}
 
@@ -1081,7 +1097,7 @@ export default function Benchmarks({
 
                 {keys.map(key => (
 
-                    <span key={key} className="inline-flex items-center gap-1">
+                    <span key={key} className={`inline-flex items-center rounded-md ${key === 'merval' || key === 'uva' ? `border pr-1 ${visible[key] ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)]'}` : ''}`}>
                     <button
 
                         type="button"
@@ -1100,25 +1116,7 @@ export default function Benchmarks({
 
                         }
 
-                        className={`
-
-              inline-flex items-center gap-2
-
-              rounded-md border px-3 py-2
-
-              text-[11px] transition-all duration-150
-
-              hover:border-[var(--line2)]
-
-              ${visible[key]
-
-                                ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]'
-
-                                : 'border-[var(--line)] text-[var(--muted)] opacity-50'
-
-                            }
-
-            `}
+                        className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-[11px] transition-all duration-150 ${key === 'merval' || key === 'uva' ? (visible[key] ? 'text-[var(--ink)]' : 'text-[var(--muted)] opacity-50') : `border hover:border-[var(--line2)] ${visible[key] ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]' : 'border-[var(--line)] text-[var(--muted)] opacity-50'}`}`}
 
                     >
 
@@ -1133,7 +1131,7 @@ export default function Benchmarks({
                         {labels[key]}
 
                     </button>
-                    {(key === 'merval' || key === 'uva') && <Explanation label={`Qué es ${labels[key]}`} content={key === 'merval' ? 'El Merval es un índice que sigue la evolución de un grupo de acciones argentinas que cotizan en bolsa. Sirve como referencia general del mercado local.' : 'La UVA es una unidad de valor que se actualiza según la inflación. Se usa, por ejemplo, en algunos préstamos y plazos fijos.'}><span aria-hidden="true" className="font-mono text-[12px]">ⓘ</span></Explanation>}
+                    {(key === 'merval' || key === 'uva') && <Explanation inside label={`Qué es ${labels[key]}`} content={key === 'merval' ? 'El Merval es un índice que sigue la evolución de un grupo de acciones argentinas que cotizan en bolsa. Sirve como referencia general del mercado local.' : 'La UVA es una unidad de valor que se actualiza según la inflación. Se usa, por ejemplo, en algunos préstamos y plazos fijos.'}><span aria-hidden="true" className="font-mono text-[12px]">ⓘ</span></Explanation>}
                     </span>
 
                 ))}

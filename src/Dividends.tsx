@@ -51,7 +51,8 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
     const events = useMemo<Row[]>(() => (result?.items ?? []).flatMap(position => (position.events ?? []).map(event => ({ ...event, position }))).sort((a, b) => a.payDate.localeCompare(b.payDate)), [result]);
     const todayIso = isoDate(new Date());
     const upcoming = events.filter(e => e.payDate >= todayIso);
-    const next = upcoming.find(e => e.eligible) ?? upcoming[0];
+    const announcedUpcoming = upcoming.filter(e => !e.estimated);
+    const next = announcedUpcoming.find(e => e.eligible) ?? announcedUpcoming[0];
     const upcomingTotal = upcoming.reduce((s, e) => s + (e.eligible && !e.estimated ? e.estimatedGross : 0), 0);
     const monthKey = isoDate(month).slice(0, 7);
     const monthEvents = events.filter(e => e.payDate.startsWith(monthKey));
@@ -64,9 +65,9 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
     const unavailable = result?.items.filter(i => i.status !== 'ok') ?? [];
     const byMonth = useMemo(() => {
         const map = new Map<string, Row[]>();
-        for (const e of upcoming) { const k = e.payDate.slice(0, 7); map.set(k, [...(map.get(k) ?? []), e]); }
+        for (const e of announcedUpcoming) { const k = e.payDate.slice(0, 7); map.set(k, [...(map.get(k) ?? []), e]); }
         return [...map.entries()];
-    }, [upcoming]);
+    }, [announcedUpcoming]);
     const byTicker = useMemo(() => {
         const map = new Map<string, number>();
         for (const e of upcoming) if (e.eligible) map.set(e.position.ticker, (map.get(e.position.ticker) ?? 0) + e.estimatedGross);
@@ -99,7 +100,7 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
                     <h2 className="text-[20px] font-light tracking-tight">{view === 'agenda' ? 'Próximos pagos' : 'Calendario de pagos'}</h2>
                     <div className="seg" role="group" aria-label="Vista"><button type="button" aria-pressed={view === 'agenda'} onClick={() => setView('agenda')}><HugeiconsIcon icon={RightToLeftListBulletIcon} size={14} className="mr-1.5 inline" />Lista</button><button type="button" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}><HugeiconsIcon icon={Calendar01Icon} size={14} className="mr-1.5 inline" />Calendario</button></div>
                 </div>
-                {view === 'agenda' ? (byMonth.length ? byMonth.map(([key, rows]) => <div key={key} className="mb-5 last:mb-0"><div className="mb-1 flex items-center justify-between"><h3 className="lb capitalize">{at(`${key}-01`).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><span className="mu text-[11px]">{money(rows.reduce((s, e) => s + (e.eligible ? e.estimatedGross : 0), 0))}</span></div>{rows.map((e, i) => payRow(e, `${e.position.id}-${e.exDate}-${i}`))}</div>) : <div className="grid min-h-[200px] place-items-center text-center"><div><HugeiconsIcon icon={CalendarMinusIcon} size={24} className="mx-auto mb-3 text-[var(--faint)]" /><p className="text-[13px] text-[var(--muted)]">{result.items.length ? 'No hay pagos futuros anunciados ni estimados.' : 'No hay acciones ni CEDEARs en tu cartera guardada.'}</p></div></div>) : <>
+                {view === 'agenda' ? (byMonth.length ? byMonth.map(([key, rows]) => <div key={key} className="mb-5 last:mb-0"><div className="mb-1 flex items-center justify-between"><h3 className="lb capitalize">{at(`${key}-01`).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><span className="mu text-[11px]">{money(rows.reduce((s, e) => s + (e.eligible ? e.estimatedGross : 0), 0))}</span></div><ul>{rows.map((e, i) => <li key={`${e.position.id}-${e.exDate}-${i}`} className="border-t border-[var(--line)] first:border-0">{payRow(e, `${e.position.id}-${e.exDate}-${i}`)}</li>)}</ul></div>) : <div className="grid min-h-[200px] place-items-center text-center"><div><HugeiconsIcon icon={CalendarMinusIcon} size={24} className="mx-auto mb-3 text-[var(--faint)]" /><p className="text-[13px] text-[var(--muted)]">{result.items.length ? 'No hay pagos futuros anunciados.' : 'No hay acciones ni CEDEARs en tu cartera guardada.'}</p></div></div>) : <>
                     <div className="mb-4 flex items-center justify-between gap-2"><h3 className="text-[16px] font-medium capitalize">{month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><div className="flex items-center gap-1">{selected && <button type="button" onClick={() => setSelected(null)} className="mu mr-2 underline">Ver todo el mes</button>}<button type="button" onClick={() => changeMonth(-1)} aria-label="Mes anterior" className="ibtn !h-9 !w-9"><HugeiconsIcon icon={ChevronLeftIcon} size={16} /></button><button type="button" onClick={() => changeMonth(1)} aria-label="Mes siguiente" className="ibtn !h-9 !w-9"><HugeiconsIcon icon={ChevronRightIcon} size={16} /></button></div></div>
                     <div className="grid grid-cols-7 gap-1 sm:gap-1.5" role="group" aria-label={`Días de ${month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`}>
                         {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => <div key={d} className="mu pb-2 text-center text-[10px]">{d}</div>)}

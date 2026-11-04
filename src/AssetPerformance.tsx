@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Investment } from './portfolio';
+import { adjustLocalSplits } from './localSplits';
 
 export type HistoryPoint = { time: number; price: number };
 type Point = HistoryPoint;
@@ -34,7 +35,7 @@ export function adjustPossibleRatios(points: Point[]) {
 }
 export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock' | 'bond' | 'fund', id: string, signal: AbortSignal): Promise<Point[]> {
     const key = `activos:asset-history:${kind === 'stock' ? 'stock-v2' : kind}:${id}`;
-    try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return cache.points; } catch { /* Sin caché. */ }
+    try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return kind === 'arg-stock' ? adjustLocalSplits(id, cache.points) : cache.points; } catch { /* Sin caché. */ }
     const [fundSlug, fundId, classId] = id.split('~');
     const url = kind === 'fund' ? `https://api.argentinadatos.com/v1/finanzas/fci/fondos/${encodeURIComponent(fundSlug)}/historico` : kind === 'bond' ? `https://data912.com/historical/bonds/${encodeURIComponent(id)}` : kind === 'stock' ? `/api/stocks/history?symbol=${encodeURIComponent(id)}` : kind === 'cedear' || kind === 'arg-stock' ? `https://data912.com/historical/${kind === 'arg-stock' ? 'stocks' : 'cedears'}/${encodeURIComponent(id)}` : `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`;
     const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]) });
@@ -50,7 +51,7 @@ export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock' 
     }).sort((a, b) => a.time - b.time);
     if (!points.length) throw new Error('El proveedor no tiene datos para este activo.');
     try { sessionStorage.setItem(key, JSON.stringify({ time: Date.now(), points })); } catch { /* Sin caché. */ }
-    return points;
+    return kind === 'arg-stock' ? adjustLocalSplits(id, points) : points;
 }
 
 export default function AssetPerformance({ items, hidden }: { items: Investment[]; hidden: boolean }) {

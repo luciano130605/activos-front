@@ -2,7 +2,7 @@ import type { Investment } from './portfolio';
 export type LocalKind = 'arg-stock' | 'bond' | 'fund';
 type LocalItem = Investment & { kind: LocalKind; coin: string };
 export function isLocal(item: Investment): item is LocalItem { return (item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'fund') && !!item.coin; }
-export async function localQuotes(items: LocalItem[], signal?: AbortSignal): Promise<Record<string, number>> {
+export async function localQuotes(items: { kind: LocalKind; coin: string }[], signal?: AbortSignal): Promise<Record<string, number>> {
     if (!items.length) return {};
     const groups = [...new Set(items.map(i => i.kind))];
     const results = await Promise.allSettled(groups.map(async kind => {

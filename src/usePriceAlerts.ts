@@ -3,6 +3,7 @@ import { coinPricesNow } from './coingecko';
 import { cedearPricesNow, stockPricesNow } from './cedears';
 import { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
 import { request } from './account';
+import { localQuotes, type LocalKind } from './local-market';
 import type { PriceAlert } from './portfolio';
 
 const DAY = 86_400_000;
@@ -22,7 +23,8 @@ export function usePriceAlerts(alerts: PriceAlert[], values: { kind: string; id:
         const relevant = configs.filter(a => a.kind === 'price' || a.kind === 'variation');
         const ids = (kind: PriceAlert['assetKind']) => [...new Set(relevant.filter(a => a.assetKind === kind).map(a => a.assetId))];
         setQuotes({}); setHistories({}); setDividends(null);
-        void Promise.allSettled([cedearPricesNow(ids('cedear'), controller.signal), stockPricesNow(ids('stock'), controller.signal), coinPricesNow(ids('crypto'), controller.signal)]).then(results => { if (!controller.signal.aborted) setQuotes(Object.assign({}, ...results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []))); });
+        const local = (['arg-stock', 'bond', 'fund'] as LocalKind[]).flatMap(kind => ids(kind).map(coin => ({ kind, coin })));
+        void Promise.allSettled([cedearPricesNow(ids('cedear'), controller.signal), stockPricesNow(ids('stock'), controller.signal), coinPricesNow(ids('crypto'), controller.signal), localQuotes(local, controller.signal)]).then(results => { if (!controller.signal.aborted) setQuotes(Object.assign({}, ...results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []))); });
         const varying = [...new Map(configs.filter(a => a.kind === 'variation').map(a => [`${a.assetKind}:${a.assetId}`, a])).entries()];
         void Promise.all(varying.map(async ([key, alert]) => { try { return [key, await history(alert.assetKind, alert.assetId, controller.signal)] as const; } catch { return [key, []] as const; } })).then(rows => { if (!controller.signal.aborted) setHistories(Object.fromEntries(rows)); });
         if (configs.some(a => a.kind === 'dividend')) void request<DividendResult>('dividends').then(data => { if (!controller.signal.aborted) setDividends(data); }).catch(() => {});
@@ -37,7 +39,7 @@ export function usePriceAlerts(alerts: PriceAlert[], values: { kind: string; id:
         let status: AlertStatus = { state: 'unavailable', message: 'Datos no disponibles' };
         if (alert.kind === 'price') {
             const price = quotes[key];
-            if (price > 0) { const matched = alert.direction === 'above' ? price >= alert.threshold : price <= alert.threshold; status = { state: matched ? 'triggered' : 'waiting', message: `Precio: ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: alert.assetKind === 'cedear' ? 'ARS' : 'USD', maximumFractionDigits: 4 }).format(price)}` }; }
+            if (price > 0) { const matched = alert.direction === 'above' ? price >= alert.threshold : price <= alert.threshold; status = { state: matched ? 'triggered' : 'waiting', message: `Precio: ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: ['cedear', 'arg-stock', 'bond', 'fund'].includes(alert.assetKind) ? 'ARS' : 'USD', maximumFractionDigits: 4 }).format(price)}` }; }
         } else if (alert.kind === 'variation') {
             const raw = histories[key];
             const points = raw && alert.assetKind === 'cedear' ? adjustPossibleRatios(raw).points : raw;
