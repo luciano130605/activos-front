@@ -1,3 +1,4 @@
+import RefreshButton from './RefreshButton';
 import { isAiProvider, type AiProvider } from './ai-provider';
 import ImportDocuments from './ImportDocuments';
 import { createPasskey, passkeyStatus, preparePasskey, supportsPasskeys, type RegistrationOptions } from './passkeys';
@@ -93,7 +94,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const { sync, view, preference, items, setItems } = usePortfolio(account);
     const savedDividendPositions = useRef(account.portfolio.investments);
     if (!view.dirty) savedDividendPositions.current = view.portfolio.investments;
-    const dividendFingerprint = JSON.stringify(savedDividendPositions.current.filter(item => item.kind === 'cedear').map(item => [item.id, item.name, item.coin, item.units, item.date]));
+    const dividendFingerprint = JSON.stringify(savedDividendPositions.current.filter(item => item.kind === 'cedear' || item.kind === 'stock').map(item => [item.id, item.name, item.kind, item.coin, item.units, item.date]));
     const [leaving, setLeaving] = useState(false);
     const [legacy, setLegacy] = useState(() => {
         try {
@@ -761,7 +762,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                     <div className="mu mt-2 flex justify-between text-[11px]"><span>capital</span><span style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{summaryGain >= 0 ? 'ganancia' : 'pérdida'}</span></div>
                                 </article>
                                 <article className="card side-glow p-6">
-                                    <div className="flex items-center justify-between"><p className="lb">REFERENCIA USDC</p><button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Actualizar cotizaciones" title="Actualizar" className="text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div>
+                                    <div className="flex items-center justify-between"><p className="lb">REFERENCIA USDC</p><RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar cotizaciones" /></div>
                                     <p className="mt-3 text-[clamp(1.6rem,3vw,2.2rem)] font-light leading-none tracking-tight tabular-nums">{fxRate ? money(fxRate, 'ARS') : 'No disponible'}</p>
                                     <p className="mu mt-2 flex items-center gap-1 text-[11px]">
                                         1 USDC en pesos · convierte USD
@@ -800,7 +801,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     <div style={{ order: panelOrder('investments') }} hidden={page !== 'investments' && (page !== 'summary' || !visiblePanels.includes('investments'))}>
                         <section className="card overflow-hidden" aria-label="Mis inversiones">
                             <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Tocá una inversión para ver sus detalles · ⋯ para más opciones</p></div>
-                                <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><button onClick={() => void refresh()} disabled={refreshing} title="Actualizar precios" aria-label="Actualizar precios" className="ibtn !h-[38px] !w-[38px] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div></div>
+                                <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar precios" /></div></div>
                             <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
                             <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
                             <div className="mt-3">{filtered.length ? filtered.map(i => {

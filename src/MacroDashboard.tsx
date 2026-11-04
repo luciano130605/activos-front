@@ -1,3 +1,4 @@
+import RefreshButton from './RefreshButton';
 import { useEffect, useState } from 'react';
 import PageLink from './PageLink';
 
@@ -35,7 +36,7 @@ export default function MacroDashboard({ rates, refreshDollars, dollarLoading }:
     const unavailable = 'No disponible';
     const metric = (title: string, value: string, note: string, source: string, url: string) => <article className="min-w-0 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4"><p className="lb">{title}</p><p className="mt-3 break-words text-[20px] font-light tabular-nums">{value}</p><p className="mu mt-2 text-[10.5px] capitalize">{note}</p><a className="mu mt-2 inline-block text-[10px] underline underline-offset-2" href={url} target="_blank" rel="noopener noreferrer">{source}</a></article>;
     return <section className="card mb-3.5 p-5 sm:p-6" aria-labelledby="macro-title">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">CONTEXTO DE MERCADO</p><h2 id="macro-title" className="mt-2 text-[20px] font-light tracking-tight">Tablero macro</h2><p className="mu mt-2 text-[12px]">Referencias de Argentina para seguir el contexto de tu cartera.</p></div><button type="button" onClick={refresh} disabled={loading || dollarLoading} className="btn-ghost text-[12px] disabled:opacity-50">{loading || dollarLoading ? 'Actualizando…' : 'Actualizar'}</button></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">CONTEXTO DE MERCADO</p><h2 id="macro-title" className="mt-2 text-[20px] font-light tracking-tight">Tablero macro</h2><p className="mu mt-2 text-[12px]">Referencias de Argentina para seguir el contexto de tu cartera.</p></div><RefreshButton onClick={refresh} loading={loading || dollarLoading} label="Actualizar tablero macro" /></div>
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {([['oficial', 'Dólar oficial'], ['bolsa', 'Dólar MEP'], ['contadoconliqui', 'Dólar CCL']] as const).map(([key, label]) => metric(label, rates[key]?.venta > 0 ? price.format(rates[key].venta) : unavailable, 'Venta · última consulta', 'DolarApi', 'https://dolarapi.com/'))}
             {metric('Riesgo país', loading ? '…' : data?.risk ? `${number.format(data.risk.valor)} pb` : unavailable, data?.risk ? day(data.risk.fecha) : 'Sin fecha disponible', 'ArgentinaDatos · Ámbito', 'https://argentinadatos.com/docs/operations/get-finanzas-indices-riesgo-pais-ultimo')}
@@ -43,6 +44,6 @@ export default function MacroDashboard({ rates, refreshDollars, dollarLoading }:
             {metric('Depósitos 30 días', loading ? '…' : data?.rate ? `${number.format(data.rate.valor)}%` : unavailable, data?.rate ? `${day(data.rate.fecha)} · tasa anual` : 'Sin fecha disponible', 'BCRA · ArgentinaDatos', 'https://argentinadatos.com/docs/operations/get-finanzas-tasas-depositos-30-dias')}
         </div>
         <div className="mu mt-4 flex flex-wrap items-center justify-between gap-3 text-[11px]"><span>Los indicadores tienen distintas fechas de publicación. La tasa es una referencia, no una oferta de un banco.</span><PageLink page="inflation" className="underline underline-offset-4">Ver inflación en detalle</PageLink></div>
-        {data && (!data.risk || !data.inflation || !data.rate) && <p role="status" className="mt-3 text-[11px] text-[var(--neg)]">Algunos indicadores no pudieron consultarse. Podés volver a intentar con Actualizar.</p>}
+        {data && (!data.risk || !data.inflation || !data.rate) && <p role="status" className="mt-3 text-[11px] text-[var(--neg)]">Algunos indicadores no pudieron consultarse. Podés volver a intentar con el botón de actualizar.</p>}
     </section>;
 }
