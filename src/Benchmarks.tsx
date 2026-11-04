@@ -1157,7 +1157,7 @@ export default function Benchmarks({
 
                 <>
 
-                    <div className="relative mt-6 select-none">
+                    <div className="relative mt-6 select-none touch-pan-y">
 
                         <svg
 
@@ -1171,9 +1171,10 @@ export default function Benchmarks({
 
                             aria-label="Gráfico de rendimiento comparado, base 100"
 
+                            onPointerDown={handlePointerMove}
                             onPointerMove={handlePointerMove}
 
-                            onPointerLeave={() => setHoverT(null)}
+                            onPointerLeave={event => { if (event.pointerType === 'mouse') setHoverT(null); }}
 
                         >
 
