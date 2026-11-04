@@ -13,7 +13,7 @@ const usd = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency
 const isoDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 const daysUntil = (iso: string) => Math.round((at(iso).getTime() - at(isoDate(new Date())).getTime()) / 86_400_000);
 
-export default function Dividends({ dirty, hidden }: { dirty: boolean; hidden: boolean }) {
+function PortfolioDividends({ dirty, hidden }: { dirty: boolean; hidden: boolean }) {
     const [result, setResult] = useState<Result | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -91,5 +91,44 @@ export default function Dividends({ dirty, hidden }: { dirty: boolean; hidden: b
             </section>
         </div>}
         <p className="px-1 text-[11px] leading-5 text-[var(--muted)]">La fecha corresponde al pago del activo de origen; la acreditación del CEDEAR puede ser posterior. El monto es estimado, bruto, antes de impuestos y comisiones. La elegibilidad depende de la fecha de corte y las tenencias efectivas. Ratios orientativos de <a className="underline" href="https://ferminrp.github.io/google-sheets-argento/" target="_blank" rel="noreferrer">Google Sheets Argento</a>; dividendos de <a className="underline" href="https://massive.com/docs/rest/stocks/corporate-actions/dividends" target="_blank" rel="noreferrer">Massive</a>. Verificá el pago en tu bróker.</p>
+    </div>;
+}
+
+
+type MarketEvent = { ticker: string; payDate: string; exDate: string | null; amountPerShare: number; currency: string | null };
+type MarketResult = { configured: boolean; items: MarketEvent[]; truncated: boolean; start?: string; end?: string };
+
+function MarketDividends() {
+    const [result, setResult] = useState<MarketResult | null>(null);
+    const [error, setError] = useState('');
+    const [search, setSearch] = useState('');
+    useEffect(() => {
+        let active = true;
+        request<MarketResult>('dividends/market').then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudo consultar el calendario. Volvé a intentar más tarde.'); });
+        return () => { active = false; };
+    }, []);
+    const events = (result?.items ?? []).filter(event => event.ticker.toLowerCase().includes(search.trim().toLowerCase()));
+    return <section className="card p-5 sm:p-6" aria-labelledby="market-dividends-title">
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="lb">MERCADO</p><h2 id="market-dividends-title" className="mt-2 text-[20px] font-light tracking-tight">Calendario general</h2><p className="mu mt-2 text-[12px]">Pagos anunciados para las próximas 4 semanas, tengas o no el activo en tu cartera.</p></div>
+        <label className="text-[11px] text-[var(--muted)]">Buscar ticker<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Ej. AAPL" className="mt-1 block w-full rounded-lg border border-[var(--line2)] bg-[var(--raised)] px-3 py-2 text-[13px] text-[var(--ink)]" /></label></div>
+        <p className="mu mt-4 text-[11px] leading-5">Cobertura de Massive: principalmente valores de EE. UU. Se muestran pagos informados con fecha y monto; la cobertura no incluye todas las bolsas del mundo.</p>
+        {error ? <p role="alert" className="mt-6 text-[12px] text-[var(--neg)]">{error}</p> : !result ? <p role="status" className="mu mt-6 text-[12px]">Consultando dividendos…</p> : !result.configured ? <p className="mu mt-6 text-[12px]">Para consultar dividendos, configurá MASSIVE_API_KEY en el backend.</p> : <>
+            {result.truncated && <p role="status" className="mu mt-4 text-[11px]">La fuente devolvió muchos resultados: esta lista puede estar incompleta.</p>}
+            <p className="mu mt-5 text-[11px]">{events.length} pagos {result.start && result.end ? `· ${date(result.start)} — ${date(result.end)}` : ''}</p>
+            {events.length ? <div className="mt-2">{events.map((event, index) => <article key={`${event.ticker}-${event.payDate}-${event.exDate}-${index}`} className="flex items-start gap-4 border-t border-[var(--line)] py-4">
+                <div className="dd">{at(event.payDate).getDate()}<small>{at(event.payDate).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '')}</small></div>
+                <div className="min-w-0 flex-1"><p className="text-[14px] font-medium">{event.ticker}</p><p className="mu mt-1 text-[11px]">Pago: {date(event.payDate)} · Fecha ex: {event.exDate ? date(event.exDate) : 'no informada'}</p></div>
+                <span className="text-right text-[12px] font-medium tabular-nums">{event.amountPerShare.toLocaleString('es-AR', { maximumFractionDigits: 6 })} {event.currency ?? 'moneda no informada'}<small className="mu mt-1 block text-[10px] font-normal">por acción · bruto</small></span>
+            </article>)}</div> : <p className="mu mt-6 text-[12px]">{search ? 'No encontramos pagos para ese ticker.' : 'No hay pagos anunciados para este período.'}</p>}
+        </>}
+        <p className="mu mt-5 text-[11px]">Datos de <a className="underline" href="https://massive.com/docs/rest/stocks/corporate-actions/dividends" target="_blank" rel="noreferrer">Massive</a>. Los montos y fechas pueden cambiar.</p>
+    </section>;
+}
+
+export default function Dividends(props: { dirty: boolean; hidden: boolean }) {
+    const [tab, setTab] = useState<'portfolio' | 'market'>('portfolio');
+    return <div className="space-y-3.5">
+        <div className="seg inline-flex" role="group" aria-label="Sección de dividendos"><button type="button" aria-pressed={tab === 'portfolio'} onClick={() => setTab('portfolio')}>Mi cartera</button><button type="button" aria-pressed={tab === 'market'} onClick={() => setTab('market')}>Calendario general</button></div>
+        {tab === 'portfolio' ? <PortfolioDividends {...props} /> : <MarketDividends />}
     </div>;
 }
