@@ -208,6 +208,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [sellInputAmount, setSellInputAmount] = useState('');
     const [sellCurrency, setSellCurrency] = useState<Currency>('ARS');
     const [sellError, setSellError] = useState('');
+    const [sellExecutionPrice, setSellExecutionPrice] = useState('');
+    const [sellFee, setSellFee] = useState('0');
     const [panelEditor, setPanelEditor] = useState(false);
     const closePanelEditor = useCallback(() => setPanelEditor(false), []);
     const [panels] = preference('panels');
@@ -677,7 +679,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const summaryOf = (i: Investment) => { const v = valueAt(i, today, prices, today, officialRate); return `${i.name} · ${titleFor(i.kind)} · invertido ${money(i.amount, i.currency)} · hoy ${Number.isFinite(v) ? money(v, i.currency) : '—'} (${percent(i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0)})`; };
     const copySummary = async (i: Investment) => { try { await navigator.clipboard.writeText(summaryOf(i)); setNotice('Resumen copiado al portapapeles.'); } catch { setNotice('No se pudo copiar. Tu navegador bloqueó el portapapeles.'); } };
     const menuFor = (i: Investment): MenuItem[] => [
-        { label: 'Registrar venta', icon: Estimate01Icon, onSelect: () => { setSellId(i.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(i.currency); setSellError(''); } },
+        { label: 'Registrar venta', icon: Estimate01Icon, onSelect: () => openSale(i) },
         { label: 'Editar', icon: Edit01Icon, onSelect: () => openEdit(i) },
         { label: 'Duplicar', icon: CopyPlusIcon, onSelect: () => duplicate(i) },
         { label: 'Copiar resumen', icon: Copy01Icon, onSelect: () => void copySummary(i) },
@@ -686,19 +688,28 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         { sep: true },
         { label: 'Eliminar', icon: Delete02Icon, danger: true, onSelect: () => setConfirmDelete(i.id) },
     ] as MenuItem[];
+    function openSale(item: Investment) {
+        const hasQuote = item.kind === 'rate' || !!(item.coin && prices[`${item.kind}:${item.coin}`] != null);
+        const currentValue = hasQuote ? valueAt(item, today, prices, today, officialRate) : NaN;
+        const initial = item.kind === 'rate' ? currentValue : item.units ? currentValue / item.units : NaN;
+        setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); setSellFee('0');
+        setSellExecutionPrice(!hidden && Number.isFinite(initial) && initial > 0 ? String(initial) : '');
+    }
     const sellItem = items.find(item => item.id === sellId);
-    const sellValue = sellItem ? valueAt(sellItem, today, prices, today, officialRate) : NaN;
-    const sellAvailable = !!sellItem && (sellItem.kind === 'rate' || !!(sellItem.coin && prices[`${sellItem.kind}:${sellItem.coin}`] != null)) && Number.isFinite(sellValue) && (sellItem.currency === sellCurrency || !!fxRate);
-    const sellTotal = sellItem && sellAvailable ? (sellItem.currency === sellCurrency ? sellValue : sellCurrency === 'ARS' ? sellValue * fxRate! : sellValue / fxRate!) : NaN;
+    const sellPrice = Number(sellExecutionPrice);
+    const sellTotal = sellItem && Number.isFinite(sellPrice) && sellPrice > 0 ? sellItem.kind === 'rate' ? sellPrice : (sellItem.units ?? 0) * sellPrice : NaN;
     const sellFraction = sellInputMode === 'percent' ? Number(sellPercent) / 100 : Number(sellInputAmount) / sellTotal;
-    const sellAmount = sellInputMode === 'percent' ? sellTotal * sellFraction : Number(sellInputAmount);
+    const sellGross = sellInputMode === 'percent' ? sellTotal * sellFraction : Number(sellInputAmount);
+    const sellCommission = sellFee.trim() === '' ? 0 : Number(sellFee);
+    const sellNet = sellGross - sellCommission;
     function registerSale() {
-        if (!sellItem || !sellAvailable) return setSellError('No hay una cotización disponible para registrar la venta.');
+        if (!sellItem || !Number.isFinite(sellTotal) || sellTotal <= 0) return setSellError(sellItem?.kind === 'rate' ? 'Ingresá el valor bruto total de la posición.' : 'Ingresá un precio ejecutado mayor a cero.');
         const fraction = sellFraction;
-        if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 1 || !Number.isFinite(sellAmount) || sellAmount <= 0) return setSellError(sellInputMode === 'percent' ? 'Ingresá un porcentaje mayor a 0 y hasta 100.' : 'Ingresá un importe mayor a 0 que no supere el valor total de la inversión.');
-        const sale = { id: crypto.randomUUID(), name: sellItem.name, date: localISO(), fraction, proceeds: sellAmount, currency: sellCurrency, cost: sellItem.amount * fraction, costCurrency: sellItem.currency };
+        if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 1 || !Number.isFinite(sellGross) || sellGross <= 0) return setSellError(sellInputMode === 'percent' ? 'Ingresá un porcentaje mayor a 0 y hasta 100.' : 'Ingresá un importe bruto mayor a 0 que no supere el valor total de la posición.');
+        if (!Number.isFinite(sellCommission) || sellCommission < 0 || sellCommission >= sellGross) return setSellError('La comisión debe ser mayor o igual a cero y menor al importe bruto.');
+        const sale: Sale = { id: crypto.randomUUID(), name: sellItem.name, date: localISO(), fraction, proceeds: sellNet, currency: sellCurrency, cost: sellItem.amount * fraction, costCurrency: sellItem.currency, fee: sellCommission, ...(sellItem.kind === 'rate' ? {} : { executionPrice: sellPrice, units: sellItem.units! * fraction }) };
         sync.update(current => ({ ...current, sales: [...(current.sales ?? []), sale], investments: current.investments.flatMap(item => item.id !== sellItem.id ? [item] : fraction === 1 ? [] : [{ ...item, amount: item.amount * (1 - fraction), ...(item.units == null ? {} : { units: item.units * (1 - fraction) }) }]) }));
-        setSellId(null); setNotice('Venta registrada. El importe no se suma como efectivo a la cartera.');
+        setSellId(null); setNotice('Venta registrada con el importe neto. No se suma como efectivo a la cartera.');
     }
     const ctxItem = ctx ? items.find(i => i.id === ctx.id) : undefined;
     const bigParts = (v: number) => {
@@ -747,7 +758,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
                 {triggeredAlerts.length > 0 && page !== 'prices' && <div role="status" className="mb-4 rounded-xl border border-[var(--sig)] bg-[var(--sigbg)] px-4 py-3 text-[12px]"><span>{triggeredAlerts.length === 1 ? `Tenés una alerta activa: ${triggeredAlerts[0].assetName} · ${alertStatuses[triggeredAlerts[0].id].message}` : `Tenés ${triggeredAlerts.length} alertas activas.`}</span> <PageLink page="prices" className="ml-2 underline">Ver alertas</PageLink></div>}
-                <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
+                <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={openSale} />
                 {page === 'prices' && <Suspense fallback={<p role="status" className="mu p-5">Cargando precios…</p>}><PricesPage items={items} alerts={alerts} statuses={alertStatuses} onAdd={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} onDelete={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} /></Suspense>}
                 {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} onMailSettings={() => setEmailSettings(true)} mailRevision={emailSettingsRevision} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
@@ -838,7 +849,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     </div>
                 </div>
                 {page === 'investments' && investmentView === 'list' && <AssetPerformance items={items} hidden={hidden} />}
-                {page === 'investments' && investmentView === 'list' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>{mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}</span></div>)}</div></section>}
+                {page === 'investments' && investmentView === 'list' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>Neto {mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}{sale.fee != null ? ` · comisión ${mny(sale.fee, sale.currency)}` : ''}{sale.executionPrice != null ? ` · precio ${mny(sale.executionPrice, sale.currency)} por unidad` : ''}{sale.currency === sale.costCurrency ? ` · resultado ${mny(sale.proceeds - sale.cost, sale.currency)}` : ''}</span></div>)}</div></section>}
                 <footer className="mu mt-8 space-y-2 text-[10px]">
                     <div className="flex flex-wrap items-center justify-between gap-2"><span>ACTIVOS / PANEL PERSONAL</span><span>Precios orientativos · No es asesoramiento financiero.</span></div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Fuentes de las cotizaciones"><QuoteSource source="usdc" label="USDC" /><QuoteSource source="dollar" label="Dólares" /><QuoteSource source="crypto" label="Cripto" /><QuoteSource source="cedear" label="CEDEARs e índices" /></div>
@@ -878,15 +889,16 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         </div>}
         {panelEditor && <PanelEditor selected={visiblePanels} showChatButton={view.portfolio.preferences.showChatButton !== false} showQuotesBar={view.portfolio.preferences.showQuotesBar !== false} onClose={closePanelEditor} onSave={(next, options) => { sync.update(current => ({ ...current, preferences: { ...current.preferences, panels: [...next, 'panel-v2'], ...options } })); setPanelEditor(false); if (page !== 'summary') goTo('/'); }} />}
         {sellItem && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setSellId(null); }}>
-            <section role="dialog" aria-modal="true" aria-label="Registrar venta" className="card w-full max-w-md p-6">
+            <section role="dialog" aria-modal="true" aria-label="Registrar venta" className="card max-h-[90dvh] w-full max-w-md overflow-y-auto p-6">
                 <h2 className="text-xl">Registrar venta</h2>
-                <p className="mu mt-2">{sellItem.name} · valor estimado actual {sellAvailable ? mny(sellValue, sellItem.currency) : 'no disponible'}</p>
-                <label className={`${label} mt-5`}>Moneda de la venta<select className={`${field} mt-1`} value={sellCurrency} onChange={e => { setSellCurrency(e.target.value as Currency); setSellInputAmount(''); setSellError(''); }}><option value="ARS">Pesos argentinos (ARS)</option><option value="USD">Dólares (USD)</option></select></label>
-                <div className="mt-4"><p className={label}>Ingresar venta por</p><div className="seg" role="group" aria-label="Forma de ingresar la venta"><button type="button" aria-pressed={sellInputMode === 'percent'} onClick={() => { setSellInputMode('percent'); setSellError(''); }}>Porcentaje</button><button type="button" aria-pressed={sellInputMode === 'amount'} onClick={() => { setSellInputMode('amount'); setSellError(''); }}>Importe</button></div></div>
-                {sellInputMode === 'percent' ? <label className={`${label} mt-4`}>Porcentaje a vender<input className={`${field} mt-1`} type="number" min="0" max="100" step="any" value={sellPercent} onChange={e => setSellPercent(e.target.value)} /></label> : <label className={`${label} mt-4`}>Importe a vender ({sellCurrency})<input className={`${field} mt-1`} type="number" min="0" step="any" value={sellInputAmount} onChange={e => setSellInputAmount(e.target.value)} /><span className="mt-2 flex flex-wrap items-center justify-between gap-2">Valor disponible: {sellAvailable ? mny(sellTotal, sellCurrency) : 'No disponible'}<button type="button" className="underline" disabled={!sellAvailable} onClick={() => setSellInputAmount(String(sellTotal))}>Vender todo</button></span></label>}
-                <p className="mt-4 text-[14px]">Importe estimado: {sellAvailable && Number.isFinite(sellAmount) ? mny(sellAmount, sellCurrency) : 'No disponible'}</p>
-                {sellInputMode === 'amount' && Number.isFinite(sellFraction) && sellFraction > 0 && <p className="mu mt-1 text-[12px]">Equivale al {(sellFraction * 100).toFixed(2)}% de la inversión.</p>}
-                <p className="mu mt-2 text-[11px]">Se usa la última cotización disponible y USDC para convertir monedas. No incluye comisiones ni ejecuta una orden en tu broker.</p>{sellError && <p role="alert" className="mt-3 text-[var(--neg)]">{sellError}</p>}
+                <p className="mu mt-2">{sellItem.name}{sellItem.units != null ? ` · ${hidden ? MASK : new Intl.NumberFormat('es-AR', { maximumSignificantDigits: 10 }).format(sellItem.units)} unidades disponibles` : ''}</p>
+                <div className="mt-5"><span className={label}>Moneda de la venta</span><Select<Currency> label="Moneda de la venta" value={sellCurrency} onChange={value => { setSellCurrency(value); setSellExecutionPrice(''); setSellInputAmount(''); setSellFee('0'); setSellError(''); }} options={[{ value: 'ARS', label: 'Pesos argentinos (ARS)' }, { value: 'USD', label: 'Dólares (USD)' }]} /></div>
+                <label className={`${label} mt-4`}>{sellItem.kind === 'rate' ? `Valor bruto total de la posición (${sellCurrency})` : `Precio ejecutado por unidad (${sellCurrency})`}<input className={`${field} mt-1`} type="number" min="0" step="any" value={sellExecutionPrice} onChange={e => { setSellExecutionPrice(e.target.value); setSellError(''); }} /></label>
+                <div className="mt-4"><p className={label}>Ingresar venta por</p><div className="seg" role="group" aria-label="Forma de ingresar la venta"><button type="button" aria-pressed={sellInputMode === 'percent'} onClick={() => { setSellInputMode('percent'); setSellError(''); }}>Porcentaje</button><button type="button" aria-pressed={sellInputMode === 'amount'} onClick={() => { setSellInputMode('amount'); setSellError(''); }}>Importe bruto</button></div></div>
+                {sellInputMode === 'percent' ? <label className={`${label} mt-4`}>Porcentaje a vender<input className={`${field} mt-1`} type="number" min="0" max="100" step="any" value={sellPercent} onChange={e => setSellPercent(e.target.value)} /></label> : <label className={`${label} mt-4`}>Importe bruto a vender ({sellCurrency})<input className={`${field} mt-1`} type="number" min="0" step="any" value={sellInputAmount} onChange={e => setSellInputAmount(e.target.value)} /><span className="mt-2 flex flex-wrap items-center justify-between gap-2">Valor bruto disponible: {Number.isFinite(sellTotal) ? mny(sellTotal, sellCurrency) : 'No disponible'}<button type="button" className="underline" disabled={!Number.isFinite(sellTotal)} onClick={() => setSellInputAmount(String(sellTotal))}>Vender todo</button></span></label>}
+                <label className={`${label} mt-4`}>Comisiones y gastos ({sellCurrency})<input className={`${field} mt-1`} type="number" min="0" step="any" value={sellFee} onChange={e => setSellFee(e.target.value)} /></label>
+                <div className="mt-4 space-y-1 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4 text-[12px]"><p>Importe bruto: {Number.isFinite(sellGross) && sellGross > 0 ? mny(sellGross, sellCurrency) : '—'}</p><p>Importe neto: {Number.isFinite(sellNet) && sellNet > 0 ? mny(sellNet, sellCurrency) : '—'}</p>{sellItem.units != null && Number.isFinite(sellFraction) && sellFraction > 0 && sellFraction <= 1 && <p className="mu">Unidades vendidas: {hidden ? MASK : new Intl.NumberFormat('es-AR', { maximumSignificantDigits: 10 }).format(sellItem.units * sellFraction)}</p>}</div>
+                <p className="mu mt-3 text-[11px]">El valor inicial puede usar la última cotización disponible: reemplazalo por el de tu comprobante. La comisión se descuenta del importe bruto. Esta acción no ejecuta una orden en tu bróker.</p>{sellError && <p role="alert" className="mt-3 text-[var(--neg)]">{sellError}</p>}
                 <div className="mt-5 flex gap-3"><button className="btn-primary" onClick={registerSale}>Registrar venta</button><button className="btn-ghost" onClick={() => setSellId(null)}>Cancelar</button></div>
             </section>
         </div>}

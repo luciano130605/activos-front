@@ -16,7 +16,7 @@ export type Investment = {
     purchaseFx?: number;
 };
 
-export type Sale = { id: string; name: string; date: string; fraction: number; proceeds: number; currency: Currency; cost: number; costCurrency: Currency };
+export type Sale = { id: string; name: string; date: string; fraction: number; proceeds: number; currency: Currency; cost: number; costCurrency: Currency; executionPrice?: number; fee?: number; units?: number };
 export function cleanSale(raw: unknown): Sale | null {
     if (!raw || typeof raw !== 'object') return null;
     const s = raw as Record<string, unknown>;

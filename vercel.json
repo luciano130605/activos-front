@@ -1,41 +1,7 @@
 {
   "framework": "vite",
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://activos-back-production.up.railway.app/api/:path*"
-    },
-    {
-      "source": "/resumen",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/evolucion",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/simulacion",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/mis-inversiones",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/asistente",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/importaciones",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/politicas",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/condiciones",
-      "destination": "/index.html"
-    }
+    { "source": "/api/:path*", "destination": "https://activos-back-production.up.railway.app/api/:path*" },
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
