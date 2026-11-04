@@ -669,7 +669,6 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const locked = !!assetSearch || !!sellItem || panelEditor || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
     return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
-        <MarketChat items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
@@ -691,6 +690,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {notice && <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-4 py-3 text-[12px]"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Cerrar aviso" className="text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={14} /></button></div>}
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
+                <MarketChat fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} />}
 
                 <div className="flex flex-col">

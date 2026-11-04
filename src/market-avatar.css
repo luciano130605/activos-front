@@ -22,3 +22,5 @@
 @media (prefers-reduced-motion: reduce) {
   .market-avatar, .avatar-eyes, .is-thinking .avatar-shape { animation: none; }
 }
+
+.avatar-nav .market-avatar, .avatar-nav .avatar-eyes { animation: none; }

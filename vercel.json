@@ -20,6 +20,10 @@
     {
       "source": "/mis-inversiones",
       "destination": "/index.html"
+    },
+    {
+      "source": "/asistente",
+      "destination": "/index.html"
     }
   ]
 }
