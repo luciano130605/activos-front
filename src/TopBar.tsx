@@ -56,8 +56,8 @@ export default function TopBar(p: Props) {
         <div className="spacer flex-1" />
         <div className="acts flex items-center gap-2">
 
+            <button type="button" className="ibtn white" onClick={p.onAdd} aria-label="Nueva inversión" title="Nueva inversión"><HugeiconsIcon icon={PlusIcon} size={18} /></button>
             <button type="button" className="ibtn" onClick={p.onSearch} aria-label="Buscar activos" title="Buscar activos"><HugeiconsIcon icon={Search01Icon} size={18} /></button>
-            <button type="button" className="ibtn" onClick={p.onAdd} aria-label="Nueva inversión" title="Nueva inversión"><HugeiconsIcon icon={PlusIcon} size={18} /></button>
             <div className="seg" role="group" aria-label="Moneda de visualización">{(['USD', 'ARS'] as const).map(c => <button key={c} type="button" aria-pressed={p.display === c} onClick={() => p.onDisplay(c)}>{c}</button>)}</div>
             <button type="button" className="ibtn" onClick={p.onHidden} aria-pressed={p.hidden} aria-label={p.hidden ? 'Mostrar montos' : 'Ocultar montos'} title={p.hidden ? 'Mostrar montos' : 'Ocultar montos'}><HugeiconsIcon icon={p.hidden ? ViewOffIcon : ViewIcon} size={18} /></button>
 
