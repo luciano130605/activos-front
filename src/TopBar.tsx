@@ -47,7 +47,7 @@ export default function TopBar(p: Props) {
         <div className="brand">
             <img src="/icon.png" alt="Activos Logo" className="brand-logo" />
             <span>
-                activos<span className="text-[var(--sig)]">.</span>
+                alza<span className="text-[var(--sig)]">.</span>
             </span>
         </div>
         <nav className="navpills" aria-label="Navegación principal">
