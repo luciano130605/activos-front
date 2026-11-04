@@ -154,6 +154,16 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     }, []);
     const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
     const [modal, setModal] = useState(false);
+    const [detailId, setDetailId] = useState<string | null>(null);
+    const detailCloseRef = useRef<HTMLButtonElement>(null);
+    const detailOpenerRef = useRef<HTMLElement | null>(null);
+    useEffect(() => {
+        if (!detailId) return;
+        detailCloseRef.current?.focus();
+        const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setDetailId(null); };
+        window.addEventListener('keydown', onKey);
+        return () => { window.removeEventListener('keydown', onKey); detailOpenerRef.current?.focus(); };
+    }, [detailId]);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [assetSearch, setAssetSearch] = useState<AssetKind | null>(null);
     const [ctx, setCtx] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -517,6 +527,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             if (!unchangedPosition && currency !== quoteCurrency && !fxRate) return setError('No está disponible la cotización de USDC para convertir el monto.');
             investment.coin = id; investment.units = unchangedPosition ? original.units : convertedAmount / selectedPrice!;
             if (investment.units == null || !Number.isFinite(investment.units) || investment.units <= 0) return setError('El monto es demasiado grande o pequeño para calcular las unidades.');
+            if (unchangedPosition) { investment.purchasePrice = original.purchasePrice; investment.purchaseFx = original.purchaseFx; }
+            else if (priceMode === 'purchase') { investment.purchasePrice = selectedPrice; if (currency !== quoteCurrency && fxRate) investment.purchaseFx = fxRate; }
             if (activeQuote?.status === 'ready') setPrices(prev => ({ ...prev, [`${kind}:${id}`]: activeQuote.price }));
         }
         setItems(prev => editingId ? prev.map(x => x.id === editingId ? investment : x) : [...prev, investment]);
@@ -690,7 +702,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, []);
-    const locked = !!assetSearch || !!sellItem || panelEditor || leaving;
+    const detailItem = detailId ? items.find(i => i.id === detailId) : undefined;
+    const locked = !!assetSearch || !!sellItem || !!detailItem || panelEditor || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
     return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
@@ -782,15 +795,15 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
 
                     <div style={{ order: panelOrder('investments') }} hidden={page !== 'investments' && (page !== 'summary' || !visiblePanels.includes('investments'))}>
                         <section className="card overflow-hidden" aria-label="Mis inversiones">
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Clic derecho o ⋯ en una fila para editar, duplicar o eliminar</p></div>
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Tocá una inversión para ver sus detalles · ⋯ para más opciones</p></div>
                                 <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><button onClick={() => void refresh()} disabled={refreshing} title="Actualizar precios" aria-label="Actualizar precios" className="ibtn !h-[38px] !w-[38px] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div></div>
                             <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
                             <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
                             <div className="mt-3">{filtered.length ? filtered.map(i => {
                                 const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : i.kind === 'stock' ? `Acción · ${i.coin}` : `Cripto · ${i.coin}`;
-                                return <div key={i.id} className={`li ${ctx?.id === i.id ? 'menu-open' : ''}`} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
+                                return <div key={i.id} className={`li cursor-pointer ${ctx?.id === i.id ? 'menu-open' : ''}`} onClick={e => { if ((e.target as HTMLElement).closest('button, a')) return; detailOpenerRef.current = e.currentTarget.querySelector('button[data-detail]'); setDetailId(i.id); }} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
                                     <div className="tk" style={{ ['--c' as string]: colorOf(cat) }} aria-hidden="true">{tickerOf(i)}</div>
-                                    <div className="min-w-0"><p className="truncate text-[14px] font-medium">{i.name}</p><p className="mu mt-1 truncate text-[11.5px]">{sub} <span className="hidden sm:inline">· {formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">Sin precio · se muestra el monto original</p>}</div>
+                                    <div className="min-w-0"><button type="button" data-detail onClick={e => { detailOpenerRef.current = e.currentTarget; setDetailId(i.id); }} className="block max-w-full truncate text-left text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2" aria-label={`Ver detalle de ${i.name}`}>{i.name}</button><p className="mu mt-1 truncate text-[11.5px]">{sub} <span className="hidden sm:inline">· {formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">Sin precio · se muestra el monto original</p>}</div>
                                     <div className="r hid"><p>{mny(i.amount, i.currency)}</p><p className="mu mt-1 text-[10px]">Invertido</p></div>
                                     <div className="r hid"><p>{mny(v, i.currency)}</p><div className="mt-1 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada por vos</span> : <QuoteSource source={i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
                                     <div className="r"><span className={`pill ${change >= 0 ? '' : 'neg'}`}>{missing ? '—' : percent(change)}</span><p className="mu mt-1 text-[10px] sm:hidden">{mny(v, i.currency)}</p></div>
@@ -808,6 +821,26 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 </footer>
             </main>
         </div>
+        {detailItem && (() => {
+            const item = detailItem;
+            const quoted = item.kind === 'rate' || !item.coin ? undefined : prices[`${item.kind}:${item.coin}`];
+            const quoteCurrency: Currency = item.kind === 'cedear' ? 'ARS' : 'USD';
+            const available = item.kind === 'rate' || (quoted != null && Number.isFinite(quoted) && quoted > 0 && item.units != null && (quoteCurrency === item.currency || !!fxRate));
+            const currentValue = available ? valueAt(item, today, prices, today, officialRate) : NaN;
+            const result = currentValue - item.amount;
+            const unitPrice = (price: number | undefined, currency: Currency) => hidden ? MASK : price != null && Number.isFinite(price) ? new Intl.NumberFormat('es-AR', { style: 'currency', currency, maximumSignificantDigits: 10 }).format(price) : 'No disponible';
+            const units = item.units == null ? 'No disponible' : hidden ? MASK : new Intl.NumberFormat('es-AR', { maximumSignificantDigits: 10 }).format(item.units);
+            return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 backdrop-blur-[5px] sm:items-center sm:p-4" onMouseDown={event => { if (event.target === event.currentTarget) setDetailId(null); }}>
+                <section role="dialog" aria-modal="true" aria-labelledby="investment-detail-title" className="max-h-[90dvh] w-full overflow-y-auto rounded-t-[22px] border border-[var(--line2)] bg-[var(--surface)] p-5 shadow-2xl sm:max-w-[500px] sm:rounded-[22px] sm:p-6">
+                    <div className="flex items-start justify-between gap-4"><div><p className="lb">DETALLE DE INVERSIÓN</p><h2 id="investment-detail-title" className="mt-2 break-words text-[24px] font-light tracking-tight">{item.name}</h2><p className="mu mt-1 text-[12px]">{categoryOf(item) === 'index' ? 'Índice' : titleFor(item.kind)}{item.coin ? ` · ${item.coin}` : ''}</p></div><button ref={detailCloseRef} type="button" onClick={() => setDetailId(null)} aria-label="Cerrar detalle" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
+                    <div className="mt-6 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4"><p className="mu text-[11px]">Valor actual de la posición</p><p className="mt-1 break-all text-[27px] font-light tabular-nums">{available ? mny(currentValue, item.currency) : 'No disponible'}</p><p className="mt-2 text-[12px]" style={{ color: available ? result >= 0 ? 'var(--sig)' : 'var(--neg)' : 'var(--muted)' }}>{available ? `${mny(result, item.currency)} · ${percent(item.amount > 0 ? result / item.amount * 100 : 0)}` : 'No hay cotización o conversión disponible'}</p></div>
+                    <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 text-[13px]"><div><dt className="mu text-[11px]">Fecha registrada</dt><dd className="mt-1">{formatDate(item.date)}</dd></div><div><dt className="mu text-[11px]">Monto registrado</dt><dd className="mt-1 break-all tabular-nums">{mny(item.amount, item.currency)}</dd></div>{item.kind !== 'rate' ? <><div><dt className="mu text-[11px]">Unidades actuales</dt><dd className="mt-1 break-all tabular-nums">{units}</dd></div><div><dt className="mu text-[11px]">Precio de compra por unidad</dt><dd className="mt-1 break-all tabular-nums">{unitPrice(item.purchasePrice, quoteCurrency)}</dd></div><div><dt className="mu text-[11px]">Precio actual por unidad</dt><dd className="mt-1 break-all tabular-nums">{unitPrice(quoted, quoteCurrency)}</dd></div></> : <div><dt className="mu text-[11px]">Tasa ingresada</dt><dd className="mt-1">{item.rate}% {item.period === 'month' ? 'mensual' : 'anual'}</dd></div>}</dl>
+                    {item.kind !== 'rate' && item.purchasePrice == null && <p className="mu mt-5 text-[11px] leading-5">No se guardó un precio de compra para esta posición. El monto registrado puede ser un valor actual ingresado al cargarla.</p>}
+                    <p className="mu mt-3 text-[11px] leading-5">Las unidades y el monto corresponden a la posición que conservás; pueden haber cambiado si registraste ventas.</p>
+                    <button type="button" onClick={() => { setDetailId(null); openEdit(item); }} className="btn-ghost mt-5 w-full">Editar inversión</button>
+                </section>
+            </div>;
+        })()}
         {ctx && ctxItem && <ContextMenu x={ctx.x} y={ctx.y} title={ctxItem.name} items={menuFor(ctxItem)} onClose={closeCtx} />}
         {passkeyDialog && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !passkeyBusy) setPasskeyDialog(false); }}>
             <section role="dialog" aria-modal="true" aria-labelledby="passkey-title" className="card w-full max-w-md p-6 shadow-2xl">
