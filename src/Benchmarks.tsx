@@ -1,5 +1,4 @@
 import Select from './Select';
-import { toPng } from 'html-to-image';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -33,7 +32,7 @@ type Series = {
 
 type Key = keyof Series | 'cartera';
 
-type Point = { t: number; value: number };
+type Point = { t: number; value: number; original?: number; observedAt?: number };
 
 type Line = {
 
@@ -269,7 +268,6 @@ export default function Benchmarks({
     const [exportPreview, setExportPreview] = useState<string | null>(null);
     const [exportError, setExportError] = useState('');
     const [exporting, setExporting] = useState(false);
-    const exportRef = useRef<HTMLElement>(null);
 
     const [hoverT, setHoverT] = useState<number | null>(null);
 
@@ -464,7 +462,7 @@ export default function Benchmarks({
         if (available) {
             const initial = valueAt(from);
             if (Number.isFinite(initial) && initial > 0) {
-                const points = times.map(t => ({ t, value: valueAt(t) / initial * 100 }));
+                const points = times.map(t => { const original = valueAt(t); return { t, value: original / initial * 100, original }; });
                 if (points.every(p => Number.isFinite(p.value) && p.value > 0)) {
                     lines.push({ key: 'cartera', label: selectionLabel, points, lastDate: to });
                 }
@@ -495,7 +493,7 @@ export default function Benchmarks({
 
                     return p
 
-                        ? [{ t, value: 100 * p.value / base.value }]
+                        ? [{ t, value: 100 * p.value / base.value, original: p.value, observedAt: p.t }]
 
                         : [];
 
@@ -559,7 +557,8 @@ export default function Benchmarks({
 
                     }
 
-                    return { t, value };
+                    const observed = at(monthly, t);
+                    return { t, value, original: observed?.value, observedAt: observed?.t };
 
                 });
 
@@ -619,7 +618,8 @@ export default function Benchmarks({
 
                     }
 
-                    return { t, value };
+                    const observed = at(rates, t);
+                    return { t, value, original: observed?.value, observedAt: observed?.t };
 
                 });
 
@@ -737,9 +737,10 @@ export default function Benchmarks({
 
         const points = result.lines.flatMap(line => {
 
+            const point = at(line.points, hoverT);
             const value = getValue(line.points, hoverT);
 
-            if (value === null) return [];
+            if (!point || value === null) return [];
 
             return [{
 
@@ -752,6 +753,8 @@ export default function Benchmarks({
                 value,
 
                 change: value - 100,
+                original: point.original,
+                observedAt: point.observedAt,
 
             }];
 
@@ -782,16 +785,88 @@ export default function Benchmarks({
         : null;
 
     const prepareExport = async () => {
-        if (!result?.lines.length || !exportRef.current || exporting) return;
+        if (!result?.lines.length || exporting) return;
         setExporting(true);
         setExportError('');
         try {
             await document.fonts.ready;
-            const image = await toPng(exportRef.current, {
-                pixelRatio: 2,
-                filter: node => !(node instanceof HTMLElement && node.hasAttribute('data-export-exclude')),
+            const width = 1000;
+            const rows = Math.ceil(result.lines.length / 2);
+            const height = 710 + rows * 105;
+            const canvas = document.createElement('canvas');
+            canvas.width = width * 2;
+            canvas.height = height * 2;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('No se pudo crear la imagen');
+            ctx.scale(2, 2);
+            const rounded = (x: number, y: number, w: number, h: number, radius: number, fill: string, stroke?: string) => {
+                ctx.beginPath(); ctx.roundRect(x, y, w, h, radius); ctx.fillStyle = fill; ctx.fill();
+                if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+            };
+            ctx.fillStyle = '#0b0d0b'; ctx.fillRect(0, 0, width, height);
+            rounded(24, 24, width - 48, height - 48, 24, '#141714', '#303730');
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#c6f26b'; ctx.font = '600 13px Geist, sans-serif';
+            ctx.fillText('ALZA  /  RENDIMIENTO COMPARADO', 60, 70);
+            ctx.fillStyle = '#f3f4ee'; ctx.font = '600 31px Geist, sans-serif';
+            ctx.fillText('Cartera y activos vs. mercado', 60, 113);
+            ctx.fillStyle = '#a9b1a8'; ctx.font = '16px Geist, sans-serif';
+            ctx.fillText('Variación en pesos argentinos · Base 100', 60, 145);
+            ctx.fillStyle = '#e0e5da'; ctx.font = '500 15px Geist, sans-serif';
+            ctx.fillText(`${dateLabel(from)} — ${dateLabel(to)}`, 60, 173);
+            if (portfolioReturn !== null) {
+                rounded(708, 53, 230, 117, 16, '#1c231c', '#354035');
+                ctx.fillStyle = '#a9b1a8'; ctx.font = '13px Geist, sans-serif';
+                ctx.fillText('VARIACIÓN EN EL PERÍODO', 726, 79);
+                ctx.fillStyle = portfolioReturn >= 0 ? '#c6f26b' : '#ff8a8a';
+                ctx.font = '600 32px Geist, sans-serif';
+                ctx.fillText(percent(portfolioReturn), 726, 119);
+                ctx.fillStyle = '#b5bdb4'; ctx.font = '14px Geist, sans-serif';
+                ctx.fillText(selectionLabel, 726, 145, 194);
+            }
+            rounded(48, 200, 904, 355, 18, '#101310', '#2b332c');
+            ctx.save();
+            ctx.translate(69, 220);
+            const sx = 860 / W;
+            const sy = 300 / H;
+            ctx.scale(sx, sy);
+            ctx.font = '12px Geist, sans-serif';
+            result.ticks.forEach(v => {
+                const y = result.y(v);
+                ctx.strokeStyle = '#303a31'; ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
+                ctx.beginPath(); ctx.moveTo(LEFT, y); ctx.lineTo(W - RIGHT, y); ctx.stroke();
+                ctx.setLineDash([]); ctx.textAlign = 'right'; ctx.fillStyle = '#99a499';
+                ctx.fillText(v.toFixed(0), LEFT - 12, y + 4);
             });
-            setExportPreview(image);
+            ctx.textAlign = 'center'; ctx.fillStyle = '#99a499';
+            result.monthTicks.forEach(t => ctx.fillText(months > 12 ? new Date(t).toLocaleDateString('es-AR', { month: 'short', year: '2-digit', timeZone: 'UTC' }) : monthLabel(t), result.x(t), H - 8));
+            ctx.strokeStyle = '#758174'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.moveTo(LEFT, result.y(100)); ctx.lineTo(W - RIGHT, result.y(100)); ctx.stroke(); ctx.setLineDash([]);
+            result.lines.forEach(line => {
+                ctx.strokeStyle = colors[line.key]; ctx.lineWidth = line.key === 'cartera' ? 3.4 : 2.2;
+                ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.beginPath();
+                line.points.forEach((point, index) => { if (index === 0) ctx.moveTo(result.x(point.t), result.y(point.value)); else ctx.lineTo(result.x(point.t), result.y(point.value)); });
+                ctx.stroke();
+            });
+            ctx.restore();
+            ctx.textAlign = 'left'; ctx.fillStyle = '#d6ddd3'; ctx.font = '600 15px Geist, sans-serif';
+            ctx.fillText('RESULTADOS POR ACTIVO', 60, 596);
+            result.lines.forEach((line, index) => {
+                const x = 60 + (index % 2) * 445;
+                const y = 615 + Math.floor(index / 2) * 105;
+                const variation = line.points[line.points.length - 1].value - 100;
+                rounded(x, y, 430, 89, 12, '#1b211b', '#303a30');
+                rounded(x + 15, y + 19, 8, 8, 4, colors[line.key]);
+                ctx.textAlign = 'left'; ctx.fillStyle = '#edf0e8'; ctx.font = '600 16px Geist, sans-serif';
+                ctx.fillText(line.label, x + 32, y + 27, 270);
+                ctx.textAlign = 'right'; ctx.fillStyle = variation >= 0 ? '#d6f6ae' : '#ff9999'; ctx.font = '600 19px Geist, sans-serif';
+                ctx.fillText(percent(variation), x + 414, y + 28);
+                ctx.textAlign = 'left'; ctx.fillStyle = '#b7c0b5'; ctx.font = '14px Geist, sans-serif';
+                ctx.fillText(`${dateLabel(from)} — ${dateLabel(line.lastDate)}`, x + 15, y + 62, 400);
+            });
+            ctx.fillStyle = '#899588'; ctx.font = '12px Geist, sans-serif';
+            ctx.fillText('ALZA  ·  Comparación de rendimiento en ARS', 60, height - 55);
+            setExportPreview(canvas.toDataURL('image/png'));
         } catch {
             setExportError('No se pudo generar la imagen. Intentá nuevamente.');
         } finally {
@@ -802,8 +877,6 @@ export default function Benchmarks({
     return (
 
         <section
-
-            ref={exportRef}
 
             className="card mb-3.5 p-5 sm:p-6"
 
@@ -1338,7 +1411,7 @@ export default function Benchmarks({
 
                             <div
 
-                                className="pointer-events-none absolute top-0 z-20 w-[210px] rounded-xl border border-[var(--line2)] bg-[var(--surface)] p-3 shadow-xl sm:w-[230px]"
+                                className="pointer-events-none absolute top-0 z-20 w-[260px] max-w-[90%] rounded-xl border border-[var(--line2)] bg-[var(--surface)] p-3 shadow-xl sm:w-[290px]"
 
                                 style={{
 
@@ -1405,6 +1478,10 @@ export default function Benchmarks({
                                                     {point.value.toFixed(2)} pts
 
                                                 </p>
+                                                {point.original != null && Number.isFinite(point.original) && <p className="mu mt-1 text-[10px] tabular-nums">
+                                                    {point.key === 'inflation' ? `Inflación mensual: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'deposit' ? `TNA: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'merval' ? `Índice: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })} pts` : `${point.key === 'cartera' ? (selection === 'all' ? 'Valor estimado' : 'Valor de la selección') : 'Cotización'}: ${point.original.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}`}
+                                                </p>}
+                                                {point.observedAt != null && <p className="mu text-[10px]">Dato del {dateLabel(point.observedAt)}</p>}
 
                                             </div>
 
