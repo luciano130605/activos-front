@@ -14,6 +14,7 @@ export type Investment = {
     units?: number;
     purchasePrice?: number;
     purchaseFx?: number;
+    maturityDate?: string;
 };
 
 export type Sale = { id: string; name: string; date: string; fraction: number; proceeds: number; currency: Currency; cost: number; costCurrency: Currency; executionPrice?: number; fee?: number; units?: number };
@@ -128,6 +129,12 @@ export function cleanInvestment(raw: unknown): Investment | null {
         const rate = Number(r.rate);
         if (!Number.isFinite(rate) || rate <= -100 || (period !== 'year' && period !== 'month')) return null;
         inv.rate = rate; inv.period = period;
+        if (r.maturityDate != null) {
+            if (rate < 0 || period !== 'year' || typeof r.maturityDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.maturityDate)) return null;
+            const maturity = new Date(`${r.maturityDate}T12:00:00Z`);
+            if (!Number.isFinite(maturity.getTime()) || maturity.toISOString().slice(0, 10) !== r.maturityDate || r.maturityDate <= date) return null;
+            inv.maturityDate = r.maturityDate;
+        }
     } else {
         const units = Number(r.units);
         if (typeof r.coin !== 'string' || !r.coin.trim() || !Number.isFinite(units) || units <= 0) return null;
