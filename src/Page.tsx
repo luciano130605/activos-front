@@ -1,7 +1,7 @@
 import { createPasskey, passkeyStatus, preparePasskey, supportsPasskeys, type RegistrationOptions } from './passkeys';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { coinPriceOn, coinPricesNow, usdcArsNow } from './coingecko';
-import { cedearPriceOn, cedearPricesNow } from './cedears';
+import { cedearPriceOn, cedearPricesNow, stockPrice, stockPricesNow } from './cedears';
 import AssetSearchDialog, { type AssetKind, type PickedAsset } from './AssetSearchDialog';
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { INDEXES, indexName, isIndexTicker } from './assets';
@@ -25,7 +25,7 @@ import { usePortfolio } from './usePortfolio';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 type Filter = 'all' | Kind | 'index';
-type AssetQuote = { id: string; date: string; kind: 'crypto' | 'cedear' } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
+type AssetQuote = { id: string; date: string; kind: 'crypto' | 'cedear' | 'stock' } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
 type DollarRate = { nombre: string; compra: number | null; venta: number };
 type Rates = Record<string, DollarRate>;
 const MASK = '****';
@@ -35,6 +35,7 @@ const kinds: { id: Filter; label: string; color: string }[] = [
     { id: 'rate', label: 'Con tasa', color: 'var(--c-rate)' },
     { id: 'cedear', label: 'CEDEARs', color: 'var(--c-cedear)' },
     { id: 'index', label: 'Índices', color: 'var(--c-index)' },
+    { id: 'stock', label: 'Acciones', color: '#9b8cff' },
     { id: 'crypto', label: 'Criptomonedas', color: 'var(--c-crypto)' },
 ];
 // Nombres de los tipos de dólar que devuelve dolarapi.com (campo "casa")
@@ -42,7 +43,7 @@ const dollarLabels: Record<string, string> = { bolsa: 'MEP', contadoconliqui: 'C
 // Dólares que se comparan contra USDC (la referencia de conversión de la app)
 const compareOrder = ['oficial', 'bolsa', 'contadoconliqui', 'blue'];
 type Usdc = { price: number; source: 'coingecko' | 'mep' };
-const titleFor = (kind: Kind) => kind === 'rate' ? 'Con tasa' : kind === 'cedear' ? 'CEDEAR' : 'Cripto';
+const titleFor = (kind: Kind) => kind === 'rate' ? 'Con tasa' : kind === 'cedear' ? 'CEDEAR' : kind === 'stock' ? 'Acción' : 'Cripto';
 const categoryOf = (investment: Investment): Exclude<Filter, 'all'> => investment.kind === 'cedear' && isIndexTicker(investment.coin) ? 'index' : investment.kind;
 const localISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const dateMillis = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
@@ -130,6 +131,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const titleRef = useRef<HTMLHeadingElement>(null);
     const previousPage = useRef(page);
     const [filter, setFilter] = useState<Filter>('all');
+    const [hiddenSummaryKinds, setHiddenSummaryKinds] = useState<Exclude<Filter, 'all'>[]>([]);
     const [search, setSearch] = useState('');
     const [display, setDisplay] = preference('display');
     const [range, setRange] = useState<'7d' | '1m' | '6m' | '1a' | 'todo'>('1a');
@@ -186,8 +188,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const fxSource = usdc?.source === 'mep' ? 'DolarAPI · MEP (CoinGecko no respondió)' : 'CoinGecko · USDC/ARS';
     const cryptos = useMemo(() => [...new Set(items.filter(i => i.kind === 'crypto' && i.coin).map(i => i.coin!))], [items]);
     const cedears = useMemo(() => [...new Set(items.filter(i => i.kind === 'cedear' && i.coin).map(i => i.coin!))], [items]);
-    const assetId = kind === 'cedear' ? coin.trim().toUpperCase() : coin.trim().toLowerCase();
-    const quoteSource = kind === 'cedear' ? 'Data912' : 'CoinGecko';
+    const stocks = useMemo(() => [...new Set(items.filter(i => i.kind === 'stock' && i.coin).map(i => i.coin!))], [items]);
+    const assetId = kind !== 'crypto' && kind !== 'rate' ? coin.trim().toUpperCase() : coin.trim().toLowerCase();
+    const quoteSource = kind === 'crypto' ? 'CoinGecko' : 'Data912';
     const todayDate = localISO();
     const activeQuote = modal && kind !== 'rate' && assetQuote?.id === assetId && assetQuote.date === todayDate && assetQuote.kind === kind ? assetQuote : null;
     const quotePrice = activeQuote?.status === 'ready' ? activeQuote.price : undefined;
@@ -203,7 +206,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const timer = window.setTimeout(async () => {
             setAssetQuote({ id: assetId, date: todayDate, kind, status: 'loading' });
             try {
-                const quote = kind === 'crypto' ? { price: await coinPriceOn(assetId, todayDate, todayDate, controller.signal) } : await cedearPriceOn(assetId, todayDate, todayDate, controller.signal);
+                const quote = kind === 'crypto' ? { price: await coinPriceOn(assetId, todayDate, todayDate, controller.signal) } : kind === 'stock' ? await stockPrice(assetId, controller.signal) : await cedearPriceOn(assetId, todayDate, todayDate, controller.signal);
                 if (!controller.signal.aborted) setAssetQuote({ id: assetId, date: todayDate, kind, status: 'ready', ...quote });
             } catch (error) {
                 if (!controller.signal.aborted) setAssetQuote({ id: assetId, date: todayDate, kind, status: 'error', message: error instanceof Error ? error.message : 'No se pudo consultar el precio. Volvé a intentar.' });
@@ -221,9 +224,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     }, [page, pageInfo.label]);
     const refresh = useCallback(async () => {
         setRefreshing(true); setPriceError(false);
-        const results = await Promise.allSettled([coinPricesNow(cryptos), cedearPricesNow(cedears), dollarsNow(), usdcArsNow()]);
-        const [cryptoResult, cedearResult, dollarResult, usdcResult] = results;
-        setPrices(prev => ({ ...prev, ...(cryptoResult.status === 'fulfilled' ? cryptoResult.value : {}), ...(cedearResult.status === 'fulfilled' ? cedearResult.value : {}) }));
+        const results = await Promise.allSettled([coinPricesNow(cryptos), cedearPricesNow(cedears), dollarsNow(), usdcArsNow(), stockPricesNow(stocks)]);
+        const [cryptoResult, cedearResult, dollarResult, usdcResult, stockResult] = results;
+        setPrices(prev => ({ ...prev, ...(cryptoResult.status === 'fulfilled' ? cryptoResult.value : {}), ...(cedearResult.status === 'fulfilled' ? cedearResult.value : {}), ...(stockResult.status === 'fulfilled' ? stockResult.value : {}) }));
         const gotDollars = dollarResult.status === 'fulfilled' && Object.keys(dollarResult.value).length > 0;
         if (dollarResult.status === 'fulfilled' && gotDollars) setRates(prev => ({ ...prev, ...dollarResult.value }));
         if (usdcResult.status === 'fulfilled') setUsdc({ price: usdcResult.value, source: 'coingecko' });
@@ -231,21 +234,23 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         setPriceError(results.some(r => r.status === 'rejected') || (dollarResult.status === 'fulfilled' && !gotDollars));
         setUpdated(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
         setRefreshing(false);
-    }, [cryptos, cedears]);
+    }, [cryptos, cedears, stocks]);
     useEffect(() => { void refresh(); }, [refresh]);
     const fx = (v: number, from: Currency) => from === display ? v : !fxRate ? NaN : display === 'USD' ? v / fxRate : v * fxRate;
     // Con "ocultar montos" activo, todo importe se muestra como ****
     const fmt = (v: number) => hidden ? MASK : Number.isFinite(v) ? money(v, display) : '—';
     const mny = (n: number, c: Currency) => hidden ? MASK : Number.isFinite(n) ? money(n, c) : '—';
-    const invested = items.reduce((s, i) => s + (dateMillis(i.date) <= today ? fx(i.amount, i.currency) : 0), 0);
     const current = items.reduce((s, i) => s + fx(valueAt(i, today, prices, today, officialRate), i.currency), 0);
-    const gain = current - invested;
-    const gainPct = invested > 0 ? gain / invested * 100 : 0;
+    const summaryItems = items.filter(i => !hiddenSummaryKinds.includes(categoryOf(i)));
+    const summaryInvested = summaryItems.reduce((s, i) => s + (dateMillis(i.date) <= today ? fx(i.amount, i.currency) : 0), 0);
+    const summaryCurrent = summaryItems.reduce((s, i) => s + fx(valueAt(i, today, prices, today, officialRate), i.currency), 0);
+    const summaryGain = summaryCurrent - summaryInvested;
+    const summaryGainPct = summaryInvested > 0 ? summaryGain / summaryInvested * 100 : 0;
     const filtered = items.filter(i => (filter === 'all' || categoryOf(i) === filter) && `${i.name} ${i.coin ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.date.localeCompare(a.date));
     const allCount = (kind: Filter) => kind === 'all' ? items.length : items.filter(i => categoryOf(i) === kind).length;
     const colorOf = (k: Filter) => kinds.find(v => v.id === k)!.color;
     const valueOf = (list: Investment[]) => list.reduce((s, i) => s + fx(valueAt(i, today, prices, today, officialRate), i.currency), 0);
-    const byKind = (['rate', 'cedear', 'index', 'crypto'] as const).map(k => { const list = items.filter(i => categoryOf(i) === k); return { label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(list), count: list.length }; });
+    const byKind = (['rate', 'cedear', 'index', 'stock', 'crypto'] as const).map(k => { const list = items.filter(i => categoryOf(i) === k); return { id: k, label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(list), count: list.length }; });
     const byCurrency = [
         { label: 'Dólares (USD)', color: 'var(--sig)', value: valueOf(items.filter(i => i.currency === 'USD')), count: items.filter(i => i.currency === 'USD').length },
         { label: 'Pesos (ARS)', color: 'var(--c-rate)', value: valueOf(items.filter(i => i.currency === 'ARS')), count: items.filter(i => i.currency === 'ARS').length },
@@ -268,17 +273,17 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         items.forEach(i => { const label = key(i); groups.set(label, [...(groups.get(label) ?? []), i]); });
         return [...groups].map(([label, list], index) => ({ label, color: palette[index % palette.length], value: valueOf(list), count: list.length }));
     };
-    const byAsset = groupDistribution(i => i.kind === 'rate' ? i.name : `${i.kind === 'cedear' ? 'CEDEAR' : 'Cripto'} · ${i.coin}`);
-    const bySector = groupDistribution(i => i.kind === 'crypto' ? 'Criptomonedas' : i.kind === 'cedear' ? classifications[i.coin ?? '']?.[0] ?? 'Sin clasificar' : 'Sin clasificar');
-    const byCountry = groupDistribution(i => i.kind === 'crypto' ? 'Sin país asociado' : i.kind === 'cedear' ? classifications[i.coin ?? '']?.[1] ?? 'Sin clasificar' : 'Sin clasificar');
-    const chart = useMemo(() => {
-        if (!items.length || !Number.isFinite(current) || !fxRate && items.some(i => i.currency !== display)) return null;
-        const earliest = Math.min(today, ...items.map(i => dateMillis(i.date)));
+    const byAsset = groupDistribution(i => i.kind === 'rate' ? i.name : `${i.kind === 'cedear' ? 'CEDEAR' : kind === 'stock' ? 'Acción' : 'Cripto'} · ${i.coin}`);
+    const bySector = groupDistribution(i => i.kind === 'crypto' ? 'Criptomonedas' : i.kind === 'cedear' || i.kind === 'stock' ? classifications[i.coin ?? '']?.[0] ?? 'Sin clasificar' : 'Sin clasificar');
+    const byCountry = groupDistribution(i => i.kind === 'crypto' ? 'Sin país asociado' : i.kind === 'cedear' || i.kind === 'stock' ? classifications[i.coin ?? '']?.[1] ?? 'Sin clasificar' : 'Sin clasificar');
+    const makeChart = (chartItems: Investment[], chartCurrent: number) => {
+        if (!chartItems.length || !Number.isFinite(chartCurrent) || !fxRate && chartItems.some(i => i.currency !== display)) return null;
+        const earliest = Math.min(today, ...chartItems.map(i => dateMillis(i.date)));
         const days = { '7d': 7, '1m': 30, '6m': 182, '1a': 365 };
         const start = range === 'todo' ? Math.min(earliest, today - 86400000) : today - days[range] * 86400000;
         const end = today;
         const len = 72, w = 850, h = 230, pad = 12;
-        const samples = Array.from({ length: len + 1 }, (_, idx) => { const t = start + (end - start) * idx / len; return { t, value: items.reduce((s, i) => s + fx(valueAt(i, t, prices, today, officialRate), i.currency), 0) }; });
+        const samples = Array.from({ length: len + 1 }, (_, idx) => { const t = start + (end - start) * idx / len; return { t, value: chartItems.reduce((s, i) => s + fx(valueAt(i, t, prices, today, officialRate), i.currency), 0) }; });
         const max = Math.max(1, ...samples.map(s => s.value)) * 1.12;
         const px = (t: number) => pad + (t - start) / (end - start || 1) * (w - 2 * pad);
         const py = (v: number) => h - pad - v / max * (h - 2 * pad);
@@ -286,8 +291,10 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const baseline = h - pad;
         const area = `${line} L ${px(end)} ${baseline} L ${px(start)} ${baseline} Z`;
         const nowX = Math.min(w - pad, px(today));
-        return { w, h, line, area, nowX, nowY: py(current), first: chartDate(start), points: samples.map(sample => ({ ...sample, x: px(sample.t), y: py(sample.value) })) };
-    }, [items, prices, range, display, fxRate, officialRate, today, current]);
+        return { w, h, line, area, nowX, nowY: py(chartCurrent), first: chartDate(start), points: samples.map(sample => ({ ...sample, x: px(sample.t), y: py(sample.value) })) };
+    };
+    const chart = makeChart(items, current);
+    const summaryChart = hiddenSummaryKinds.length ? makeChart(summaryItems, summaryCurrent) : chart;
     const [temporaryBenchmark, setTemporaryBenchmark] = useState<PickedAsset | null>(null);
     const [benchmarkSearchOpen, setBenchmarkSearchOpen] = useState(false);
     const [benchmarkSearchStatus, setBenchmarkSearchStatus] = useState('');
@@ -305,7 +312,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const assetRequests = keys.map(async key => {
             const [assetKind, id] = key.split(':');
             try {
-                const points = await history(assetKind as 'cedear' | 'crypto', id, controller.signal);
+                const points = await history(assetKind as 'cedear' | 'crypto' | 'stock', id, controller.signal);
                 return [key, assetKind === 'cedear' ? adjustPossibleRatios(points).points : points] as const;
             } catch { return [key, []] as const; }
         });
@@ -459,7 +466,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     }, 0);
     const actualReturnArs = costInPesos > 0 && Number.isFinite(currentInPesos) ? (currentInPesos / costInPesos - 1) * 100 : null;
     const chartPoint = chartIndex == null ? null : chart?.points[chartIndex] ?? null;
-    const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); setCoin(k === 'cedear' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
+    const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); if (k === 'cedear') setCurrency('ARS'); else if (k === 'stock') setCurrency('USD'); setCoin(k === 'cedear' || k === 'stock' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
     function openModal() {
         setError(''); setEditingId(null); setName(''); setAmount(''); setRate(''); setDate(localISO());
         setIndexMode(false); setAssetQuote(null); setModal(true);
@@ -473,7 +480,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     function closeModal() { setModal(false); setEditingId(null); }
     function selectAsset(asset: PickedAsset) {
         const isIndex = asset.kind === 'index';
-        setIndexMode(isIndex); setKind(asset.kind === 'crypto' ? 'crypto' : 'cedear'); setCoin(asset.id); setName(asset.name.slice(0, 70));
+        setIndexMode(isIndex); setKind(asset.kind === 'crypto' ? 'crypto' : 'cedear'); if (asset.kind !== 'crypto') setCurrency('ARS'); setCoin(asset.id); setName(asset.name.slice(0, 70));
         setAssetQuote(null); setQuoteRequest(value => value + 1); setError(''); setAssetSearch(null); setModal(true);
     }
     function duplicate(i: Investment) { setItems(prev => [...prev, { ...i, id: crypto.randomUUID(), name: `${i.name} (copia)`.slice(0, 70) }]); setNotice('Inversión duplicada.'); }
@@ -489,7 +496,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             if (!rate.trim() || !Number.isFinite(r) || r <= -100) return setError('Ingresá una tasa válida superior a -100%.');
             investment.rate = r; investment.period = period;
         } else {
-            const id = kind === 'cedear' ? coin.trim().toUpperCase() : coin.trim().toLowerCase();
+            const id = kind !== 'crypto' ? coin.trim().toUpperCase() : coin.trim().toLowerCase();
             if (!id) return setError('Ingresá el ticker o identificador del activo.');
             const original = editingId ? items.find(item => item.id === editingId) : undefined;
             const unchangedPosition = original && original.kind === kind && original.coin === id && original.amount === value && original.currency === currency && original.date === date;
@@ -621,7 +628,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const syncLabel = view.status === 'saved' ? 'Guardado en tu cuenta' : view.status === 'saving' ? 'Guardando…' : view.status === 'pending' ? 'Cambios pendientes' : 'Sin guardar';
     const goTo = (path: string) => { window.history.pushState(null, '', path); window.dispatchEvent(new PopStateEvent('popstate')); };
     const cryptoSymbols: Record<string, string> = { bitcoin: 'BTC', ethereum: 'ETH', solana: 'SOL', tether: 'USDT', 'usd-coin': 'USDC', ripple: 'XRP', binancecoin: 'BNB', dogecoin: 'DOGE', cardano: 'ADA' };
-    const tickerOf = (i: Investment) => i.kind === 'rate' ? 'TASA' : i.kind === 'cedear' ? (i.coin ?? '').slice(0, 5) : (cryptoSymbols[i.coin ?? ''] ?? (i.coin ?? '').slice(0, 4).toUpperCase());
+    const tickerOf = (i: Investment) => i.kind === 'rate' ? 'TASA' : i.kind !== 'crypto' ? (i.coin ?? '').slice(0, 5) : (cryptoSymbols[i.coin ?? ''] ?? (i.coin ?? '').slice(0, 4).toUpperCase());
     const summaryOf = (i: Investment) => { const v = valueAt(i, today, prices, today, officialRate); return `${i.name} · ${titleFor(i.kind)} · invertido ${money(i.amount, i.currency)} · hoy ${Number.isFinite(v) ? money(v, i.currency) : '—'} (${percent(i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0)})`; };
     const copySummary = async (i: Investment) => { try { await navigator.clipboard.writeText(summaryOf(i)); setNotice('Resumen copiado al portapapeles.'); } catch { setNotice('No se pudo copiar. Tu navegador bloqueó el portapapeles.'); } };
     const menuFor = (i: Investment): MenuItem[] => [
@@ -655,9 +662,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const [int, dec] = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v).split(',');
         return { cur: display === 'USD' ? 'US$' : '$', int, dec: `,${dec}` };
     };
-    const big = bigParts(current);
-    const capShare = gain >= 0 ? (current > 0 ? invested / current : 1) : (invested > 0 ? current / invested : 1);
-    const slicesForBar = byKind.filter(k => Number.isFinite(k.value) && k.value > 0);
+    const big = bigParts(summaryCurrent);
+    const capShare = summaryGain >= 0 ? (summaryCurrent > 0 ? summaryInvested / summaryCurrent : 1) : (summaryInvested > 0 ? summaryCurrent / summaryInvested : 1);
+    const slicesForBar = byKind.filter(k => !hiddenSummaryKinds.includes(k.id) && Number.isFinite(k.value) && k.value > 0);
     const slicesTotal = slicesForBar.reduce((s, k) => s + k.value, 0);
     const statusDot = view.status === 'saved' ? 'live' : 'live warn';
     const compare = compareOrder.filter(k => rates[k]);
@@ -701,25 +708,26 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}>
                         <section className="mb-3.5 grid gap-3.5 lg:grid-cols-[1.5fr_1fr]" aria-label="Valor de la cartera">
                             <article className="card hero-glow flex min-h-[360px] flex-col overflow-hidden p-6">
-                                <div className="flex items-center justify-between"><span className="lb">VALOR ACTUAL</span> </div>
+                                <div className="flex items-center justify-between"><span className="lb">VALOR ACTUAL</span></div>
+                                {items.length > 0 && <fieldset className="mt-4"><legend className="mu mb-2 text-[11px]">Incluir en el resumen</legend><div className="flex flex-wrap gap-2">{kinds.filter(k => k.id !== 'all' && allCount(k.id) > 0).map(k => { const category = k.id as Exclude<Filter, 'all'>; const selected = !hiddenSummaryKinds.includes(category); return <button key={category} type="button" aria-pressed={selected} onClick={() => setHiddenSummaryKinds(prev => prev.includes(category) ? prev.filter(id => id !== category) : [...prev, category])} className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors ${selected ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]' : 'border-[var(--line)] text-[var(--muted)] opacity-60'}`}><span aria-hidden="true">{selected ? '✓ ' : '+ '}</span>{k.label}</button>; })}</div></fieldset>}
                                 <p className="big mt-6" aria-label={hidden ? 'Monto oculto' : undefined}>{big.cur && <span className="cur">{big.cur}</span>}{big.int}{big.dec && <span className="dec">{big.dec}</span>}</p>
-                                <div className="mt-4 flex flex-wrap items-center gap-3"><span className={`pill ${gain >= 0 ? '' : 'neg'}`}>
+                                <div className="mt-4 flex flex-wrap items-center gap-3"><span className={`pill ${summaryGain >= 0 ? '' : 'neg'}`}>
                                     <HugeiconsIcon
-                                        icon={gain >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon}
+                                        icon={summaryGain >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon}
                                         size={16}
-                                        color={gain >= 0 ? "#22c55e" : "#ef4444"}
+                                        color={summaryGain >= 0 ? "#22c55e" : "#ef4444"}
                                         strokeWidth={2}
                                     />
-                                    {Number.isFinite(gainPct) ? percent(gainPct) : '—'}</span><span className="mu">{fmt(gain)} respecto al capital aportado</span></div>
+                                    {Number.isFinite(summaryGainPct) ? percent(summaryGainPct) : '—'}</span><span className="mu">{fmt(summaryGain)} respecto al capital aportado</span></div>
                                 {slicesForBar.length > 0 && <div className="mt-7"><div className="dm" role="img" aria-label={`Distribución: ${slicesForBar.map(k => `${k.label} ${(k.value / slicesTotal * 100).toFixed(0)}%`).join(', ')}`}>{slicesForBar.map(k => <i key={k.label} style={{ ['--c' as string]: k.color, flex: k.value }} />)}</div><div className="lg mt-3">{slicesForBar.map(k => <span key={k.label} style={{ ['--c' as string]: k.color }}>{k.label} {(k.value / slicesTotal * 100).toFixed(0)}%</span>)}</div></div>}
-                                {chart && <svg className="mt-auto -mx-6 -mb-6 block h-[100px] w-[calc(100%+3rem)] pt-4" viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .28 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs><path d={chart.area} fill="url(#hero-fill)" /><path d={chart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>}
+                                {summaryChart && <svg className="mt-auto -mx-6 -mb-6 block h-[100px] w-[calc(100%+3rem)] pt-4" viewBox={`0 0 ${summaryChart.w} ${summaryChart.h}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .28 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs><path d={summaryChart.area} fill="url(#hero-fill)" /><path d={summaryChart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>}
                             </article>
                             <div className="grid gap-3.5">
                                 <article className="card p-6">
                                     <p className="lb">CAPITAL Y RESULTADO</p>
-                                    <div className="mt-4 grid grid-cols-2 gap-4"><div><p className="mu">Aportado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight">{fmt(invested)}</p></div><div><p className="mu">Resultado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight" style={{ color: gain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{fmt(gain)}</p></div></div>
-                                    <div className="trk mt-5" role="img" aria-label={`Capital ${(capShare * 100).toFixed(0)}% del valor actual`}><i style={{ width: `${Math.min(100, capShare * 100)}%` }} /><b style={{ width: `${Math.max(0, 100 - capShare * 100)}%`, background: gain >= 0 ? 'var(--sig)' : 'var(--neg)' }} /></div>
-                                    <div className="mu mt-2 flex justify-between text-[11px]"><span>capital</span><span style={{ color: gain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{gain >= 0 ? 'ganancia' : 'pérdida'}</span></div>
+                                    <div className="mt-4 grid grid-cols-2 gap-4"><div><p className="mu">Aportado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight">{fmt(summaryInvested)}</p></div><div><p className="mu">Resultado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight" style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{fmt(summaryGain)}</p></div></div>
+                                    <div className="trk mt-5" role="img" aria-label={`Capital ${(capShare * 100).toFixed(0)}% del valor actual`}><i style={{ width: `${Math.min(100, capShare * 100)}%` }} /><b style={{ width: `${Math.max(0, 100 - capShare * 100)}%`, background: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }} /></div>
+                                    <div className="mu mt-2 flex justify-between text-[11px]"><span>capital</span><span style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{summaryGain >= 0 ? 'ganancia' : 'pérdida'}</span></div>
                                 </article>
                                 <article className="card side-glow p-6">
                                     <div className="flex items-center justify-between"><p className="lb">REFERENCIA USDC</p><button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Actualizar cotizaciones" title="Actualizar" className="text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-50"><HugeiconsIcon icon={Refresh04Icon} size={15} className={refreshing ? 'animate-spin' : ''} /></button></div>
@@ -765,7 +773,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
                             <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
                             <div className="mt-3">{filtered.length ? filtered.map(i => {
-                                const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : `Cripto · ${i.coin}`;
+                                const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : i.kind === 'stock' ? `Acción · ${i.coin}` : `Cripto · ${i.coin}`;
                                 return <div key={i.id} className={`li ${ctx?.id === i.id ? 'menu-open' : ''}`} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
                                     <div className="tk" style={{ ['--c' as string]: colorOf(cat) }} aria-hidden="true">{tickerOf(i)}</div>
                                     <div className="min-w-0"><p className="truncate text-[14px] font-medium">{i.name}</p><p className="mu mt-1 truncate text-[11.5px]">{sub} <span className="hidden sm:inline">· {formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">Sin precio · se muestra el monto original</p>}</div>
@@ -814,22 +822,22 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             <div role="dialog" aria-modal="true" aria-labelledby="modal-title" className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[22px] border border-[var(--line2)] bg-[var(--surface)] p-5 shadow-[0_25px_90px_rgba(0,0,0,.5)] sm:max-w-[470px] sm:rounded-[22px] sm:p-6">
                 <div className="mb-5 flex items-start justify-between"><div><h2 id="modal-title" className="text-[24px] font-light tracking-tight">{editingId ? 'Editar inversión' : 'Nueva inversión'}</h2><p className="mt-1 font-mono text-[11px] text-[var(--muted)]">{editingId ? 'Modificá los datos de esta posición' : 'Registrá una posición en tu cartera'}</p></div><button onClick={closeModal} aria-label="Cerrar" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
                 <form onSubmit={add} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{(['rate', 'cedear', 'crypto'] as const).map(k => <button type="button" key={k} onClick={() => pickKind(k)} aria-pressed={kind === k && !indexMode} className={`flex items-center justify-center gap-2 rounded-[10px] border px-2 py-2.5 text-[12px] ${kind === k && !indexMode ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}><span className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf(k) }} />{titleFor(k)}</button>)}<button type="button" aria-pressed={indexMode} onClick={() => { setIndexMode(true); setKind('cedear'); setCoin('SPY'); setName('S&P 500 (SPY)'); setAssetQuote(null); setError(''); }} className={`rounded-[10px] border px-2 py-2.5 text-[12px] ${indexMode ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}>Índices</button></div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{(['rate', 'cedear', 'stock', 'crypto'] as const).map(k => <button type="button" key={k} onClick={() => pickKind(k)} aria-pressed={kind === k && !indexMode} className={`flex items-center justify-center gap-2 rounded-[10px] border px-2 py-2.5 text-[12px] ${kind === k && !indexMode ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}><span className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf(k) }} />{titleFor(k)}</button>)}<button type="button" aria-pressed={indexMode} onClick={() => { setIndexMode(true); setKind('cedear'); setCurrency('ARS'); setCoin('SPY'); setName('S&P 500 (SPY)'); setAssetQuote(null); setError(''); }} className={`flex items-center justify-center gap-2 rounded-[10px] border px-2 py-2.5 text-[12px] ${indexMode ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}><span className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf('index') }} />Índices</button></div>
                     {indexMode && <div><label htmlFor="invest-index" className={label}>Índice de referencia</label><Select id="invest-index" label="Índice de referencia" value={coin} onChange={ticker => { setCoin(ticker); setName(`${indexName(ticker)} (${ticker})`.slice(0, 70)); setAssetQuote(null); setError(''); }} options={INDEXES.map(i => ({ value: i.symbol, label: `${i.name} · ${i.symbol}` }))} /><p className="mt-2 text-[11px] text-[var(--muted)]">Se registra el CEDEAR del ETF en pesos, que sigue al índice de referencia.</p></div>}
                     <div><label htmlFor="invest-name" className={label}>Nombre</label><input id="invest-name" required maxLength={70} className={field} value={name} onChange={e => setName(e.target.value)} placeholder="Ej: S&P 500, plazo fijo..." /></div>
-                    <div className="grid grid-cols-2 gap-3"><div><label htmlFor="invest-amount" className={label}>{kind === 'rate' ? 'Monto' : 'Valor actual'} ({currency})</label><input id="invest-amount" required type="number" min="0.000001" step="any" className={field} value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000" /></div><div><label htmlFor="invest-currency" className={label}>Moneda</label><Select<Currency> id="invest-currency" label="Moneda" value={currency} onChange={setCurrency} options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }]} /></div><div><label htmlFor="invest-date" className={label}>Fecha de compra</label><input id="invest-date" required type="date" max={localISO()} className={field} value={date} onChange={e => { setDate(e.target.value); setError(''); }} /></div></div>
+                    <div className="grid grid-cols-2 gap-3"><div><label htmlFor="invest-amount" className={label}>{kind === 'rate' ? 'Monto' : 'Valor actual'} ({currency})</label><input id="invest-amount" required type="number" min="0.000001" step="any" className={field} value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000" /></div><div><label htmlFor="invest-currency" className={label}>Moneda</label>{kind === 'stock' || kind === 'cedear' ? <div className={field}>{kind === 'stock' ? 'USD (USDC)' : currency === 'USD' ? 'USD (registro anterior)' : 'ARS'}</div> : <Select<Currency> id="invest-currency" label="Moneda" value={currency} onChange={setCurrency} options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }]} />}</div><div><label htmlFor="invest-date" className={label}>Fecha de compra</label><input id="invest-date" required type="date" max={localISO()} className={field} value={date} onChange={e => { setDate(e.target.value); setError(''); }} /></div></div>
                     {kind !== 'rate' && currency !== quoteCurrency && <p className="text-[11px] text-[var(--muted)]">Para calcular las unidades y el valor en {currency} se usa el precio actual de USDC en pesos{officialRate ? ` (${money(officialRate, 'ARS')})` : ', no disponible en este momento'}. En compras anteriores no se usa la cotización histórica.</p>}
                     {kind === 'rate' ? <div className="grid grid-cols-2 gap-3"><div><label htmlFor="invest-rate" className={label}>Tasa (%)</label><input id="invest-rate" type="number" step="any" className={field} value={rate} onChange={e => setRate(e.target.value)} placeholder="8" /></div><div><label htmlFor="invest-period" className={label}>Período</label><Select<Period> id="invest-period" label="Período" value={period} onChange={setPeriod} options={[{ value: 'year', label: 'Anual' }, { value: 'month', label: 'Mensual' }]} /></div></div> : <div>
-                        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2"><label htmlFor="invest-coin" className="text-[12px] text-[var(--muted)]">{kind === 'cedear' ? 'Ticker del CEDEAR' : 'ID de CoinGecko'}</label>{<button type="button" onClick={() => setAssetSearch(indexMode ? 'index' : kind === 'cedear' ? 'cedear' : 'crypto')} className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ink)] underline underline-offset-4"><HugeiconsIcon icon={Search01Icon} size={13} />Buscar {kind === 'crypto' ? 'criptomoneda' : indexMode ? 'índice' : 'CEDEAR'}</button>}</div>
-                        <input id="invest-coin" className={field} required readOnly={indexMode} value={coin} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby="coin-help" onChange={e => { const nextId = kind === 'cedear' ? e.target.value.trim().toUpperCase() : e.target.value.trim().toLowerCase(); if (nextId !== assetId) setAssetQuote(null); setCoin(e.target.value); setError(''); }} placeholder={kind === 'cedear' ? 'AAPL, SPY, MELI' : 'bitcoin, ethereum, solana'} />
-                        <p id="coin-help" className="mt-2 font-mono text-[10px] text-[var(--muted)]">{kind === 'crypto' ? 'Se consulta el precio actual en CoinGecko.' : 'Ingresá el ticker en pesos. Se consulta su última cotización.'}</p>
+                        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2"><label htmlFor="invest-coin" className="text-[12px] text-[var(--muted)]">{kind === 'cedear' ? 'Ticker del CEDEAR' : kind === 'stock' ? 'Ticker de la acción' : 'ID de CoinGecko'}</label>{kind !== 'stock' && <button type="button" onClick={() => setAssetSearch(indexMode ? 'index' : kind === 'cedear' ? 'cedear' : 'crypto')} className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ink)] underline underline-offset-4"><HugeiconsIcon icon={Search01Icon} size={13} />Buscar {kind === 'crypto' ? 'criptomoneda' : indexMode ? 'índice' : 'CEDEAR'}</button>}</div>
+                        <input id="invest-coin" className={field} required readOnly={indexMode} value={coin} autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby="coin-help" onChange={e => { const nextId = kind !== 'crypto' ? e.target.value.trim().toUpperCase() : e.target.value.trim().toLowerCase(); if (nextId !== assetId) setAssetQuote(null); setCoin(e.target.value); setError(''); }} placeholder={kind !== 'crypto' ? 'AAPL, SPY, MELI' : 'bitcoin, ethereum, solana'} />
+                        <p id="coin-help" className="mt-2 font-mono text-[10px] text-[var(--muted)]">{kind === 'crypto' ? 'Se consulta el precio actual en CoinGecko.' : kind === 'stock' ? 'Ingresá el ticker de la acción estadounidense. Cotización en USD.' : 'Ingresá el ticker en pesos. Se consulta su última cotización.'}</p>
                         <div className="mt-3 rounded-xl border border-[var(--line2)] bg-[var(--raised)] p-3.5" aria-live="polite" aria-atomic="true">
-                            {!assetId ? <p className="text-[12px] text-[var(--muted)]">Ingresá {kind === 'cedear' ? 'un ticker' : 'un ID'} para consultar su precio.</p> : activeQuote?.status === 'error' ? <>
+                            {!assetId ? <p className="text-[12px] text-[var(--muted)]">Ingresá {kind !== 'crypto' ? 'un ticker' : 'un ID'} para consultar su precio.</p> : activeQuote?.status === 'error' ? <>
                                 <p role="alert" className="text-[12px] text-[var(--neg)]">{activeQuote.message}</p>
                                 <button type="button" onClick={() => { setAssetQuote(null); setQuoteRequest(value => value + 1); setError(''); }} className="mt-3 inline-flex items-center gap-1.5 text-[12px] underline underline-offset-4"><HugeiconsIcon icon={Refresh04Icon} size={13} />Reintentar consulta</button>
                             </> : activeQuote?.status === 'ready' ? <>
-                                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[11px] text-[var(--muted)]">{kind === 'cedear' ? 'Última cotización por unidad' : 'Precio actual por unidad'}</p><p className="mt-1 break-words font-mono text-[22px] leading-tight tracking-tight">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: kind === 'cedear' ? 'ARS' : 'USD', currencyDisplay: 'code', ...(activeQuote.price < 1 ? { maximumSignificantDigits: 6 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }).format(activeQuote.price)}</p></div><QuoteSource source={kind === 'cedear' ? 'cedear' : 'crypto'} asset={assetId} className="shrink-0 rounded-md bg-[var(--sig)]/10 px-2 py-1" /></div>
-                                {kind === 'crypto' ? <a href={`https://www.coingecko.com/en/coins/${encodeURIComponent(assetId)}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block break-all font-mono text-[11px] text-[var(--muted)] underline underline-offset-4">{assetId}</a> : <p className="mt-2 font-mono text-[11px] text-[var(--muted)]">{assetId} · CEDEAR en pesos</p>}
+                                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[11px] text-[var(--muted)]">{kind === 'cedear' ? 'Última cotización por unidad' : 'Precio actual por unidad'}</p><p className="mt-1 break-words font-mono text-[22px] leading-tight tracking-tight">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: kind === 'cedear' ? 'ARS' : 'USD', currencyDisplay: 'code', ...(activeQuote.price < 1 ? { maximumSignificantDigits: 6 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }).format(activeQuote.price)}</p></div><QuoteSource source={kind === 'stock' ? 'stock' : kind === 'cedear' ? 'cedear' : 'crypto'} asset={assetId} className="shrink-0 rounded-md bg-[var(--sig)]/10 px-2 py-1" /></div>
+                                {kind === 'crypto' ? <a href={`https://www.coingecko.com/en/coins/${encodeURIComponent(assetId)}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block break-all font-mono text-[11px] text-[var(--muted)] underline underline-offset-4">{assetId}</a> : <p className="mt-2 font-mono text-[11px] text-[var(--muted)]">{assetId} · {kind === 'stock' ? 'Acción en USD' : 'CEDEAR en pesos'}</p>}
                                 {previewUnits != null && Number.isFinite(previewUnits) && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-3 text-[12px]"><span className="text-[var(--muted)]">Unidades estimadas</span><span className="break-all font-mono">{new Intl.NumberFormat('es-AR', { maximumSignificantDigits: 10 }).format(previewUnits)}</span></div>}
                                 <p className="mt-2 text-[10px] text-[var(--muted)]">Se usa el precio actual para estimar las unidades; el monto ingresado se toma como valor actual.</p>
                             </> : <p role="status" className="flex items-center gap-2 text-[12px] text-[var(--muted)]"><HugeiconsIcon icon={LoaderIcon} size={15} className="animate-spin" />Consultando {quoteSource}...</p>}

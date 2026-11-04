@@ -39,3 +39,19 @@ export async function cedearPriceOn(ticker: string, iso: string, today: string, 
     if (!row) throw new Error('No hay cotización de ese CEDEAR para la fecha elegida ni para días anteriores. Probá otra fecha.');
     return { price: row.c, sourceDate: row.date.slice(0, 10) };
 }
+
+// Cotizaciones de acciones estadounidenses, expresadas en USD por acción.
+export async function stockPricesNow(ids: string[], signal?: AbortSignal): Promise<Record<string, number>> {
+    if (!ids.length) return {};
+    let rows: LivePrice[];
+    try { rows = await request<LivePrice>('/live/usa_stocks', signal); }
+    catch (error) { if (signal?.aborted) throw error; throw new Error('No se pudo consultar la cotización de acciones en Data912. Volvé a intentar.'); }
+    return Object.fromEntries(rows.filter(row => ids.includes(row.symbol?.toUpperCase()) && Number.isFinite(row.c) && row.c > 0).map(row => [`stock:${row.symbol.toUpperCase()}`, row.c]));
+}
+export async function stockPrice(ticker: string, signal?: AbortSignal): Promise<CedearQuote> {
+    if (!/^[A-Z0-9.\-]+$/.test(ticker)) throw new Error('Ingresá un ticker válido, por ejemplo AAPL o MSFT.');
+    const prices = await stockPricesNow([ticker], signal);
+    const price = prices[`stock:${ticker}`];
+    if (!price) throw new Error('No se encontró una cotización para esa acción. Revisá el ticker.');
+    return { price };
+}

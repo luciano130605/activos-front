@@ -32,7 +32,8 @@ export function adjustPossibleRatios(points: Point[]) {
     }
     return { points: adjusted, changes };
 }
-export async function history(kind: 'cedear' | 'crypto', id: string, signal: AbortSignal): Promise<Point[]> {
+export async function history(kind: 'cedear' | 'crypto' | 'stock', id: string, signal: AbortSignal): Promise<Point[]> {
+    if (kind === 'stock') throw new Error('El historial de acciones no está disponible.');
     const key = `activos:asset-history:${kind}:${id}`;
     try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return cache.points; } catch { /* Sin caché. */ }
     const url = kind === 'cedear' ? `https://data912.com/historical/cedears/${encodeURIComponent(id)}` : `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`;
@@ -69,7 +70,7 @@ export default function AssetPerformance({ items, hidden }: { items: Investment[
         }).sort((a, b) => a.time - b.time) : []).catch(() => []) : Promise.resolve([]);
         void Promise.all([Promise.all(keys.map(async key => {
             const [kind, id] = key.split(':');
-            try { return [key, { points: await history(kind as 'cedear' | 'crypto', id, controller.signal) }] as const; }
+            try { return [key, { points: await history(kind as 'cedear' | 'crypto' | 'stock', id, controller.signal) }] as const; }
             catch (error) { return [key, { points: [], error: error instanceof Error ? error.message : 'Historial no disponible.' }] as const; }
         })), dollarRequest]).then(([entries, dollarPoints]) => { if (!controller.signal.aborted) { setData(Object.fromEntries(entries)); setDollar(dollarPoints); setLoading(false); } });
         return () => controller.abort();
@@ -101,10 +102,10 @@ export default function AssetPerformance({ items, hidden }: { items: Investment[
             else if (!message && !fresh) message = 'El último precio histórico no está disponible o está desactualizado.';
             else if (!message && safeYearReturn == null) message = 'Falta historial suficiente para estimar el rendimiento anual.';
             else if (!message && !month) message = 'Falta historial suficiente para calcular el último mes.';
-            const ticker = item.kind === 'cedear' ? item.coin?.toUpperCase() : (item.coin ?? '').slice(0, 4).toUpperCase();
+            const ticker = item.kind !== 'crypto' ? item.coin?.toUpperCase() : (item.coin ?? '').slice(0, 4).toUpperCase();
             const positiveColor = (value: number | null) => value == null ? 'text-[var(--faint)]' : value < 0 ? 'text-[var(--neg)]' : 'text-[var(--sig)]';
             return <article key={item.id} className="card flex min-w-0 flex-col p-5 sm:p-6">
-                <div className="flex items-start gap-3"><div className="grid h-11 min-w-11 shrink-0 place-items-center rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-1 font-mono text-[10px] font-medium text-[var(--sig)]">{ticker}</div><div className="min-w-0 flex-1"><p className="truncate text-[15px] font-medium">{item.name}</p><p className="mu mt-1 text-[11px]">{item.kind === 'cedear' ? 'CEDEAR · USD MEP' : 'Cripto · USD'} <span aria-hidden="true">·</span> {item.kind === 'cedear' ? 'Data912' : 'CoinGecko'}</p></div>{estimated && <span className="rounded-full border border-[var(--line2)] px-2.5 py-1 text-[10px] text-[var(--muted)]">Estimado</span>}</div>
+                <div className="flex items-start gap-3"><div className="grid h-11 min-w-11 shrink-0 place-items-center rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-1 font-mono text-[10px] font-medium text-[var(--sig)]">{ticker}</div><div className="min-w-0 flex-1"><p className="truncate text-[15px] font-medium">{item.name}</p><p className="mu mt-1 text-[11px]">{item.kind === 'cedear' ? 'CEDEAR · USD MEP' : item.kind === 'stock' ? 'Acción · USD' : 'Cripto · USD'} <span aria-hidden="true">·</span> {item.kind !== 'crypto' ? 'Data912' : 'CoinGecko'}</p></div>{estimated && <span className="rounded-full border border-[var(--line2)] px-2.5 py-1 text-[10px] text-[var(--muted)]">Estimado</span>}</div>
                 <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3"><p className="mu text-[10px]">ÚLTIMO MES</p><p className={`mt-2 font-mono text-[clamp(1rem,2vw,1.25rem)] ${positiveColor(monthReturn)}`}>{monthReturn == null ? '—' : pct(monthReturn)}</p><p className="mu mt-1 text-[10px]">30 días</p></div><div className="rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3"><p className="mu text-[10px]">ÚLTIMO AÑO</p><p className={`mt-2 font-mono text-[clamp(1rem,2vw,1.25rem)] ${positiveColor(safeYearReturn)}`}>{safeYearReturn == null ? '—' : pct(safeYearReturn)}</p><p className="mu mt-1 text-[10px]">{annualized ? `Estimado · ${availableDays} días` : '365 días'}</p></div><div className="col-span-2 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3 sm:col-span-1"><p className="mu text-[10px]">ESCENARIO A 1 AÑO</p><p className="mt-2 break-all font-mono text-[clamp(1rem,2vw,1.25rem)]">{positionProjection == null ? '—' : hidden ? '****' : money(positionProjection, 'USD')}</p><p className="mu mt-1 text-[10px]">Tu posición · estimado</p><p className="mu mt-2 text-[10px]">Por unidad: {projection == null ? '—' : hidden ? '****' : money(projection, 'USD')}</p>{projection != null && item.units == null && <p className="mu mt-1 text-[10px]">Sin unidades registradas</p>}</div></div>
                 <div className="mu mt-4 flex flex-wrap items-center justify-between gap-2 text-[10.5px]"><span>{end ? `Último dato · ${date(end.time)}` : 'Sin cotización histórica'}</span><span>{end && !hidden ? `Cierre ${money(end.price, 'USD')}` : ''}</span></div>
                 {needsMessage && <div className="mu mt-3 rounded-lg border border-[var(--line)] px-3 py-2 text-[11px] leading-5">{message && <p>{message}</p>}{annualized && <p>El anual es una proyección calculada con {availableDays} días disponibles, no un rendimiento real de 365 días.</p>}{adjustedYear && <p>Se ajustó un salto que podría ser un cambio de ratio del CEDEAR. La corrección es aproximada y requiere confirmación.</p>}</div>}
