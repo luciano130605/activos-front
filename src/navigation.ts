@@ -5,6 +5,7 @@ export const pages = {
     evolution: { path: '/evolucion', label: 'Evolución', title: 'Evolución', description: 'Seguí el valor de tu cartera y compará el rendimiento de tus activos.' },
     inflation: { path: '/inflacion', label: 'Inflación', title: 'Inflación', description: 'Consultá la inflación de Argentina y Estados Unidos de los últimos meses y años.' },
     investments: { path: '/mis-inversiones', label: 'Mis inversiones', title: 'Mis inversiones', description: 'Administrá tus activos y las posiciones de tu cartera.' },
+    radar: { path: '/radar', label: 'Radar', title: 'Radar de oportunidades', description: 'Descubrí movimientos y eventos destacados de tu cartera.' },
     imports: { path: '/importaciones', label: 'Importar', title: 'Importar operaciones', description: 'Subí comprobantes y revisá cada operación antes de incorporarla.' },
     assistant: { path: '/asistente', label: 'Asistente', title: 'Asistente', description: 'Tu espacio para investigar y administrar tu cartera.' },
     marketCalendar: { path: '/calendario-mercado', label: 'Calendario de mercado', title: 'Calendario de mercado', description: 'Feriados bursátiles, balances y eventos de deuda argentina.' },

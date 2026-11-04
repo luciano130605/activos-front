@@ -17,6 +17,7 @@ import ContributionStreak from './ContributionStreak';
 import Benchmarks from './Benchmarks';
 import Dividends from './Dividends';
 import MarketCalendar from './MarketCalendar';
+import OpportunityRadar from './OpportunityRadar';
 import Inflation from './Inflation';
 import AssetPerformance, { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
 import MarketChat from './MarketChat';
@@ -741,6 +742,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
                 <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
                 {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} onMailSettings={() => setEmailSettings(true)} mailRevision={emailSettingsRevision} />}
+                {page === 'radar' && <OpportunityRadar items={items} dirty={view.dirty} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
 
