@@ -51,3 +51,17 @@ export async function listCedears(signal?: AbortSignal): Promise<SearchAsset[]> 
     cache = { list, expires: Date.now() + 10 * 60_000 };
     return list;
 }
+
+export async function listArgentineStocks(signal?: AbortSignal): Promise<SearchAsset[]> {
+    const response = await fetch('https://data912.com/live/arg_stocks', { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('No se pudo cargar el listado de acciones argentinas.');
+    const rows: unknown = await response.json();
+    if (!Array.isArray(rows)) throw new Error('El listado de acciones no es válido.');
+    const seen = new Set<string>();
+    return rows.flatMap((row: { symbol?: unknown; c?: unknown }) => {
+        const symbol = typeof row?.symbol === 'string' ? row.symbol.toUpperCase() : '';
+        if (!/^[A-Z0-9]+$/.test(symbol) || seen.has(symbol) || !(Number(row.c) > 0)) return [];
+        seen.add(symbol);
+        return [{ symbol, name: cedearName(symbol) }];
+    }).sort((a, b) => a.symbol.localeCompare(b.symbol));
+}

@@ -331,8 +331,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         const assetRequests = keys.map(async key => {
             const [assetKind, id] = key.split(':');
             try {
-                const points = await history(assetKind as 'cedear' | 'crypto' | 'stock', id, controller.signal);
-                return [key, assetKind === 'cedear' ? adjustPossibleRatios(points).points : points] as const;
+                const points = await history(assetKind as 'cedear' | 'crypto' | 'stock' | 'arg-stock', id, controller.signal);
+                return [key, (assetKind === 'cedear' || assetKind === 'arg-stock') ? adjustPossibleRatios(points).points : points] as const;
             } catch { return [key, []] as const; }
         });
         const dollarRequest = needsDollarHistory ? fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) }).then(async response => {
@@ -377,7 +377,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         try {
             const kind = asset.kind === 'index' ? 'cedear' : asset.kind;
             const raw = await history(kind, asset.id, new AbortController().signal);
-            const points = kind === 'cedear' ? adjustPossibleRatios(raw).points : raw;
+            const points = kind === 'cedear' || kind === 'arg-stock' ? adjustPossibleRatios(raw).points : raw;
             const last = points.at(-1);
             const coversYear = !!last && today - last.time <= 7 * 86400000 && Array.from({ length: 241 }, (_, index) => yearStart + (today - yearStart) * index / 240).every(t => {
                 const previous = points.filter(point => point.time <= t).at(-1);

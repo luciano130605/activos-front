@@ -32,19 +32,19 @@ export function adjustPossibleRatios(points: Point[]) {
     }
     return { points: adjusted, changes };
 }
-export async function history(kind: 'cedear' | 'crypto' | 'stock', id: string, signal: AbortSignal): Promise<Point[]> {
+export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock', id: string, signal: AbortSignal): Promise<Point[]> {
     if (kind === 'stock') throw new Error('El historial de acciones no está disponible.');
     const key = `activos:asset-history:${kind}:${id}`;
     try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return cache.points; } catch { /* Sin caché. */ }
-    const url = kind === 'cedear' ? `https://data912.com/historical/cedears/${encodeURIComponent(id)}` : `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`;
+    const url = kind === 'cedear' || kind === 'arg-stock' ? `https://data912.com/historical/${kind === 'arg-stock' ? 'stocks' : 'cedears'}/${encodeURIComponent(id)}` : `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`;
     const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]) });
     if (!response.ok) throw new Error(response.status === 429 ? 'Límite de consultas del proveedor.' : 'Historial no disponible.');
     const raw: unknown = await response.json();
-    const rows = kind === 'cedear' ? raw : (raw as { prices?: unknown })?.prices;
+    const rows = kind !== 'crypto' ? raw : (raw as { prices?: unknown })?.prices;
     if (!Array.isArray(rows)) throw new Error('Respuesta histórica inválida.');
     const points: Point[] = rows.flatMap(row => {
-        const time = kind === 'cedear' ? Date.parse(`${String(row?.date ?? '').slice(0, 10)}T12:00:00Z`) : Number(row?.[0]);
-        const price = Number(kind === 'cedear' ? row?.c : row?.[1]);
+        const time = kind !== 'crypto' ? Date.parse(`${String(row?.date ?? '').slice(0, 10)}T12:00:00Z`) : Number(row?.[0]);
+        const price = Number(kind !== 'crypto' ? row?.c : row?.[1]);
         return Number.isFinite(time) && Number.isFinite(price) && price > 0 && time <= Date.now() ? [{ time, price }] : [];
     }).sort((a, b) => a.time - b.time);
     if (!points.length) throw new Error('El proveedor no tiene datos para este activo.');
