@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import ArgentineMarket, { type ArgentineKind } from './ArgentineMarket';
+import ArgentineMarket, { type ArgentineKind, type LocalSelection } from './ArgentineMarket';
 import type { Investment } from './portfolio';
 import { listCryptoAssets } from './coingecko';
 import { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
@@ -21,7 +21,7 @@ const tabs: { id: AssetKind; label: string; color: string; hint: string; placeho
     { id: 'index', label: 'Índices', color: 'var(--c-index)', hint: 'Índice o ticker', placeholder: 'Ej: S&P 500, QQQ…', source: 'Data912' },
 ];
 
-export default function AssetSearchDialog({ initial = 'crypto', initialLocal, onClose, onSelect, onAddLocal, benchmarkMode = false, footer = 'Elegí un activo para consultar su precio y cargar la inversión.' }: { initial?: AssetKind; initialLocal?: ArgentineKind; onClose: () => void; onSelect: (asset: PickedAsset) => void; onAddLocal?: (investment: Investment) => void; benchmarkMode?: boolean; footer?: string }) {
+export default function AssetSearchDialog({ initial = 'crypto', initialLocal, onClose, onSelect, onAddLocal, onChooseLocal, benchmarkMode = false, footer = 'Elegí un activo para consultar su precio y cargar la inversión.' }: { initial?: AssetKind; initialLocal?: ArgentineKind; onClose: () => void; onSelect: (asset: PickedAsset) => void; onAddLocal?: (investment: Investment) => void; onChooseLocal?: (asset: LocalSelection) => void; benchmarkMode?: boolean; footer?: string }) {
     const [localTab, setLocalTab] = useState<ArgentineKind | null>(initialLocal ?? null);
     const [tab, setTab] = useState<AssetKind>(initial);
     const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -177,7 +177,7 @@ export default function AssetSearchDialog({ initial = 'crypto', initialLocal, on
         }}>
             <div className="shrink-0 border-b border-[var(--line)] p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-3"><div><p className="lb mb-2">BUSCADOR DE ACTIVOS</p><h2 id="asset-search-title" className="text-[24px] font-light tracking-tight">Buscar activo<span className="text-[var(--faint)]">.</span></h2></div><button type="button" onClick={onClose} aria-label="Cerrar buscador" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
-                <div className="tabs mt-5" role="group" aria-label="Tipo de activo">{tabs.map(t => <button key={t.id} type="button" aria-pressed={t.id === 'stock' ? (!localTab && tab === 'stock') || localTab === 'stocks' : !localTab && tab === t.id} onClick={() => switchTab(t.id)}><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: t.color }} />{t.label}</button>)}{!benchmarkMode && onAddLocal && ([['funds', 'FCI'], ['bonds', 'Bonos']] as const).map(([id, name]) => <button key={id} type="button" aria-pressed={localTab === id} onClick={() => setLocalTab(id)}>{name}</button>)}</div>
+                <div className="tabs mt-5" role="group" aria-label="Tipo de activo">{tabs.map(t => <button key={t.id} type="button" aria-pressed={t.id === 'stock' ? (!localTab && tab === 'stock') || localTab === 'stocks' : !localTab && tab === t.id} onClick={() => switchTab(t.id)}><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: t.color }} />{t.label}</button>)}{!benchmarkMode && onAddLocal && ([['funds', 'FCI'], ['bonds', 'Bonos']] as const).map(([id, name]) => <button key={id} type="button" aria-pressed={localTab === id} onClick={() => setLocalTab(id)}><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: id === 'funds' ? '#b8d8a3' : '#e1b77b' }} />{name}</button>)}</div>
                 {!benchmarkMode && onAddLocal && ((!localTab && tab === 'stock') || localTab === 'stocks') && <div className="seg mt-4" role="group" aria-label="Mercado de acciones"><button type="button" aria-pressed={!localTab} onClick={() => switchTab('stock')}>EE. UU.</button><button type="button" aria-pressed={localTab === 'stocks'} onClick={() => setLocalTab('stocks')}>Argentina</button></div>}
                 {!localTab && <><label htmlFor="asset-search" className="mb-1.5 mt-4 block text-[12px] text-[var(--muted)]">{current.hint}</label>
                 <div className="relative"><HugeiconsIcon icon={Search02Icon} size={17} className="pointer-events-none absolute left-3 top-3 text-[var(--muted)]" /><input ref={input} id="asset-search" type="search" value={query} onChange={event => { resetFilter(); setQuery(event.target.value); setLimit(40); }} placeholder={current.placeholder} autoComplete="off" spellCheck={false} className="w-full rounded-[10px] border border-[var(--line2)] bg-[var(--raised)] py-2.5 pl-10 pr-3 text-[14px] outline-none focus:border-[var(--muted)]" /></div></>}
@@ -199,7 +199,7 @@ export default function AssetSearchDialog({ initial = 'crypto', initialLocal, on
                     {(benchmarkMode ? matches.length > limit && qualified === null : displayed.length > limit) && <button type="button" disabled={benchmarkMode && checkingHistory} onClick={() => setLimit(value => value + 40)} className="my-3 w-full rounded-lg border border-[var(--line2)] py-2.5 text-[12px] disabled:opacity-50">Mostrar más</button>}
                 </>}
             </div>}
-            {localTab && onAddLocal && <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:px-4"><ArgentineMarket key={localTab} initialKind={localTab} hideTabs onAdd={onAddLocal} /></div>}
+            {localTab && onAddLocal && <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:px-4"><ArgentineMarket key={localTab} initialKind={localTab} hideTabs onAdd={onAddLocal} onChoose={onChooseLocal} /></div>}
             <p className="shrink-0 border-t border-[var(--line)] px-5 py-4 text-[11px] text-[var(--muted)]">{footer}</p>
         </div>
     </div>;
