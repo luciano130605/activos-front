@@ -674,14 +674,14 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onExport={exportJSON} onImport={() => fileRef.current?.click()}
                 email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} onAiSettings={() => setAiSettingsRequest(value => value + 1)} />
-            <div className="ticker" role="group" aria-label="Cotizaciones de referencia">
+            <div style={page === 'assistant' ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
                 <span role="status">{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
                 <span className="ml-auto"><span className={statusDot} aria-hidden="true" style={{ alignSelf: 'center' }} />{syncLabel}</span>
             </div>
-            <main inert={false}>
-                <header className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
+            <main inert={false} className={page === 'assistant' ? 'pt-3' : undefined}>
+                <header style={page === 'assistant' ? { display: 'none' } : undefined} className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
                     <div><p className="lb mb-2">PANEL PERSONAL / {pageInfo.label.toUpperCase()}</p><h1 ref={titleRef} tabIndex={-1} className="text-[clamp(2.2rem,5vw,3.3rem)] font-light leading-none tracking-[-.045em] outline-none">{pageInfo.title}<span className="sig">.</span></h1><p className="mu mt-3">{pageInfo.description}</p></div>
                     <div className="flex items-center gap-2"><button type="button" onClick={() => setAssetSearch('crypto')} className="btn-ghost hidden sm:inline-flex"><HugeiconsIcon icon={Search01Icon} size={16} />Buscar activos</button><button type="button" onClick={openModal} className="btn-primary hidden sm:inline-flex"><HugeiconsIcon icon={PlusIcon} size={16} />Nueva inversión</button></div>
                 </header>
