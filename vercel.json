@@ -24,6 +24,10 @@
     {
       "source": "/asistente",
       "destination": "/index.html"
+    },
+    {
+      "source": "/importaciones",
+      "destination": "/index.html"
     }
   ]
 }
