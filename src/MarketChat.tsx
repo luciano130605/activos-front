@@ -1,3 +1,4 @@
+import { aiLabels as labels, type AiProvider as Provider } from './ai-provider';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import './market-avatar.css';
 import { request } from './account';
@@ -8,18 +9,16 @@ import { cleanInvestment, type Investment } from './portfolio';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowUp, ArrowUp02Icon, Cancel01Icon, ChevronRight, CircleFadingPlusIcon, CopyCheckIcon, CopyIcon, Edit01Icon, Key01Icon, TrashIcon } from '@hugeicons/core-free-icons';
 
-type Provider = 'openai' | 'claude' | 'gemini' | 'openrouter';
 type Message = { role: 'user' | 'assistant'; content: string; citations?: { url: string; title: string }[] };
-const labels: Record<Provider, string> = { openai: 'OpenAI', claude: 'Claude', gemini: 'Gemini', openrouter: 'OpenRouter gratis' };
 const suggestions = ['¿Qué pasó hoy en los mercados?', 'Analizá los riesgos de mi cartera', '¿Cómo afecta el dólar MEP a mis CEDEARs?'];
 
 export function Avatar({ thinking = false }: { thinking?: boolean }) {
     return <span className={`market-avatar${thinking ? ' is-thinking' : ''}`} aria-hidden="true"><span className="avatar-shape" /><svg viewBox="0 0 80 80" className="avatar-face"><g className="avatar-eyes"><ellipse cx="32" cy="39" rx="3.5" ry="5" /><ellipse cx="48" cy="39" rx="3.5" ry="5" /><circle cx="33" cy="37.5" r="1.1" fill="white" /><circle cx="49" cy="37.5" r="1.1" fill="white" /></g><path d="M35 49c3 2.8 7 2.8 10 0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /><ellipse cx="27" cy="46" rx="3" ry="1.5" fill="#f5ac77" opacity=".45" /><ellipse cx="53" cy="46" rx="3" ry="1.5" fill="#f5ac77" opacity=".45" /></svg></span>;
 }
 
-export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirty, fullPage, showButton = true }: { items: Investment[]; settingsRequest: number; onAdd: (investment: Investment) => void; onSell: (item: Investment) => void; dirty: boolean; fullPage: boolean; showButton?: boolean }) {
+export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirty, fullPage, showButton = true, provider, setProvider }: { provider: Provider; setProvider: (provider: Provider) => void; items: Investment[]; settingsRequest: number; onAdd: (investment: Investment) => void; onSell: (item: Investment) => void; dirty: boolean; fullPage: boolean; showButton?: boolean }) {
     const [open, setOpen] = useState(false), [settings, setSettings] = useState(false);
-    const [provider, setProvider] = useState<Provider>('openai'), [configured, setConfigured] = useState<Provider[]>([]);
+    const [configured, setConfigured] = useState<Provider[]>([]);
     const [sharedProviders, setSharedProviders] = useState<Provider[]>([]);
     const [limits, setLimits] = useState<Partial<Record<Provider, number | null>>>({});
     const [masks, setMasks] = useState<Partial<Record<Provider, string>>>({});
@@ -33,7 +32,7 @@ export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirt
     const activeRequest = useRef<AbortController | null>(null);
     const [editing, setEditing] = useState<number | null>(null);
     useEffect(() => { if (settingsRequest) { setSettings(true); setError(''); } }, [settingsRequest]);
-    useEffect(() => { if (open || settings || fullPage) void request<{ providers: Provider[]; masks: Partial<Record<Provider, string>>; sharedProviders?: Provider[] }>('ai/keys').then(result => { setConfigured(result.providers); setMasks(result.masks ?? {}); setSharedProviders(result.sharedProviders ?? []); setProvider(current => result.providers.includes(current) ? current : result.providers[0] ?? current); }).catch(() => setError('No se pudo consultar la configuración.')); }, [open, settings, fullPage]);
+    useEffect(() => { if (open || settings || fullPage) void request<{ providers: Provider[]; masks: Partial<Record<Provider, string>>; sharedProviders?: Provider[] }>('ai/keys').then(result => { setConfigured(result.providers); setMasks(result.masks ?? {}); setSharedProviders(result.sharedProviders ?? []); if (!result.providers.includes(provider) && result.providers.length) setProvider(result.providers[0]); }).catch(() => setError('No se pudo consultar la configuración.')); }, [open, settings, fullPage, provider, setProvider]);
     useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
     useEffect(() => { const timer = window.setInterval(() => setLimits(current => { const next = { ...current }; let changed = false; for (const p of Object.keys(next) as Provider[]) if (typeof next[p] === 'number' && next[p]! <= Date.now()) { delete next[p]; changed = true; } return changed ? next : current; }), 1000); return () => window.clearInterval(timer); }, []);
     async function saveKey(remove = false, target = provider) {
