@@ -676,7 +676,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
-                display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onExport={exportJSON} onImport={() => fileRef.current?.click()}
+                display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onAdd={openModal} onExport={exportJSON} onImport={() => fileRef.current?.click()}
                 email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} onAiSettings={() => setAiSettingsRequest(value => value + 1)} />
             <div style={page === 'assistant' ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
@@ -687,7 +687,6 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             <main inert={false} className={page === 'assistant' ? 'pt-3' : undefined}>
                 <header style={page === 'assistant' ? { display: 'none' } : undefined} className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
                     <div><p className="lb mb-2">PANEL PERSONAL / {pageInfo.label.toUpperCase()}</p><h1 ref={titleRef} tabIndex={-1} className="text-[clamp(2.2rem,5vw,3.3rem)] font-light leading-none tracking-[-.045em] outline-none">{pageInfo.title}<span className="sig">.</span></h1><p className="mu mt-3">{pageInfo.description}</p></div>
-                    <div className="flex items-center gap-2"><button type="button" onClick={() => setAssetSearch('crypto')} className="btn-ghost hidden sm:inline-flex"><HugeiconsIcon icon={Search01Icon} size={16} />Buscar activos</button><button type="button" onClick={openModal} className="btn-primary hidden sm:inline-flex"><HugeiconsIcon icon={PlusIcon} size={16} />Nueva inversión</button></div>
                 </header>
                 {view.error && view.status !== 'expired' && <div role="alert" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]"><p>{view.error}</p><div className="mt-3 flex flex-wrap gap-4">{view.status === 'conflict' ? <button onClick={() => void reloadPortfolio()} className="underline">Cargar versión guardada</button> : <button onClick={() => void sync.flush()} className="underline">Reintentar guardado</button>}<button onClick={() => void exportJSON()} className="underline">Exportar mis cambios</button></div></div>}
                 {legacy && <div className="card mb-4 p-4 text-[12px]"><p>Encontramos {legacy.investments.length} inversiones guardadas en este navegador. Podés agregarlas a la cuenta de <strong>{account.user.email}</strong>.</p><div className="mt-3 flex gap-4"><button disabled={view.status === 'saving'} onClick={() => void importLegacy()} className="underline disabled:opacity-50">Guardar en mi cuenta</button><button onClick={() => setLegacy(null)} className="text-[var(--muted)]">Ahora no</button></div></div>}
@@ -787,7 +786,6 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 </footer>
             </main>
         </div>
-        <button inert={locked} onClick={openModal} aria-label="Nueva inversión" className="fixed bottom-6 right-5 z-20 grid h-14 w-14 place-items-center rounded-full bg-[var(--ink)] text-[var(--bg)] shadow-[0_6px_24px_rgba(0,0,0,.38)] sm:hidden"><HugeiconsIcon icon={PlusIcon} size={24} /></button>
         {ctx && ctxItem && <ContextMenu x={ctx.x} y={ctx.y} title={ctxItem.name} items={menuFor(ctxItem)} onClose={closeCtx} />}
         {passkeyDialog && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !passkeyBusy) setPasskeyDialog(false); }}>
             <section role="dialog" aria-modal="true" aria-labelledby="passkey-title" className="card w-full max-w-md p-6 shadow-2xl">
