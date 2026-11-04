@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { request } from './account';
+import { cedearName } from './assets';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Calendar01Icon, Calendar03Icon, CalendarMinusIcon, ChevronLeftIcon, ChevronRightIcon, ListViewIcon, RightToLeftListBulletIcon } from '@hugeicons/core-free-icons';
 
@@ -119,10 +120,40 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
 type MarketEvent = { ticker: string; payDate: string; exDate: string | null; amountPerShare: number; currency: string | null };
 type MarketResult = { configured: boolean; items: MarketEvent[]; truncated: boolean; start?: string; end?: string };
 
+async function loadMarketNames(): Promise<Record<string, string>> {
+    const key = 'activos:nombres-mercado:v1';
+    try {
+        const cached = JSON.parse(localStorage.getItem(key) ?? 'null');
+        if (cached && Date.now() >= cached.time && Date.now() - cached.time < CACHE_AGE && cached.names && typeof cached.names === 'object') return cached.names;
+    } catch { /* Se vuelve a consultar el catálogo. */ }
+    const exchanges = ['nasdaq', 'nyse', 'amex'];
+    const responses = await Promise.allSettled(exchanges.map(async exchange => {
+        const response = await fetch(`https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/${exchange}/${exchange}_full_tickers.json`, { signal: AbortSignal.timeout(15000) });
+        if (!response.ok) throw new Error('Catálogo no disponible');
+        const rows: unknown = await response.json();
+        if (!Array.isArray(rows)) throw new Error('Catálogo inválido');
+        return rows as { symbol?: unknown; name?: unknown }[];
+    }));
+    const names: Record<string, string> = {};
+    for (const response of responses) if (response.status === 'fulfilled') for (const row of response.value) {
+        if (typeof row.symbol === 'string' && typeof row.name === 'string' && row.symbol && row.name) names[row.symbol.toUpperCase()] = row.name;
+    }
+    if (responses.every(response => response.status === 'fulfilled') && Object.keys(names).length) {
+        try { localStorage.setItem(key, JSON.stringify({ time: Date.now(), names })); } catch { /* Almacenamiento no disponible. */ }
+    }
+    return names;
+}
+
+// Selección editorial de acciones y fondos conocidos; el calendario completo sigue disponible.
+const POPULAR_DIVIDEND_TICKERS = new Set('AAPL MSFT GOOGL GOOG AMZN META NVDA JPM BAC V MA WMT COST KO PEP MCD SBUX NKE DIS T VZ XOM CVX PFE JNJ ABBV MRK LLY PG CL KMB MMM CAT BA IBM INTC CSCO ORCL AVGO QCOM TXN ADP HD LOW UPS UNP RTX LMT GE GS MS C WFC BLK BRK.B SPY QQQ DIA IWM VOO VTI SCHD VYM JEPI JEPQ O VNQ XLK XLF XLE XLV XLU XLP TLT BND AGG PBR VALE TSM ASML BABA MELI YPF'.split(' '));
+
 function MarketDividends({ userId }: { userId: string }) {
     const [result, setResult] = useState<MarketResult | null>(null);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const [showAll, setShowAll] = useState(false);
+    const [names, setNames] = useState<Record<string, string>>({});
     const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
     const [selected, setSelected] = useState<string | null>(null);
     useEffect(() => {
@@ -130,34 +161,42 @@ function MarketDividends({ userId }: { userId: string }) {
         cachedDividends<MarketResult>(`activos:dividendos-mercado:${userId}`, isoDate(new Date()), 'dividends/market', data => Boolean(data?.configured && Array.isArray(data.items) && !data.truncated)).then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudo consultar el calendario. Volvé a intentar más tarde.'); });
         return () => { active = false; };
     }, [userId]);
-    const events = (result?.items ?? []).filter(event => event.ticker.toLowerCase().includes(search.trim().toLowerCase()));
+    useEffect(() => { let active = true; void loadMarketNames().then(value => { if (active) setNames(value); }); return () => { active = false; }; }, []);
+    const companyName = (ticker: string) => names[ticker.toUpperCase()] || cedearName(ticker.toUpperCase());
+    const matches = (result?.items ?? []).filter(event => `${event.ticker} ${companyName(event.ticker)}`.toLowerCase().includes(search.trim().toLowerCase()));
+    const events = matches.filter(event => showAll || POPULAR_DIVIDEND_TICKERS.has(event.ticker.toUpperCase()));
     const monthKey = isoDate(month).slice(0, 7);
     const monthEvents = events.filter(event => event.payDate.startsWith(monthKey));
-    const shownEvents = selected ? monthEvents.filter(event => event.payDate === selected) : monthEvents;
+    const shownEvents = (selected ? monthEvents.filter(event => event.payDate === selected) : monthEvents).slice().sort((a, b) => Number(POPULAR_DIVIDEND_TICKERS.has(b.ticker.toUpperCase())) - Number(POPULAR_DIVIDEND_TICKERS.has(a.ticker.toUpperCase())) || a.payDate.localeCompare(b.payDate) || a.ticker.localeCompare(b.ticker));
+    const totalPages = Math.max(1, Math.ceil(shownEvents.length / 10));
+    const currentPage = Math.min(page, totalPages);
+    const pageEvents = shownEvents.slice((currentPage - 1) * 10, currentPage * 10);
     const offset = (month.getDay() + 6) % 7;
     const dayCount = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
     const cells = Array.from({ length: Math.ceil((offset + dayCount) / 7) * 7 }, (_, i) => i - offset + 1);
-    const changeMonth = (step: number) => { setMonth(value => new Date(value.getFullYear(), value.getMonth() + step, 1)); setSelected(null); };
+    const changeMonth = (step: number) => { setMonth(value => new Date(value.getFullYear(), value.getMonth() + step, 1)); setSelected(null); setPage(1); };
     return <section className="card p-5 sm:p-6" aria-labelledby="market-dividends-title">
         <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="lb">MERCADO</p><h2 id="market-dividends-title" className="mt-2 text-[20px] font-light tracking-tight">Calendario general</h2><p className="mu mt-2 text-[12px]">Pagos anunciados para las próximas 4 semanas, tengas o no el activo en tu cartera.</p></div>
-        <label className="text-[11px] text-[var(--muted)]">Buscar ticker<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Ej. AAPL" className="mt-1 block w-full rounded-lg border border-[var(--line2)] bg-[var(--raised)] px-3 py-2 text-[13px] text-[var(--ink)]" /></label></div>
+        <label className="text-[11px] text-[var(--muted)]">Buscar empresa o ticker<input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Ej. Apple o AAPL" className="mt-1 block w-full rounded-lg border border-[var(--line2)] bg-[var(--raised)] px-3 py-2 text-[13px] text-[var(--ink)]" /></label></div>
         <p className="mu mt-4 text-[11px] leading-5">Cobertura de Massive: principalmente valores de EE. UU. Se muestran pagos informados con fecha y monto; la cobertura no incluye todas las bolsas del mundo.</p>
         {error ? <p role="alert" className="mt-6 text-[12px] text-[var(--neg)]">{error}</p> : !result ? <p role="status" className="mu mt-6 text-[12px]">Consultando dividendos…</p> : !result.configured ? <p className="mu mt-6 text-[12px]">Para consultar dividendos, configurá MASSIVE_API_KEY en el backend.</p> : <>
             {result.truncated && <p role="status" className="mu mt-4 text-[11px]">La fuente devolvió muchos resultados: esta lista puede estar incompleta.</p>}
-            <div className="mt-5 flex items-center justify-between gap-2"><h3 className="text-[16px] font-medium capitalize">{month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><div className="flex items-center gap-1">{selected && <button type="button" onClick={() => setSelected(null)} className="mu mr-2 underline">Ver todo el mes</button>}<button type="button" onClick={() => changeMonth(-1)} disabled={!result.start || monthKey <= result.start.slice(0, 7)} aria-label="Mes anterior" className="ibtn !h-9 !w-9 disabled:opacity-30"><HugeiconsIcon icon={ChevronLeftIcon} size={16} /></button><button type="button" onClick={() => changeMonth(1)} disabled={!result.end || monthKey >= result.end.slice(0, 7)} aria-label="Mes siguiente" className="ibtn !h-9 !w-9 disabled:opacity-30"><HugeiconsIcon icon={ChevronRightIcon} size={16} /></button></div></div>
+            <div className="mt-5 flex items-center justify-between gap-2"><h3 className="text-[16px] font-medium capitalize">{month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><div className="flex items-center gap-1">{selected && <button type="button" onClick={() => { setSelected(null); setPage(1); }} className="mu mr-2 underline">Ver todo el mes</button>}<button type="button" onClick={() => changeMonth(-1)} disabled={!result.start || monthKey <= result.start.slice(0, 7)} aria-label="Mes anterior" className="ibtn !h-9 !w-9 disabled:opacity-30"><HugeiconsIcon icon={ChevronLeftIcon} size={16} /></button><button type="button" onClick={() => changeMonth(1)} disabled={!result.end || monthKey >= result.end.slice(0, 7)} aria-label="Mes siguiente" className="ibtn !h-9 !w-9 disabled:opacity-30"><HugeiconsIcon icon={ChevronRightIcon} size={16} /></button></div></div>
             <p className="mu mt-2 text-[11px]">Pagos disponibles {result.start && result.end ? `del ${date(result.start)} al ${date(result.end)}` : ''}</p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--line)] bg-[var(--raised)] px-3 py-2"><p className="mu text-[11px]">{showAll ? 'Mostrando todos los activos, con los principales primero.' : 'Mostrando una selección de activos principales.'}</p><button type="button" aria-pressed={showAll} onClick={() => { setShowAll(value => !value); setPage(1); }} className="text-[12px] font-medium text-[var(--sig)]">{showAll ? 'Ver solo principales' : 'Ver todos los activos'}</button></div>
             <div className="mt-4 grid grid-cols-7 gap-1 sm:gap-1.5" role="group" aria-label={`Días de ${month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`}>
                 {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => <div key={day} className="mu pb-2 text-center text-[10px]">{day}</div>)}
-                {cells.map((day, index) => { if (day < 1 || day > dayCount) return <div key={`blank-${index}`} />; const key = `${monthKey}-${String(day).padStart(2, '0')}`; const daily = monthEvents.filter(event => event.payDate === key); return <button key={key} type="button" onClick={() => setSelected(selected === key ? null : key)} aria-pressed={selected === key} aria-label={`${date(key)}: ${daily.length} pagos`} className={`relative flex min-h-[53px] flex-col items-center rounded-lg border p-1 text-[12px] sm:min-h-[76px] sm:items-start sm:p-2 ${selected === key ? 'border-[var(--sig)] bg-[var(--sigbg)]' : 'border-[var(--line)] hover:bg-[var(--raised)]'} ${key === isoDate(new Date()) ? 'font-semibold text-[var(--sig)]' : 'text-[var(--muted)]'}`}><span>{day}</span>{daily.length > 0 && <><span className="mt-auto hidden max-w-full truncate rounded bg-[var(--sigbg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--sig)] sm:block">{daily[0].ticker}{daily.length > 1 ? ` +${daily.length - 1}` : ''}</span><span className="mb-1 mt-auto h-1.5 w-1.5 rounded-full bg-[var(--sig)] sm:hidden" /></>}</button>; })}
+                {cells.map((day, index) => { if (day < 1 || day > dayCount) return <div key={`blank-${index}`} />; const key = `${monthKey}-${String(day).padStart(2, '0')}`; const daily = monthEvents.filter(event => event.payDate === key); return <button key={key} type="button" onClick={() => { setSelected(selected === key ? null : key); setPage(1); }} aria-pressed={selected === key} aria-label={`${date(key)}: ${daily.length} pagos`} className={`relative flex min-h-[53px] flex-col items-center rounded-lg border p-1 text-[12px] sm:min-h-[76px] sm:items-start sm:p-2 ${selected === key ? 'border-[var(--sig)] bg-[var(--sigbg)]' : 'border-[var(--line)] hover:bg-[var(--raised)]'} ${key === isoDate(new Date()) ? 'font-semibold text-[var(--sig)]' : 'text-[var(--muted)]'}`}><span>{day}</span>{daily.length > 0 && <><span className="mt-auto hidden max-w-full truncate rounded bg-[var(--sigbg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--sig)] sm:block">{daily[0].ticker}{daily.length > 1 ? ` +${daily.length - 1}` : ''}</span><span className="mb-1 mt-auto h-1.5 w-1.5 rounded-full bg-[var(--sig)] sm:hidden" /></>}</button>; })}
             </div>
             <p className="mu mt-5 text-[11px]">{shownEvents.length} pagos {selected ? `· ${date(selected)}` : 'en el mes'}</p>
-            {shownEvents.length ? <div className="mt-2">{shownEvents.map((event, index) => <article key={`${event.ticker}-${event.payDate}-${event.exDate}-${index}`} className="flex items-start gap-4 border-t border-[var(--line)] py-4">
+            {shownEvents.length ? <div className="mt-2">{pageEvents.map((event, index) => <article key={`${event.ticker}-${event.payDate}-${event.exDate}-${index}`} className="flex items-start gap-4 border-t border-[var(--line)] py-4">
                 <div className="dd">{at(event.payDate).getDate()}<small>{at(event.payDate).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '')}</small></div>
-                <div className="min-w-0 flex-1"><p className="text-[14px] font-medium">{event.ticker}</p><p className="mu mt-1 text-[11px]">Pago: {date(event.payDate)} · Fecha ex: {event.exDate ? date(event.exDate) : 'no informada'}</p></div>
+                <div className="min-w-0 flex-1"><p className="text-[14px] font-medium">{companyName(event.ticker) || 'Nombre no disponible'} <span className="mu ml-1">{event.ticker}</span></p><p className="mu mt-1 text-[11px]">Pago: {date(event.payDate)} · Fecha ex: {event.exDate ? date(event.exDate) : 'no informada'}</p></div>
                 <span className="text-right text-[12px] font-medium tabular-nums">{event.amountPerShare.toLocaleString('es-AR', { maximumFractionDigits: 6 })} {event.currency ?? 'moneda no informada'}<small className="mu mt-1 block text-[10px] font-normal">por acción · bruto</small></span>
-            </article>)}</div> : <p className="mu mt-6 text-[12px]">{search ? 'No encontramos pagos para ese ticker en esta selección.' : 'No hay pagos anunciados en esta selección.'}</p>}
+            </article>)}</div> : <p className="mu mt-6 text-[12px]">{search ? (showAll ? 'No encontramos pagos para esa búsqueda en esta selección.' : 'No encontramos pagos entre los principales. Probá ver todos los activos.') : (showAll ? 'No hay pagos anunciados en esta selección.' : 'No hay pagos de activos principales en esta selección. Probá ver todos los activos.')}</p>}
+            {shownEvents.length > 10 && <nav aria-label="Páginas de dividendos" className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--line)] pt-4"><button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1} className="btn-ghost text-[12px] disabled:opacity-30">Anterior</button><span className="mu text-[12px]" aria-live="polite">Página {currentPage} de {totalPages}</span><button type="button" onClick={() => setPage(currentPage + 1)} disabled={currentPage === totalPages} className="btn-ghost text-[12px] disabled:opacity-30">Siguiente</button></nav>}
         </>}
-        <p className="mu mt-5 text-[11px]">Datos de <a className="underline" href="https://massive.com/docs/rest/stocks/corporate-actions/dividends" target="_blank" rel="noreferrer">Massive</a>. Los montos y fechas pueden cambiar.</p>
+        <p className="mu mt-5 text-[11px]">Nombres de <a className="underline" href="https://github.com/rreichel3/US-Stock-Symbols" target="_blank" rel="noreferrer">US Stock Symbols</a>. Dividendos de <a className="underline" href="https://massive.com/docs/rest/stocks/corporate-actions/dividends" target="_blank" rel="noreferrer">Massive</a>. Los montos y fechas pueden cambiar.</p>
     </section>;
 }
 
