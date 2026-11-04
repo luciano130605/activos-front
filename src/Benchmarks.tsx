@@ -1,8 +1,10 @@
+import { HugeiconsIcon } from '@hugeicons/react';
 import Select from './Select';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PointerEvent } from 'react';
+import { Cancel01Icon } from '@hugeicons/core-free-icons';
 
 type Row = {
 
@@ -913,29 +915,29 @@ export default function Benchmarks({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                <button type="button" data-export-exclude onClick={() => void prepareExport()} disabled={!result?.lines.length || historyLoading || exporting} className="btn-ghost text-[12px] disabled:opacity-50">{exporting ? 'Preparando…' : 'Exportar PNG'}</button>
-                <div className="rounded-lg border border-[var(--line)] bg-[var(--raised)] px-3 py-2">
+                    <button type="button" data-export-exclude onClick={() => void prepareExport()} disabled={!result?.lines.length || historyLoading || exporting} className="btn-ghost text-[12px] disabled:opacity-50">{exporting ? 'Preparando…' : 'Exportar PNG'}</button>
+                    <div className="rounded-lg border border-[var(--line)] bg-[var(--raised)] px-3 py-2">
 
-                    <p className="mu text-[10px]">
+                        <p className="mu text-[10px]">
 
-                        Período seleccionado
+                            Período seleccionado
 
-                    </p>
+                        </p>
 
-                    <p className="mt-0.5 text-[12px] font-medium tabular-nums">
+                        <p className="mt-0.5 text-[12px] font-medium tabular-nums">
 
-                        {dateLabel(from)} — {dateLabel(to)}
+                            {dateLabel(from)} — {dateLabel(to)}
 
-                    </p>
+                        </p>
 
-                </div>
+                    </div>
 
                 </div>
             </div>
             {exportError && <p data-export-exclude role="alert" className="mt-3 text-[12px] text-[var(--neg)]">{exportError}</p>}
             {exportPreview && <div data-export-exclude className="fixed inset-0 z-[60] grid place-items-center bg-black/65 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setExportPreview(null); }} onKeyDown={event => { if (event.key === 'Escape') setExportPreview(null); }}>
                 <div role="dialog" aria-modal="true" aria-labelledby="benchmark-export-title" className="card max-h-[90dvh] w-full max-w-[900px] overflow-y-auto p-5 shadow-2xl">
-                    <div className="flex items-start justify-between gap-3"><div><h3 id="benchmark-export-title" className="text-[20px] font-medium">Vista previa</h3><p className="mu mt-1 text-[12px]">Así se verá tu comparación en PNG.</p></div><button type="button" autoFocus onClick={() => setExportPreview(null)} aria-label="Cerrar vista previa" className="btn-ghost text-[18px]">×</button></div>
+                    <div className="flex items-start justify-between gap-3"><div><h3 id="benchmark-export-title" className="text-[20px] font-medium">Vista previa</h3><p className="mu mt-1 text-[12px]">Así se verá tu comparación en PNG.</p></div><button type="button" autoFocus onClick={() => setExportPreview(null)} aria-label="Cerrar vista previa" className="btn-ghost text-[18px]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
                     <img src={exportPreview} alt="Vista previa de la comparación de rendimiento" className="mt-4 w-full rounded-lg border border-[var(--line)]" />
                     <div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setExportPreview(null)} className="btn-ghost text-[12px]">Cancelar</button><a href={exportPreview} download="cartera-vs-mercado.png" className="rounded-lg bg-[var(--ink)] px-4 py-2.5 text-[12px] font-medium text-[var(--bg)]">Descargar PNG</a></div>
                 </div>

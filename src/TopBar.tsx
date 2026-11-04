@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { DarkModeFreeIcons, DashboardCircleEditIcon, DashboardCircleIcon, Download02Icon, LogoutCircle01Icon, MenuTwoLineIcon, MoreHorizontalIcon, PlusIcon, ScanFaceIcon, Search01Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, Key01Icon } from '@hugeicons/core-free-icons';
+import { DarkModeFreeIcons, DashboardCircleEditIcon, DashboardCircleIcon, Download02Icon, LogoutCircle01Icon, MenuTwoLineIcon, MoreHorizontalIcon, PlusIcon, ScanFaceIcon, Search01Icon, Share08Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, Key01Icon } from '@hugeicons/core-free-icons';
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
 import PageIcon from './PageIcon';
 import ContextMenu from './ContextMenu';
 import AppearanceDialog from './AppearanceDialog';
+import ShareDialog from './ShareDialog';
 import type { Currency } from './portfolio';
 
 type Props = {
@@ -41,6 +42,7 @@ function ThemeIcon({ size = 18 }: { size?: number }) {
 export default function TopBar(p: Props) {
     const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
     const [appearance, setAppearance] = useState(false);
+    const [sharing, setSharing] = useState(false);
     const more = useRef<HTMLButtonElement>(null);
     const openMenu = () => { const r = more.current!.getBoundingClientRect(); setMenu({ x: r.right - 230, y: r.bottom + 8 }); };
     return <header className="topbar">
@@ -71,9 +73,11 @@ export default function TopBar(p: Props) {
             { label: p.passkeyCount === null ? 'Passkeys y llaves de seguridad' : p.passkeyCount > 0 ? `Passkeys activadas (${p.passkeyCount})` : 'Activar passkey o llave de seguridad', icon: ScanFaceIcon, onSelect: p.onPasskey },
             { label: 'Exportar datos', icon: Download02Icon, onSelect: p.onExport },
             { label: 'Importar datos', icon: Upload06Icon, onSelect: p.onImport },
+            { label: 'Compartir página', icon: Share08Icon, onSelect: () => setSharing(true) },
             { sep: true },
             { label: p.leaving ? 'Cerrando sesión…' : 'Cerrar sesión', icon: LogoutCircle01Icon, onSelect: p.onLogout, danger: true },
         ]} />}
+        {sharing && <ShareDialog onClose={() => setSharing(false)} />}
         {appearance && <AppearanceDialog theme={p.theme} onTheme={p.onTheme} onClose={() => setAppearance(false)} />}
     </header>;
 }

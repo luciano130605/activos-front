@@ -848,3 +848,9 @@ input {
     transition: none !important;
   }
 }
+/* Mantiene el desplazamiento dentro de los diálogos. */
+[aria-modal="true"] { overscroll-behavior: contain; }
+[role="alertdialog"][aria-modal="true"],
+[aria-labelledby="passkey-title"],
+[aria-label="Registrar venta"][aria-modal="true"],
+[aria-labelledby="api-keys-title"] { max-height: 90dvh; overflow-y: auto; }

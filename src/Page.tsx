@@ -179,7 +179,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [sellError, setSellError] = useState('');
     const [panelEditor, setPanelEditor] = useState(false);
     const closePanelEditor = useCallback(() => setPanelEditor(false), []);
-    const [panels, setPanels] = preference('panels');
+    const [panels] = preference('panels');
     const visiblePanels = panels ? (panels.includes('panel-v2') ? panels.filter(id => id !== 'panel-v2') : [...panels.filter(id => id !== 'inflation'), ...(panels.includes('value') ? ['macro', 'streak'] : [])]) : ['value', 'macro', 'streak', 'evolution', 'distribution', 'investments'];
     const today = Date.now();
     const fxRate = usdc?.price; // 1 USDC en pesos: referencia única de conversión
@@ -678,7 +678,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onAdd={openModal} onExport={exportJSON} onImport={() => fileRef.current?.click()}
                 email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} onAiSettings={() => setAiSettingsRequest(value => value + 1)} />
-            <div style={page === 'assistant' ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
+            <div style={page === 'assistant' || view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
                 <span role="status">{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
@@ -693,7 +693,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {notice && <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-4 py-3 text-[12px]"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Cerrar aviso" className="text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={14} /></button></div>}
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
-                <MarketChat fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
+                <MarketChat showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
 
@@ -796,7 +796,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" className="btn-ghost" disabled={passkeyBusy} onClick={() => setPasskeyDialog(false)}>Cerrar</button>{passkeyOptions ? <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void enablePasskey()}>{passkeyBusy ? 'Activando…' : 'Crear passkey'}</button> : <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void preparePasskeyDialog()}>{passkeyBusy ? 'Preparando…' : 'Agregar passkey'}</button>}</div>
             </section>
         </div>}
-        {panelEditor && <PanelEditor selected={visiblePanels} onClose={closePanelEditor} onSave={next => { setPanels([...next, 'panel-v2']); setPanelEditor(false); if (page !== 'summary') goTo('/'); }} />}
+        {panelEditor && <PanelEditor selected={visiblePanels} showChatButton={view.portfolio.preferences.showChatButton !== false} showQuotesBar={view.portfolio.preferences.showQuotesBar !== false} onClose={closePanelEditor} onSave={(next, options) => { sync.update(current => ({ ...current, preferences: { ...current.preferences, panels: [...next, 'panel-v2'], ...options } })); setPanelEditor(false); if (page !== 'summary') goTo('/'); }} />}
         {sellItem && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setSellId(null); }}>
             <section role="dialog" aria-modal="true" aria-label="Registrar venta" className="card w-full max-w-md p-6">
                 <h2 className="text-xl">Registrar venta</h2>
