@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ArgentineMarket, { type ArgentineKind } from './ArgentineMarket';
+import type { Investment } from './portfolio';
 import { listCryptoAssets } from './coingecko';
 import { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
 import { INDEXES, cedearName, listCedears, listUsStocks, type SearchAsset } from './assets';
@@ -19,7 +21,8 @@ const tabs: { id: AssetKind; label: string; color: string; hint: string; placeho
     { id: 'index', label: 'Índices', color: 'var(--c-index)', hint: 'Índice o ticker', placeholder: 'Ej: S&P 500, QQQ…', source: 'Data912' },
 ];
 
-export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelect, benchmarkMode = false, footer = 'Elegí un activo para consultar su precio y cargar la inversión.' }: { initial?: AssetKind; onClose: () => void; onSelect: (asset: PickedAsset) => void; benchmarkMode?: boolean; footer?: string }) {
+export default function AssetSearchDialog({ initial = 'crypto', initialLocal, onClose, onSelect, onAddLocal, benchmarkMode = false, footer = 'Elegí un activo para consultar su precio y cargar la inversión.' }: { initial?: AssetKind; initialLocal?: ArgentineKind; onClose: () => void; onSelect: (asset: PickedAsset) => void; onAddLocal?: (investment: Investment) => void; benchmarkMode?: boolean; footer?: string }) {
+    const [localTab, setLocalTab] = useState<ArgentineKind | null>(initialLocal ?? null);
     const [tab, setTab] = useState<AssetKind>(initial);
     const [catalog, setCatalog] = useState<Catalog | null>(null);
     const [query, setQuery] = useState('');
@@ -162,7 +165,7 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
     };
     const eligibleMatches = benchmarkMode ? matches.slice(0, limit).filter(row => eligible.has(row.id)) : matches;
     const displayed = qualified === null ? eligibleMatches : eligibleMatches.filter(row => qualified.has(row.id));
-    const switchTab = (next: AssetKind) => { if (next === tab) return; resetFilter(); setCatalog(null); setQuery(''); setLimit(40); setTab(next); };
+    const switchTab = (next: AssetKind) => { if (next === tab && !localTab) return; setLocalTab(null); resetFilter(); setCatalog(null); setQuery(''); setLimit(40); setTab(next); };
     return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 p-0 backdrop-blur-[5px] sm:items-center sm:p-4" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
         <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="asset-search-title" className="flex max-h-[90dvh] w-full flex-col rounded-t-[22px] border border-[var(--line2)] bg-[var(--surface)] shadow-2xl sm:max-w-[560px] sm:rounded-[22px]" onKeyDown={event => {
             if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
@@ -174,18 +177,19 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
         }}>
             <div className="shrink-0 border-b border-[var(--line)] p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-3"><div><p className="lb mb-2">BUSCADOR DE ACTIVOS</p><h2 id="asset-search-title" className="text-[24px] font-light tracking-tight">Buscar activo<span className="text-[var(--faint)]">.</span></h2></div><button type="button" onClick={onClose} aria-label="Cerrar buscador" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
-                <div className="tabs mt-5" role="group" aria-label="Tipo de activo">{tabs.filter(t => benchmarkMode || t.id !== 'stock').map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => switchTab(t.id)}><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: t.color }} />{t.label}</button>)}</div>
-                <label htmlFor="asset-search" className="mb-1.5 mt-4 block text-[12px] text-[var(--muted)]">{current.hint}</label>
-                <div className="relative"><HugeiconsIcon icon={Search02Icon} size={17} className="pointer-events-none absolute left-3 top-3 text-[var(--muted)]" /><input ref={input} id="asset-search" type="search" value={query} onChange={event => { resetFilter(); setQuery(event.target.value); setLimit(40); }} placeholder={current.placeholder} autoComplete="off" spellCheck={false} className="w-full rounded-[10px] border border-[var(--line2)] bg-[var(--raised)] py-2.5 pl-10 pr-3 text-[14px] outline-none focus:border-[var(--muted)]" /></div>
+                <div className="tabs mt-5" role="group" aria-label="Tipo de activo">{tabs.map(t => <button key={t.id} type="button" aria-pressed={t.id === 'stock' ? (!localTab && tab === 'stock') || localTab === 'stocks' : !localTab && tab === t.id} onClick={() => switchTab(t.id)}><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: t.color }} />{t.label}</button>)}{!benchmarkMode && onAddLocal && ([['funds', 'FCI'], ['bonds', 'Bonos']] as const).map(([id, name]) => <button key={id} type="button" aria-pressed={localTab === id} onClick={() => setLocalTab(id)}>{name}</button>)}</div>
+                {!benchmarkMode && onAddLocal && ((!localTab && tab === 'stock') || localTab === 'stocks') && <div className="seg mt-4" role="group" aria-label="Mercado de acciones"><button type="button" aria-pressed={!localTab} onClick={() => switchTab('stock')}>EE. UU.</button><button type="button" aria-pressed={localTab === 'stocks'} onClick={() => setLocalTab('stocks')}>Argentina</button></div>}
+                {!localTab && <><label htmlFor="asset-search" className="mb-1.5 mt-4 block text-[12px] text-[var(--muted)]">{current.hint}</label>
+                <div className="relative"><HugeiconsIcon icon={Search02Icon} size={17} className="pointer-events-none absolute left-3 top-3 text-[var(--muted)]" /><input ref={input} id="asset-search" type="search" value={query} onChange={event => { resetFilter(); setQuery(event.target.value); setLimit(40); }} placeholder={current.placeholder} autoComplete="off" spellCheck={false} className="w-full rounded-[10px] border border-[var(--line2)] bg-[var(--raised)] py-2.5 pl-10 pr-3 text-[14px] outline-none focus:border-[var(--muted)]" /></div></>}
             </div>
-            {benchmarkMode && <div className="border-b border-[var(--line)] px-5 py-3">
+            {!localTab && benchmarkMode && <div className="border-b border-[var(--line)] px-5 py-3">
                 <button type="button" disabled={filtering || checkingHistory || catalog?.status !== 'ready'} onClick={qualified === null ? filterByInflation : resetFilter} className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] disabled:opacity-50">{qualified === null ? 'Mostrar los que igualaron o superaron la inflación' : filtering ? 'Consultando…' : 'Mostrar todos'}</button>
                 <p className="mu mt-2 text-[11px]">Analiza los resultados de la búsqueda; admite hasta 5 puntos porcentuales por debajo de la inflación. Puede tardar y algunos proveedores limitan las consultas.</p>
                 {filterStatus && <p role="status" className="mu mt-1 text-[11px]">{filterStatus}</p>}
                 <p role="status" className="mu mt-1 text-[11px]">{checkingHistory ? 'Verificando que los activos tengan al menos un año de historial…' : 'Se muestran activos con al menos un año de historial verificable.'} {historyFailures > 0 && `${historyFailures} no se pudieron verificar.`}</p>
                 {historyFailures > 0 && !checkingHistory && <button type="button" onClick={() => setHistoryAttempt(value => value + 1)} className="mt-1 text-[11px] underline">Reintentar verificación</button>}
             </div>}
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:px-4">
+            {!localTab && <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:px-4">
                 {!catalog ? <p role="status" className="flex items-center justify-center gap-2 py-12 text-[13px] text-[var(--muted)]"><HugeiconsIcon icon={LoaderIcon} size={17} className="animate-spin" />Cargando {current.label.toLowerCase()}…</p> : catalog.status === 'error' ? <div className="p-4"><p role="alert" className="text-[13px] text-[var(--neg)]">{catalog.message}</p><button type="button" onClick={() => { setCatalog(null); setAttempt(value => value + 1); }} className="mt-4 inline-flex items-center gap-2 text-[12px] underline"><HugeiconsIcon icon={Refresh04Icon} size={14} />Reintentar</button></div> : <>
                     <p role="status" className="mu px-2 pb-2 text-[10px]">{displayed.length.toLocaleString('es-AR')} {query.trim() ? 'resultados' : 'disponibles'} · {current.source}</p>
                     {displayed.length === 0 ? <p className="px-2 py-10 text-center text-[13px] text-[var(--muted)]">{checkingHistory ? 'Verificando historiales…' : 'No encontramos activos disponibles. Probá otro nombre o ticker.'}</p> : displayed.slice(0, limit).map(row => <button key={row.id} type="button" onClick={() => onSelect({ kind: tab, id: row.id, name: tab === 'cedear' ? (cedearName(row.id) || row.id) : tab === 'index' ? `${row.title} (${row.id})` : row.title })} className="group flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-[var(--raised)] focus-visible:bg-[var(--raised)]">
@@ -194,7 +198,8 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                     </button>)}
                     {(benchmarkMode ? matches.length > limit && qualified === null : displayed.length > limit) && <button type="button" disabled={benchmarkMode && checkingHistory} onClick={() => setLimit(value => value + 40)} className="my-3 w-full rounded-lg border border-[var(--line2)] py-2.5 text-[12px] disabled:opacity-50">Mostrar más</button>}
                 </>}
-            </div>
+            </div>}
+            {localTab && onAddLocal && <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:px-4"><ArgentineMarket key={localTab} initialKind={localTab} hideTabs onAdd={onAddLocal} /></div>}
             <p className="shrink-0 border-t border-[var(--line)] px-5 py-4 text-[11px] text-[var(--muted)]">{footer}</p>
         </div>
     </div>;
