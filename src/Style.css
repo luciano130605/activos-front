@@ -209,8 +209,8 @@ input {
 }
 
 .white {
-  background: var(--pbg);
-  color: var(--on-pbg);
+  background: var(--pbg) !important;
+  color: var(--on-pbg) !important;
 }
 
 
