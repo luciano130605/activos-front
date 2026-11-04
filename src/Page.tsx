@@ -669,7 +669,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const locked = !!assetSearch || !!sellItem || panelEditor || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
     return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
-        <MarketChat items={items} settingsRequest={aiSettingsRequest} />
+        <MarketChat items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={openModal} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
