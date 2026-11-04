@@ -28,7 +28,11 @@ export function cleanSale(raw: unknown): Sale | null {
     return { id: s.id, name: s.name, date: s.date, fraction: s.fraction, proceeds: s.proceeds, cost: s.cost, currency: s.currency, costCurrency: s.costCurrency };
 }
 
+export type AllocationCategory = 'rate' | 'cedear' | 'index' | 'stock' | 'crypto';
+export type AllocationTargets = Record<AllocationCategory, number>;
+
 export type Preferences = {
+    allocationTargets?: AllocationTargets;
     theme: 'dark' | 'light' | 'system';
     dollar: string;
     hidden: boolean;
