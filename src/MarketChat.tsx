@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import './market-avatar.css';
 import { request } from './account';
+import { INDEXES, listCedears } from './assets';
+import { listCryptoAssets } from './coingecko';
 import { cleanInvestment, type Investment } from './portfolio';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowUp, ArrowUp02Icon, Cancel01Icon, ChevronLeft, CircleFadingPlusIcon, CopyCheckIcon, CopyIcon, Edit01Icon, Key01Icon, TrashIcon } from '@hugeicons/core-free-icons';
@@ -21,6 +23,7 @@ export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirt
     const [key, setKey] = useState(''), [input, setInput] = useState(''), [messages, setMessages] = useState<Message[]>([]);
     const [busy, setBusy] = useState(false), [error, setError] = useState('');
     const [selectSale, setSelectSale] = useState(false);
+    const [selectDollar, setSelectDollar] = useState(false);
     const [draft, setDraft] = useState<{ step: string; data: Partial<Investment> } | null>(null);
     const [editingKey, setEditingKey] = useState<Provider | null>(null), [copied, setCopied] = useState<Provider | null>(null);
     const end = useRef<HTMLDivElement>(null);
@@ -47,7 +50,7 @@ export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirt
         setDraft({ step: 'kind', data: {} }); setEditing(null); setSelectSale(false); setError('');
         setMessages(current => [...current, { role: 'user', content: 'Quiero cargar una inversión' }, { role: 'assistant', content: '¿Qué tipo de inversión es? Escribí CEDEAR, cripto o tasa.' }]);
     }
-    function investmentReply(value: string) {
+    async function investmentReply(value: string) {
         if (!draft) return;
         const answer = value.trim(), lower = answer.toLocaleLowerCase('es-AR');
         let { step, data } = draft; data = { ...data };
@@ -65,7 +68,23 @@ export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirt
             else { data.name = answer; step = data.kind === 'rate' ? 'currency' : 'coin'; reply = data.kind === 'rate' ? '¿La inversión está en ARS o USD?' : data.kind === 'crypto' ? '¿Cuál es el identificador de CoinGecko? Por ejemplo: bitcoin o ethereum.' : '¿Cuál es el ticker? Por ejemplo: AAPL.'; }
         } else if (step === 'coin') {
             if (!/^[a-z0-9][a-z0-9.-]{0,49}$/i.test(answer)) reply = 'Ingresá un ticker o identificador válido, sin espacios.';
-            else { data.coin = data.kind === 'cedear' ? answer.toUpperCase() : lower; step = 'currency'; reply = '¿En qué moneda pagaste? ARS o USD.'; }
+            else {
+                setInput(''); setBusy(true);
+                try {
+                    const catalog = data.kind === 'crypto'
+                        ? (await listCryptoAssets()).map(asset => ({ id: asset.id, symbol: asset.symbol, name: asset.name }))
+                        : [...await listCedears(), ...INDEXES].map(asset => ({ id: asset.symbol, symbol: asset.symbol, name: asset.name }));
+                    const exactId = catalog.find(asset => asset.id.toLowerCase() === lower);
+                    const symbols = catalog.filter(asset => asset.symbol.toLowerCase() === lower);
+                    const exact = exactId ?? (symbols.length === 1 ? symbols[0] : undefined);
+                    if (exact) { data.coin = data.kind === 'cedear' ? exact.id.toUpperCase() : exact.id; step = 'currency'; reply = `Encontré ${exact.name || exact.symbol} (${exact.symbol.toUpperCase()}). ¿En qué moneda pagaste? ARS o USD.`; }
+                    else {
+                        const candidates = (symbols.length > 1 ? symbols : catalog.filter(asset => asset.symbol.toLowerCase().startsWith(lower) || asset.id.toLowerCase().startsWith(lower) || (lower.length > 1 && asset.name.toLowerCase().includes(lower)))).slice(0, 3);
+                        reply = candidates.length ? `No encontré una coincidencia exacta para “${answer}”. ¿Quisiste decir ${candidates.map(asset => `${asset.name || asset.symbol} (${data.kind === 'crypto' ? asset.id : asset.symbol})`).join(', ')}? Escribí el identificador correcto.` : `No encontré “${answer}” en el catálogo. Probá con otro ${data.kind === 'crypto' ? 'identificador de CoinGecko' : 'ticker'}.`;
+                    }
+                } catch { reply = 'No pude consultar el catálogo para validar el activo. Probá de nuevo en un momento.'; }
+                finally { setBusy(false); }
+            }
         } else if (step === 'currency') {
             if (!/^(ars|usd|pesos|d[oó]lares)$/i.test(answer)) reply = 'Indicá ARS o USD.';
             else { data.currency = /^(ars|pesos)$/i.test(answer) ? 'ARS' : 'USD'; step = data.kind === 'rate' ? 'amount' : 'units'; reply = data.kind === 'rate' ? '¿Cuál fue el monto invertido?' : '¿Cuántas unidades compraste?'; }
@@ -96,13 +115,39 @@ export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirt
         if (reply !== 'Carga cancelada.' && !(step === 'confirm' && /^(s[ií]|confirmar|confirmo)$/i.test(answer) && reply.startsWith('Listo,'))) setDraft({ step, data });
         setMessages(current => [...current, { role: 'user', content: answer }, { role: 'assistant', content: reply }]); setInput('');
     }
+    async function showDollar(question: string) {
+        setInput(''); setError(''); setMessages(current => [...current, { role: 'user', content: question }]); setBusy(true);
+        try {
+            const response = await fetch('https://dolarapi.com/v1/dolares', { signal: AbortSignal.timeout(20000) });
+            if (!response.ok) throw new Error();
+            const rows: { casa: string; venta: number; fechaActualizacion?: string }[] = await response.json();
+            const requested = /\bmep\b|\bbolsa\b/i.test(question) ? ['bolsa'] : /\bblue\b/i.test(question) ? ['blue'] : /\boficial\b/i.test(question) ? ['oficial'] : /\bccl\b|contado con liqui/i.test(question) ? ['contadoconliqui'] : ['oficial', 'blue', 'bolsa', 'contadoconliqui'];
+            const labels: Record<string, string> = { oficial: 'Oficial', blue: 'Blue', bolsa: 'MEP', contadoconliqui: 'CCL' };
+            const found = requested.flatMap(id => { const row = rows.find(item => item.casa === id && Number.isFinite(item.venta) && item.venta > 0); return row ? [row] : []; });
+            if (!found.length) throw new Error();
+            const lines = found.map(row => `• ${labels[row.casa]}: $${row.venta.toLocaleString('es-AR', { maximumFractionDigits: 2 })}`);
+            const dates = found.map(row => row.fechaActualizacion ? Date.parse(row.fechaActualizacion) : NaN).filter(Number.isFinite);
+            const updated = dates.length ? `\nActualizado: ${new Date(Math.min(...dates)).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' })}.` : '';
+            setMessages(current => [...current, { role: 'assistant', content: `Dólar venta:\n${lines.join('\n')}${updated}`, citations: [{ title: 'DolarAPI', url: 'https://dolarapi.com/' }] }]);
+        } catch { setMessages(current => [...current, { role: 'assistant', content: 'No pude consultar el dólar en este momento. Intentá de nuevo.' }]); } finally { setBusy(false); }
+    }
     async function send(value: string) {
         const trimmed = value.trim(); if (!trimmed || busy) return;
-        if (trimmed.toLowerCase() === '/clear') { setMessages([]); setInput(''); setEditing(null); setError(''); setSelectSale(false); setDraft(null); return; }
-        if (draft) { investmentReply(trimmed); return; }
+        if (trimmed.toLowerCase() === '/clear') { setMessages([]); setInput(''); setEditing(null); setError(''); setSelectSale(false); setSelectDollar(false); setDraft(null); return; }
+        if (draft) { await investmentReply(trimmed); return; }
+        if (selectDollar) {
+            if (/^(cancelar|salir)$/i.test(trimmed)) { setSelectDollar(false); setInput(''); setMessages(current => [...current, { role: 'user', content: trimmed }, { role: 'assistant', content: 'Consulta cancelada.' }]); return; }
+            if (/\b(mep|bolsa|blue|oficial|ccl|todos)\b|contado con liqui/i.test(trimmed)) { setSelectDollar(false); void showDollar(trimmed); return; }
+            setInput(''); setMessages(current => [...current, { role: 'user', content: trimmed }, { role: 'assistant', content: '¿Oficial, blue, MEP o CCL?' }]); return;
+        }
         const intent = trimmed.toLocaleLowerCase('es-AR');
         if (/^(quiero |necesito |pod[eé]s |puedo )?(cargar|agregar|registrar) (una? )?(inversi[oó]n|activo|compra)/.test(intent)) { setInput(''); startInvestment(); return; }
         if (/^(quiero |necesito |pod[eé]s |puedo )?(vender|registrar (una? )?venta)\b/.test(intent)) { setInput(''); setSelectSale(true); return; }
+        if (/^(?:(?:decime|dec[ií]me|mostrame|cu[aá]l es|a cu[aá]nto (?:est[aá]|cotiza)|cu[aá]nto (?:est[aá]|vale)|cotizaci[oó]n (?:del|de)|precio (?:del|de))\s+)?(?:el\s+)?d[oó]lar(?:\s+(?:mep|bolsa|blue|oficial|ccl|contado con liqui))?(?:\s+hoy)?[?¿.!]*$/i.test(trimmed)) {
+            if (/\b(mep|bolsa|blue|oficial|ccl)\b|contado con liqui/i.test(trimmed)) void showDollar(trimmed);
+            else { setInput(''); setSelectDollar(true); setMessages(current => [...current, { role: 'user', content: trimmed }, { role: 'assistant', content: '¿Qué dólar querés consultar: oficial, blue, MEP o CCL?' }]); }
+            return;
+        }
         if (/dividendo/.test(intent) && /(mis |me |m[ií]o|cartera|acciones|cedears|pr[oó]ximo|ver|consultar|mostrar|mostrame)/.test(intent)) { setInput(''); void showDividends(trimmed); return; }
         if (!configured.includes(provider)) { setSettings(true); setError('Primero agregá una API key.'); return; }
         const next: Message[] = [...(editing == null ? messages : messages.slice(0, editing)), { role: 'user', content: trimmed }]; setMessages(next); setInput(''); setEditing(null); setBusy(true); setError('');
@@ -137,7 +182,7 @@ export default function MarketChat({ items, settingsRequest, onAdd, onSell, dirt
     return <>
         {!open && <button type="button" onClick={() => { setSettings(false); setOpen(true); }} className="fixed bottom-5 right-5 z-40 h-[72px] w-[72px] rounded-full border border-[var(--line2)] bg-[var(--surface)] p-1 shadow-[0_12px_40px_rgba(0,0,0,.28)] transition-transform hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-[var(--sig)]" aria-label="Abrir asistente de mercado" title="Abrir asistente de mercado"><Avatar /></button>}
         {open && <section role="dialog" aria-label="Asistente de mercado" className="fixed bottom-0 right-0 z-50 flex h-[min(720px,100dvh)] w-full flex-col overflow-hidden border border-[var(--line2)] bg-[var(--surface)] shadow-[0_20px_80px_rgba(0,0,0,.35)] sm:bottom-5 sm:right-5 sm:h-[min(720px,calc(100dvh-40px))] sm:w-[420px] sm:rounded-[24px]">
-            <header className="flex items-center gap-3 border-b border-[var(--line)] px-5 py-4"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--sig)]/15 text-[var(--sig)]"><Avatar thinking={busy} /></div><div className="min-w-0 flex-1"><h2 className="text-[15px] font-medium">Asistente de mercado</h2><p className="mu mt-0.5 text-[11px]">Tu espacio para entender e investigar</p></div><button type="button" title="Nueva conversación" aria-label="Nueva conversación" onClick={() => { setMessages([]); setDraft(null); setError(''); }} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><HugeiconsIcon icon={CircleFadingPlusIcon} size={18} /></button><button type="button" title="Configurar API key" aria-label="Configurar API key" onClick={() => { setSettings(true); setError(''); }} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><HugeiconsIcon icon={Key01Icon} size={17} /></button><button type="button" aria-label="Cerrar chat" onClick={() => setOpen(false)} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></header>
+            <header className="flex items-center gap-3 border-b border-[var(--line)] px-5 py-4"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--sig)]/15 text-[var(--sig)]"><Avatar thinking={busy} /></div><div className="min-w-0 flex-1"><h2 className="text-[15px] font-medium">Asistente de mercado</h2><p className="mu mt-0.5 text-[11px]">Tu espacio para entender e investigar</p></div><button type="button" title="Nueva conversación" aria-label="Nueva conversación" disabled={busy} onClick={() => { setMessages([]); setDraft(null); setSelectDollar(false); setError(''); }} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><HugeiconsIcon icon={CircleFadingPlusIcon} size={18} /></button><button type="button" title="Configurar API key" aria-label="Configurar API key" onClick={() => { setSettings(true); setError(''); }} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><HugeiconsIcon icon={Key01Icon} size={17} /></button><button type="button" aria-label="Cerrar chat" onClick={() => setOpen(false)} className="rounded-xl p-2 text-[var(--muted)] hover:bg-[var(--raised)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></header>
             {configured.length > 0 && <div className="flex items-center gap-2 border-b border-[var(--line)] px-5 py-3"><span className="mu mr-1 text-[11px]">Proveedor</span>{configured.map(p => <button key={p} type="button" onClick={() => { setProvider(p); setError(''); }} aria-pressed={provider === p} className={`rounded-full border px-3 py-1.5 text-[11px] ${provider === p ? 'border-[var(--sig)] text-[var(--sig)]' : 'border-[var(--line)] text-[var(--muted)]'}`}>{labels[p]}</button>)}</div>}
             {<div className="flex-1 overflow-y-auto px-5 py-5" aria-live="polite">{!messages.length ? <div className="flex h-full flex-col justify-center"><div className="grid h-14 w-14 place-items-center rounded-[20px] border border-[var(--line2)] bg-[var(--raised)] text-[var(--sig)]"><Avatar /></div><p className="mu mt-6 text-[10px] uppercase tracking-[.18em]">Tu copiloto financiero</p><h3 className="mt-2 text-[25px] font-light leading-tight tracking-tight">El mercado, un poco<br />más claro<span className="sig">.</span></h3><p className="mu mt-3 max-w-[300px] text-[12px] leading-5">Preguntá sobre activos, noticias o conceptos. Puedo investigar y ayudarte a entender tu cartera.</p><div className="mt-6 space-y-2">{suggestions.map(s => <button type="button" key={s} onClick={() => void send(s)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--raised)] px-3.5 py-3 text-left text-[12px] transition-colors hover:border-[var(--line2)]"><span>{s}</span><HugeiconsIcon icon={ChevronLeft} size={14} className=" text-[var(--muted)]" /></button>)}</div></div> : <div className="space-y-5">{messages.map((m, index) => <div key={index} className={m.role === 'user' ? 'ml-8 rounded-2xl rounded-tr-sm bg-[var(--raised)] px-4 py-3' : 'mr-2'}><p className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">{m.role === 'assistant' ? <>Asistente</> : 'Vos'}</p><p className="whitespace-pre-wrap break-words text-[13px] leading-6">{m.content}</p>{m.role === 'user' && !busy && !draft && <button type="button" className="mu mt-2 text-[10px] underline" onClick={() => { setEditing(index); setInput(m.content); }}>Editar pregunta</button>}{!!m.citations?.length && <div className="mt-3 flex flex-wrap gap-2">{m.citations.map((c, i) => <a key={i} href={c.url} target="_blank" rel="noopener noreferrer" className="max-w-full truncate rounded-full border border-[var(--line2)] px-3 py-1 text-[10px] text-[var(--sig)]">{c.title || `Fuente ${i + 1}`} ↗</a>)}</div>}</div>)}{busy && <p role="status" className="mu flex items-center gap-2 text-[12px]"><span className="h-10 w-10 shrink-0"><Avatar thinking /></span> Investigando tu consulta…</p>}<div ref={end} /></div>}</div>}
             {error && <p role="alert" className="mx-5 mb-2 rounded-xl bg-[var(--neg)]/10 p-3 text-[11px] text-[var(--neg)]">{error}</p>}

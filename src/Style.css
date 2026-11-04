@@ -92,6 +92,10 @@ input {
   margin-bottom: 10px;
 }
 
+input {
+  font-size: 16px;
+}
+
 .lb {
   font: 400 12px 'Geist Mono', monospace;
   color: var(--muted);
