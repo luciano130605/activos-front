@@ -4,7 +4,7 @@ import { cedearName } from './assets';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Calendar01Icon, Calendar03Icon, CalendarMinusIcon, ChevronLeftIcon, ChevronRightIcon, ListViewIcon, RightToLeftListBulletIcon } from '@hugeicons/core-free-icons';
 
-type Event = { payDate: string; exDate: string; amountPerShare: number; eligible: boolean; estimatedGross: number };
+type Event = { payDate: string; exDate: string; amountPerShare: number; eligible: boolean; estimatedGross: number; estimated?: boolean; sourcePayDate?: string };
 type Position = { id: string; name: string; ticker: string; kind: 'stock' | 'cedear'; units: number; ratio?: number; status: 'ok' | 'missing_ratio' | 'unavailable'; events?: Event[] };
 type Result = { configured: boolean; items: Position[] };
 type Row = Event & { position: Position };
@@ -44,7 +44,7 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
     useEffect(() => {
         let active = true;
         setLoading(true); setError('');
-        cachedDividends<Result>(`activos:dividendos:${userId}`, portfolioKey, 'dividends', data => Boolean(data?.configured && Array.isArray(data.items) && data.items.every(item => item.status !== 'unavailable'))).then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudieron consultar los dividendos. Volvé a intentar más tarde.'); }).finally(() => { if (active) setLoading(false); });
+        cachedDividends<Result>(`activos:dividendos:v2:${userId}`, portfolioKey, 'dividends', data => Boolean(data?.configured && Array.isArray(data.items) && data.items.every(item => item.status !== 'unavailable'))).then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudieron consultar los dividendos. Volvé a intentar más tarde.'); }).finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
     }, [userId, portfolioKey]);
     const money = (n: number) => hidden ? '****' : usd(n);
@@ -52,7 +52,7 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
     const todayIso = isoDate(new Date());
     const upcoming = events.filter(e => e.payDate >= todayIso);
     const next = upcoming.find(e => e.eligible) ?? upcoming[0];
-    const upcomingTotal = upcoming.reduce((s, e) => s + (e.eligible ? e.estimatedGross : 0), 0);
+    const upcomingTotal = upcoming.reduce((s, e) => s + (e.eligible && !e.estimated ? e.estimatedGross : 0), 0);
     const monthKey = isoDate(month).slice(0, 7);
     const monthEvents = events.filter(e => e.payDate.startsWith(monthKey));
     const monthTotal = monthEvents.reduce((s, e) => s + (e.eligible ? e.estimatedGross : 0), 0);
@@ -78,18 +78,19 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
     const payRow = (e: Row, key: string) => <article key={key} className="flex items-start gap-4 border-t border-[var(--line)] py-4 first:border-0">
         <div className="dd">{at(e.payDate).getDate()}<small>{at(e.payDate).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '')}</small></div>
         <div className="min-w-0 flex-1"><p className="truncate text-[14px] font-medium">{e.position.name} <span className="mu ml-1">{e.position.ticker}</span></p>
-            <p className="mu mt-1 text-[11px]">{when(e.payDate)} · fecha ex {date(e.exDate)}{e.position.kind === 'cedear' && ` · ratio ${e.position.ratio}:1`}</p>
+            <p className="mu mt-1 text-[11px]">{when(e.payDate)} · {e.estimated ? 'fecha ex estimada' : 'fecha ex'} {date(e.exDate)}{e.position.kind === 'cedear' && ` · ratio ${e.position.ratio}:1`}</p>
             <p className="mu mt-1 text-[11px]">{money(e.amountPerShare)} por acción{e.position.kind === 'cedear' ? ' subyacente' : ''} · {e.position.units.toLocaleString('es-AR', { maximumFractionDigits: 6 })} {e.position.kind === 'cedear' ? 'CEDEARs' : 'acciones'}</p>
-            {!e.eligible && <p className="mt-1 text-[11px] text-[var(--neg)]">Tu compra es posterior a la fecha de corte: sin derecho.</p>}</div>
-        <span className={`pill ${e.eligible ? '' : 'neg'}`}>{e.eligible ? money(e.estimatedGross) : 'Sin derecho'}</span>
+            {e.estimated && <p className="mt-1 text-[11px] text-[var(--sig)]">Estimado · basado en el pago del {date(e.sourcePayDate!)}. Fecha y monto sin confirmar.</p>}
+            {!e.eligible && !e.estimated && <p className="mt-1 text-[11px] text-[var(--neg)]">Tu compra es posterior a la fecha de corte: sin derecho.</p>}</div>
+        <span className={`pill ${e.estimated ? 'border border-dashed border-[var(--sig)]' : e.eligible ? '' : 'neg'}`}>{e.estimated ? `Est. ${money(e.estimatedGross)}` : e.eligible ? money(e.estimatedGross) : 'Sin derecho'}</span>
     </article>;
 
     return <div className="space-y-3.5">
         <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-            {kpi('01 — PRÓXIMO PAGO', ready && next ? date(next.payDate) : '—', next ? `${next.position.ticker} · ${when(next.payDate)}` : 'Sin pagos anunciados')}
+            {kpi('01 — PRÓXIMO PAGO', ready && next ? date(next.payDate) : '—', next ? `${next.position.ticker} · ${next.estimated ? 'estimado · ' : ''}${when(next.payDate)}` : 'Sin pagos anunciados')}
             {kpi('02 — A COBRAR (ANUNCIADO)', ready ? money(upcomingTotal) : '—', 'Bruto · pagos futuros con derecho', true)}
             {kpi('03 — ESTIMADO DEL MES', ready ? money(monthTotal) : '—', month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }))}
-            {kpi('04 — PAGOS ANUNCIADOS', ready ? String(upcoming.length) : '—', `${byTicker.length} ${byTicker.length === 1 ? 'activo' : 'activos'} con derecho`)}
+            {kpi('04 — PAGOS ANUNCIADOS', ready ? String(upcoming.filter(e => !e.estimated).length) : '—', 'Solo pagos anunciados')}
         </div>
         {dirty && <p className="rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">Hay cambios sin guardar: los dividendos usan la última cartera guardada en tu cuenta.</p>}
         {loading ? <p className="p-4 text-[13px] text-[var(--muted)]" role="status">Consultando dividendos…</p> : error ? <p className="p-4 text-[13px] text-[var(--neg)]" role="alert">{error}</p> : !result?.configured ? <p className="card p-5 text-[13px] text-[var(--muted)]">Para consultar dividendos, configurá MASSIVE_API_KEY en el backend.</p> : <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
@@ -98,11 +99,11 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
                     <h2 className="text-[20px] font-light tracking-tight">{view === 'agenda' ? 'Próximos pagos' : 'Calendario de pagos'}</h2>
                     <div className="seg" role="group" aria-label="Vista"><button type="button" aria-pressed={view === 'agenda'} onClick={() => setView('agenda')}><HugeiconsIcon icon={RightToLeftListBulletIcon} size={14} className="mr-1.5 inline" />Lista</button><button type="button" aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}><HugeiconsIcon icon={Calendar01Icon} size={14} className="mr-1.5 inline" />Calendario</button></div>
                 </div>
-                {view === 'agenda' ? (byMonth.length ? byMonth.map(([key, rows]) => <div key={key} className="mb-5 last:mb-0"><div className="mb-1 flex items-center justify-between"><h3 className="lb capitalize">{at(`${key}-01`).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><span className="mu text-[11px]">{money(rows.reduce((s, e) => s + (e.eligible ? e.estimatedGross : 0), 0))}</span></div>{rows.map((e, i) => payRow(e, `${e.position.id}-${e.exDate}-${i}`))}</div>) : <div className="grid min-h-[200px] place-items-center text-center"><div><HugeiconsIcon icon={CalendarMinusIcon} size={24} className="mx-auto mb-3 text-[var(--faint)]" /><p className="text-[13px] text-[var(--muted)]">{result.items.length ? 'No hay pagos futuros anunciados.' : 'No hay acciones ni CEDEARs en tu cartera guardada.'}</p></div></div>) : <>
+                {view === 'agenda' ? (byMonth.length ? byMonth.map(([key, rows]) => <div key={key} className="mb-5 last:mb-0"><div className="mb-1 flex items-center justify-between"><h3 className="lb capitalize">{at(`${key}-01`).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><span className="mu text-[11px]">{money(rows.reduce((s, e) => s + (e.eligible ? e.estimatedGross : 0), 0))}</span></div>{rows.map((e, i) => payRow(e, `${e.position.id}-${e.exDate}-${i}`))}</div>) : <div className="grid min-h-[200px] place-items-center text-center"><div><HugeiconsIcon icon={CalendarMinusIcon} size={24} className="mx-auto mb-3 text-[var(--faint)]" /><p className="text-[13px] text-[var(--muted)]">{result.items.length ? 'No hay pagos futuros anunciados ni estimados.' : 'No hay acciones ni CEDEARs en tu cartera guardada.'}</p></div></div>) : <>
                     <div className="mb-4 flex items-center justify-between gap-2"><h3 className="text-[16px] font-medium capitalize">{month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><div className="flex items-center gap-1">{selected && <button type="button" onClick={() => setSelected(null)} className="mu mr-2 underline">Ver todo el mes</button>}<button type="button" onClick={() => changeMonth(-1)} aria-label="Mes anterior" className="ibtn !h-9 !w-9"><HugeiconsIcon icon={ChevronLeftIcon} size={16} /></button><button type="button" onClick={() => changeMonth(1)} aria-label="Mes siguiente" className="ibtn !h-9 !w-9"><HugeiconsIcon icon={ChevronRightIcon} size={16} /></button></div></div>
                     <div className="grid grid-cols-7 gap-1 sm:gap-1.5" role="group" aria-label={`Días de ${month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`}>
                         {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => <div key={d} className="mu pb-2 text-center text-[10px]">{d}</div>)}
-                        {cells.map((day, index) => { if (day < 1 || day > dayCount) return <div key={`b-${index}`} />; const key = `${monthKey}-${String(day).padStart(2, '0')}`; const daily = monthEvents.filter(e => e.payDate === key); return <button key={key} type="button" onClick={() => setSelected(selected === key ? null : key)} aria-pressed={selected === key} aria-label={`${date(key)}: ${daily.length} pagos`} className={`relative flex min-h-[53px] flex-col items-center rounded-lg border p-1 text-[12px] transition-colors sm:min-h-[76px] sm:items-start sm:p-2 ${selected === key ? 'border-[var(--sig)] bg-[var(--sigbg)]' : 'border-[var(--line)] hover:bg-[var(--raised)]'} ${key === todayIso ? 'font-semibold text-[var(--sig)]' : 'text-[var(--muted)]'}`}><span>{day}</span>{daily.length > 0 && <><span className="mt-auto hidden max-w-full truncate rounded bg-[var(--sigbg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--sig)] sm:block">{daily[0].position.ticker}{daily.length > 1 ? ` +${daily.length - 1}` : ''}</span><span className="mb-1 mt-auto h-1.5 w-1.5 rounded-full bg-[var(--sig)] sm:hidden" /></>}</button>; })}
+                        {cells.map((day, index) => { if (day < 1 || day > dayCount) return <div key={`b-${index}`} />; const key = `${monthKey}-${String(day).padStart(2, '0')}`; const daily = monthEvents.filter(e => e.payDate === key); return <button key={key} type="button" onClick={() => setSelected(selected === key ? null : key)} aria-pressed={selected === key} aria-label={`${date(key)}: ${daily.length} pagos${daily.some(e => e.estimated) ? ', incluye estimados' : ''}`} className={`relative flex min-h-[53px] flex-col items-center rounded-lg border p-1 text-[12px] transition-colors sm:min-h-[76px] sm:items-start sm:p-2 ${selected === key ? 'border-[var(--sig)] bg-[var(--sigbg)]' : 'border-[var(--line)] hover:bg-[var(--raised)]'} ${key === todayIso ? 'font-semibold text-[var(--sig)]' : 'text-[var(--muted)]'}`}><span>{day}</span>{daily.length > 0 && <><span className="mt-auto hidden max-w-full truncate rounded bg-[var(--sigbg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--sig)] sm:block">{daily[0].estimated ? 'Est. ' : ''}{daily[0].position.ticker}{daily.length > 1 ? ` +${daily.length - 1}` : ''}</span><span className="mb-1 mt-auto h-1.5 w-1.5 rounded-full bg-[var(--sig)] sm:hidden" /></>}</button>; })}
                     </div>
                     {shownEvents.length > 0 && <div className="mt-5">{shownEvents.map((e, i) => payRow(e, `c-${e.position.id}-${e.exDate}-${i}`))}</div>}
                 </>}
@@ -112,7 +113,7 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
                 {unavailable.length > 0 && <div className="mt-6 rounded-xl border border-[var(--line2)] bg-[var(--raised)] p-3 text-[11px] leading-5 text-[var(--muted)]">No se pudo calcular {unavailable.map(i => i.ticker).join(', ')}: falta el ratio o la cotización de dividendos.</div>}
             </section>
         </div>}
-        <p className="px-1 text-[11px] leading-5 text-[var(--muted)]">La fecha corresponde al pago del activo de origen; la acreditación del CEDEAR puede ser posterior. El monto es estimado, bruto, antes de impuestos y comisiones. La elegibilidad depende de la fecha de corte y las tenencias efectivas. Ratios orientativos de <a className="underline" href="https://ferminrp.github.io/google-sheets-argento/" target="_blank" rel="noreferrer">Google Sheets Argento</a>; dividendos de <a className="underline" href="https://massive.com/docs/rest/stocks/corporate-actions/dividends" target="_blank" rel="noreferrer">Massive</a>. Verificá el pago en tu bróker.</p>
+        <p className="px-1 text-[11px] leading-5 text-[var(--muted)]">Los pagos estimados repiten la fecha y el monto del año anterior y no están confirmados. Los totales mensuales y por activo incluyen estimaciones. La fecha corresponde al pago del activo de origen; la acreditación del CEDEAR puede ser posterior. El monto es estimado, bruto, antes de impuestos y comisiones. La elegibilidad depende de la fecha de corte y las tenencias efectivas. Ratios orientativos de <a className="underline" href="https://ferminrp.github.io/google-sheets-argento/" target="_blank" rel="noreferrer">Google Sheets Argento</a>; dividendos de <a className="underline" href="https://massive.com/docs/rest/stocks/corporate-actions/dividends" target="_blank" rel="noreferrer">Massive</a>. Verificá el pago en tu bróker.</p>
     </div>;
 }
 
