@@ -3,7 +3,7 @@ import Select from './Select';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { PointerEvent } from 'react';
+import type { PointerEvent, ReactNode } from 'react';
 import { Cancel01Icon } from '@hugeicons/core-free-icons';
 
 type Row = {
@@ -190,6 +190,14 @@ const getValue = (points: Point[], t: number) => {
 
 };
 
+function Explanation({ label, children, content }: { label: string; children: ReactNode; content: ReactNode }) {
+    const [open, setOpen] = useState(false);
+    return <span className="group relative inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); (event.currentTarget.querySelector('button') as HTMLButtonElement | null)?.blur(); } }}>
+        <button type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen(true)} onFocus={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--muted)]">{children}</button>
+        {open && <span role="tooltip" className="absolute left-0 top-full z-40 mt-2 block w-[min(260px,75vw)] rounded-xl border border-[var(--line2)] bg-[var(--surface)] p-3 text-left text-[11px] font-normal leading-5 text-[var(--muted)] shadow-xl">{content}</span>}
+    </span>;
+}
+
 export default function Benchmarks({
 
     start,
@@ -225,6 +233,10 @@ export default function Benchmarks({
     selectionLabel,
 
     averageMonthlyReturn,
+
+    composition,
+
+    compositionIncomplete,
 
 }: {
 
@@ -262,7 +274,16 @@ export default function Benchmarks({
 
     averageMonthlyReturn: number | null;
 
+    composition: { label: string; value: number; color: string; count: number }[];
+
+    compositionIncomplete: boolean;
+
 }) {
+
+    const compositionTotal = composition.reduce((sum, item) => sum + item.value, 0);
+    const compositionAvailable = Number.isFinite(compositionTotal) && compositionTotal > 0 && composition.every(item => Number.isFinite(item.value));
+    const compositionRows = composition.filter(item => item.count > 0 && Number.isFinite(item.value) && item.value > 0).sort((a, b) => b.value - a.value);
+    const compositionContent = <><span className="block font-medium text-[var(--ink)]">Composición actual</span>{compositionAvailable ? <><span className="mt-1 block">Participación por tipo sobre el valor actual de tu cartera.</span><span className="mt-2 block space-y-1">{compositionRows.map(item => <span key={item.label} className="flex items-center justify-between gap-4"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: item.color }} />{item.label}</span><span className="font-mono tabular-nums text-[var(--ink)]">{(item.value / compositionTotal * 100).toLocaleString('es-AR', { maximumFractionDigits: 1 })}%</span></span>)}</span>{compositionIncomplete && <span className="mt-2 block">Algunas cotizaciones faltan; se usa el monto registrado.</span>}</> : <span className="mt-1 block">No se puede calcular la distribución con los valores disponibles.</span>}</>;
 
     const [data, setData] = useState<Partial<Series> | null>(null);
 
@@ -1055,25 +1076,13 @@ export default function Benchmarks({
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
 
-                {result?.lines.some(line => line.key === 'cartera') && <span className="mr-1 inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium">
+                {result?.lines.some(line => line.key === 'cartera') && (selection === 'all' ? <Explanation label="Ver composición actual de mi cartera" content={compositionContent}><span className="h-2 w-2 rounded-full" style={{ background: colors.cartera }} />{selectionLabel}<span aria-hidden="true" className="text-[var(--muted)]">ⓘ</span></Explanation> : <span className="mr-1 inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium"><span className="h-2 w-2 rounded-full" style={{ background: colors.cartera }} />{selectionLabel}</span>)}
 
-                    <span
-
-                        className="h-2 w-2 rounded-full"
-
-                        style={{ background: colors.cartera }}
-
-                    />
-
-                    {selectionLabel}
-
-                </span>}
 
                 {keys.map(key => (
 
+                    <span key={key} className="inline-flex items-center gap-1">
                     <button
-
-                        key={key}
 
                         type="button"
 
@@ -1124,6 +1133,8 @@ export default function Benchmarks({
                         {labels[key]}
 
                     </button>
+                    {(key === 'merval' || key === 'uva') && <Explanation label={`Qué es ${labels[key]}`} content={key === 'merval' ? 'El Merval es un índice que sigue la evolución de un grupo de acciones argentinas que cotizan en bolsa. Sirve como referencia general del mercado local.' : 'La UVA es una unidad de valor que se actualiza según la inflación. Se usa, por ejemplo, en algunos préstamos y plazos fijos.'}><span aria-hidden="true" className="font-mono text-[12px]">ⓘ</span></Explanation>}
+                    </span>
 
                 ))}
 
