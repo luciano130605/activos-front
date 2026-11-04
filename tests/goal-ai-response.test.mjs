@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseAllocationResponse } from '../src/goal-ai-response.ts';
 
 test('acepta preguntas y distribuciones completas que suman 100', () => {
-    assert.deepEqual(parseAllocationResponse('{"message":"¿A qué plazo?","allocation":null}'), { message: '¿A qué plazo?', allocation: null });
+    assert.deepEqual(parseAllocationResponse('{"message":"¿A qué plazo?","allocation":null,"choices":["Menos de un año","Más de un año"]}'), { message: '¿A qué plazo?', allocation: null, choices: ['Menos de un año', 'Más de un año'] });
     const allocation = { rate: 10, cedear: 30, index: 10, stock: 0, crypto: 10, 'arg-stock': 5, bond: 20, fund: 15 };
     assert.deepEqual(parseAllocationResponse(JSON.stringify({ message: 'Propuesta', allocation })).allocation, allocation);
 });
