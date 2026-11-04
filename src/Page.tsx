@@ -10,6 +10,8 @@ import AssetSearchDialog, { type AssetKind, type PickedAsset } from './AssetSear
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { INDEXES, cedearName, indexName, isIndexTicker } from './assets';
 import Distribution from './Distribution';
+import { lazy, Suspense } from 'react';
+const PortfolioMap = lazy(() => import('./PortfolioMap'));
 import MacroDashboard from './MacroDashboard';
 import ContributionStreak from './ContributionStreak';
 import Benchmarks from './Benchmarks';
@@ -138,6 +140,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const titleRef = useRef<HTMLHeadingElement>(null);
     const previousPage = useRef(page);
     const [filter, setFilter] = useState<Filter>('all');
+    const [investmentView, setInvestmentView] = useState<'list' | 'map'>('list');
     const [hiddenSummaryKinds, setHiddenSummaryKinds] = useState<Exclude<Filter, 'all'>[]>([]);
     const [search, setSearch] = useState('');
     const [display, setDisplay] = preference('display');
@@ -298,7 +301,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     };
     const byAsset = groupDistribution(i => i.kind === 'rate' ? i.name : `${i.kind === 'cedear' ? 'CEDEAR' : kind === 'stock' ? 'Acción' : 'Cripto'} · ${i.coin}`);
     const bySector = groupDistribution(i => i.kind === 'crypto' ? 'Criptomonedas' : i.kind === 'cedear' || i.kind === 'stock' ? classifications[i.coin ?? '']?.[0] ?? 'Sin clasificar' : 'Sin clasificar');
-    const byCountry = groupDistribution(i => i.kind === 'crypto' ? 'Sin país asociado' : i.kind === 'cedear' || i.kind === 'stock' ? classifications[i.coin ?? '']?.[1] ?? 'Sin clasificar' : 'Sin clasificar');
+    const countryOf = (i: Investment) => i.kind === 'crypto' ? 'Sin país asociado' : i.kind === 'cedear' || i.kind === 'stock' ? classifications[i.coin ?? '']?.[1] ?? 'Sin clasificar' : 'Sin clasificar';
+    const byCountry = groupDistribution(countryOf);
+    const mapPositions = items.map(investment => ({ investment, country: countryOf(investment), value: fx(valueAt(investment, today, prices, today, officialRate), investment.currency) }));
     const makeChart = (chartItems: Investment[], chartCurrent: number) => {
         if (!chartItems.length || !Number.isFinite(chartCurrent) || !fxRate && chartItems.some(i => i.currency !== display)) return null;
         const earliest = Math.min(today, ...chartItems.map(i => dateMillis(i.date)));
@@ -739,6 +744,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
 
+                {page === 'investments' && <div className="mb-4 flex justify-end"><div className="seg" role="group" aria-label="Vista de inversiones"><button type="button" aria-pressed={investmentView === 'list'} onClick={() => setInvestmentView('list')}>Lista</button><button type="button" aria-pressed={investmentView === 'map'} onClick={() => setInvestmentView('map')}>Mapa 3D</button></div></div>}
+                {page === 'investments' && investmentView === 'map' && <Suspense fallback={<div className="card p-8 text-[13px] text-[var(--muted)]" role="status">Cargando mapa…</div>}><PortfolioMap positions={mapPositions} format={fmt} /></Suspense>}
                 <div className="flex flex-col">
                     <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}>
                         <section className="mb-3.5 grid gap-3.5 lg:grid-cols-[1.5fr_1fr]" aria-label="Valor de la cartera">
@@ -801,7 +808,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     {page === 'inflation' && <Inflation />}
                     <div style={{ order: panelOrder('distribution') }} hidden={page !== 'summary' || !visiblePanels.includes('distribution')}>{items.length > 0 && <Distribution byKind={byKind} byCurrency={byCurrency} byAsset={byAsset} bySector={bySector} byCountry={byCountry} format={fmt} />}</div>
 
-                    <div style={{ order: panelOrder('investments') }} hidden={page !== 'investments' && (page !== 'summary' || !visiblePanels.includes('investments'))}>
+                    <div style={{ order: panelOrder('investments') }} hidden={(page !== 'investments' || investmentView !== 'list') && (page !== 'summary' || !visiblePanels.includes('investments'))}>
                         <section className="card overflow-hidden" aria-label="Mis inversiones">
                             <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Tocá una inversión para ver sus detalles · ⋯ para más opciones</p></div>
                                 <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar precios" /></div></div>
@@ -821,11 +828,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                         </section>
                     </div>
                 </div>
-                {page === 'investments' && <AssetPerformance items={items} hidden={hidden} />}
-                {page === 'investments' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>{mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}</span></div>)}</div></section>}
+                {page === 'investments' && investmentView === 'list' && <AssetPerformance items={items} hidden={hidden} />}
+                {page === 'investments' && investmentView === 'list' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>{mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}</span></div>)}</div></section>}
                 <footer className="mu mt-8 space-y-2 text-[10px]">
                     <div className="flex flex-wrap items-center justify-between gap-2"><span>ACTIVOS / PANEL PERSONAL</span><span>Precios orientativos · No es asesoramiento financiero.</span></div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Fuentes de las cotizaciones"><QuoteSource source="usdc" label="USDC" /><QuoteSource source="dollar" label="Dólares" /><QuoteSource source="crypto" label="Cripto" /><QuoteSource source="cedear" label="CEDEARs e índices" /></div>
+                    <nav aria-label="Información legal" className="flex flex-wrap gap-2 pt-2"><a href="/politicas" className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[11px] hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2">Política de privacidad</a><a href="/condiciones" className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[11px] hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2">Términos y condiciones</a></nav>
                 </footer>
             </main>
         </div>
