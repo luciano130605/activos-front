@@ -6,6 +6,7 @@ export const pages = {
     inflation: { path: '/inflacion', label: 'Inflación', title: 'Inflación', description: 'Consultá la inflación de Argentina y Estados Unidos de los últimos meses y años.' },
     investments: { path: '/mis-inversiones', label: 'Mis inversiones', title: 'Mis inversiones', description: 'Administrá tus activos y las posiciones de tu cartera.' },
     assistant: { path: '/asistente', label: 'Asistente', title: 'Asistente', description: 'Tu espacio para investigar y administrar tu cartera.' },
+    marketCalendar: { path: '/calendario-mercado', label: 'Calendario de mercado', title: 'Calendario de mercado', description: 'Feriados bursátiles, balances y eventos de deuda argentina.' },
     dividends: { path: '/dividendos', label: 'Dividendos', title: 'Dividendos', description: 'Próximos pagos anunciados para tus inversiones.' },
 } as const;
 
