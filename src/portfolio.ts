@@ -40,7 +40,14 @@ export type Preferences = {
     showQuotesBar?: boolean;
 };
 
+export type ImportOperation = {
+    id: string; status: 'pending' | 'confirmed' | 'discarded'; source: string;
+    asset: string; name: string; kind: string; side: string; date: string;
+    quantity: string; price: string; amount: string; currency: string; fee: string; externalId: string; executions: string;
+};
+
 export type Portfolio = {
+    imports?: ImportOperation[];
     investments: Investment[];
     sales?: Sale[];
     preferences: Preferences;

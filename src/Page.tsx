@@ -1,10 +1,11 @@
+import ImportDocuments from './ImportDocuments';
 import { createPasskey, passkeyStatus, preparePasskey, supportsPasskeys, type RegistrationOptions } from './passkeys';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { coinPriceOn, coinPricesNow, usdcArsNow } from './coingecko';
 import { cedearPriceOn, cedearPricesNow, stockPrice, stockPricesNow } from './cedears';
 import AssetSearchDialog, { type AssetKind, type PickedAsset } from './AssetSearchDialog';
 import ContextMenu, { type MenuItem } from './ContextMenu';
-import { INDEXES, indexName, isIndexTicker } from './assets';
+import { INDEXES, cedearName, indexName, isIndexTicker } from './assets';
 import Distribution from './Distribution';
 import MacroDashboard from './MacroDashboard';
 import ContributionStreak from './ContributionStreak';
@@ -162,6 +163,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [importPreview, setImportPreview] = useState<{ items: Investment[]; sales: Sale[]; skipped: number } | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
     const [name, setName] = useState('');
+    const [selectedAsset, setSelectedAsset] = useState<PickedAsset | null>(null);
     const [amount, setAmount] = useState('');
     const [priceMode, setPriceMode] = useState<'current' | 'purchase'>('current');
     const [purchasePrice, setPurchasePrice] = useState('');
@@ -192,7 +194,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const cedears = useMemo(() => [...new Set(items.filter(i => i.kind === 'cedear' && i.coin).map(i => i.coin!))], [items]);
     const stocks = useMemo(() => [...new Set(items.filter(i => i.kind === 'stock' && i.coin).map(i => i.coin!))], [items]);
     const assetId = kind !== 'crypto' && kind !== 'rate' ? coin.trim().toUpperCase() : coin.trim().toLowerCase();
-    const quoteSource = kind === 'crypto' ? 'CoinGecko' : 'Data912';
+    const quoteSource = kind === 'crypto' ? 'CoinGecko' : kind === 'stock' ? 'Data912 o Yahoo Finance' : 'Data912';
     const todayDate = localISO();
     const activeQuote = modal && kind !== 'rate' && assetQuote?.id === assetId && assetQuote.date === todayDate && assetQuote.kind === kind ? assetQuote : null;
     const quotePrice = activeQuote?.status === 'ready' ? activeQuote.price : undefined;
@@ -471,11 +473,13 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const chartPoint = chartIndex == null ? null : chart?.points[chartIndex] ?? null;
     const pickKind = (k: Kind) => { if (k === kind && !indexMode) return; setIndexMode(false); setKind(k); if (k === 'cedear') setCurrency('ARS'); else if (k === 'stock') setCurrency('USD'); setCoin(k === 'cedear' || k === 'stock' ? 'AAPL' : 'bitcoin'); setAssetQuote(null); setError(''); };
     function openModal() {
+        setSelectedAsset(null);
         setPriceMode('current'); setPurchasePrice('');
         setError(''); setEditingId(null); setName(''); setAmount(''); setRate(''); setDate(localISO());
         setIndexMode(false); setAssetQuote(null); setModal(true);
     }
     function openEdit(i: Investment) {
+        setSelectedAsset(null);
         setPriceMode('current'); setPurchasePrice('');
         setError(''); setEditingId(i.id); setIndexMode(i.kind === 'cedear' && isIndexTicker(i.coin)); setKind(i.kind); setName(i.name); setAmount(String(i.amount)); setDate(i.date);
         setCurrency(i.currency); setRate(i.rate != null ? String(i.rate) : ''); setPeriod(i.period ?? 'year');
@@ -484,18 +488,22 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     }
     function closeModal() { setModal(false); setEditingId(null); }
     function selectAsset(asset: PickedAsset) {
+        setSelectedAsset(asset);
         const isIndex = asset.kind === 'index';
-        setIndexMode(isIndex); setKind(asset.kind === 'crypto' ? 'crypto' : 'cedear'); if (asset.kind !== 'crypto') setCurrency('ARS'); setCoin(asset.id); setName(asset.name.slice(0, 70));
+        setIndexMode(isIndex); setKind(asset.kind === 'crypto' ? 'crypto' : 'cedear'); if (isIndex) setCurrency('USD'); else if (asset.kind !== 'crypto') setCurrency('ARS'); setCoin(asset.id); setName(asset.name.slice(0, 70));
         setAssetQuote(null); setQuoteRequest(value => value + 1); setError(''); setAssetSearch(null); setModal(true);
     }
     function duplicate(i: Investment) { setItems(prev => [...prev, { ...i, id: crypto.randomUUID(), name: `${i.name} (copia)`.slice(0, 70) }]); setNotice('Inversión duplicada.'); }
     function add(e: FormEvent<HTMLFormElement>) {
         e.preventDefault(); setError('');
         const value = Number(amount); const todayDate = localISO();
-        if (!name.trim() || !Number.isFinite(value) || value <= 0) return setError('Ingresá un nombre y un monto válido mayor a cero.');
+        if ((kind === 'rate' && !name.trim()) || !Number.isFinite(value) || value <= 0) return setError('Ingresá un nombre y un monto válido mayor a cero.');
         if (!date || date > todayDate || !Number.isFinite(dateMillis(date))) return setError('Ingresá una fecha válida que no sea futura.');
         const cur: Currency = currency;
-        const investment: Investment = { id: editingId ?? crypto.randomUUID(), name: name.trim(), amount: value, currency: cur, date, kind };
+        const id = kind === 'crypto' ? coin.trim().toLowerCase() : coin.trim().toUpperCase();
+        const selectedName = selectedAsset && selectedAsset.id === id && (selectedAsset.kind === kind || (selectedAsset.kind === 'index' && kind === 'cedear')) ? selectedAsset.name : '';
+        const fallbackName = indexMode ? `${indexName(id)} (${id})` : selectedName || (kind !== 'crypto' ? cedearName(id) : '') || id;
+        const investment: Investment = { id: editingId ?? crypto.randomUUID(), name: (name.trim() || fallbackName).slice(0, 70), amount: value, currency: cur, date, kind };
         if (kind === 'rate') {
             const r = Number(rate);
             if (!rate.trim() || !Number.isFinite(r) || r <= -100) return setError('Ingresá una tasa válida superior a -100%.');
@@ -706,6 +714,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
                 <MarketChat showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
+                {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
 
@@ -827,10 +836,11 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             <div role="dialog" aria-modal="true" aria-labelledby="modal-title" className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[22px] border border-[var(--line2)] bg-[var(--surface)] p-5 shadow-[0_25px_90px_rgba(0,0,0,.5)] sm:max-w-[470px] sm:rounded-[22px] sm:p-6">
                 <div className="mb-5 flex items-start justify-between"><div><h2 id="modal-title" className="text-[24px] font-light tracking-tight">{editingId ? 'Editar inversión' : 'Nueva inversión'}</h2><p className="mt-1 font-mono text-[11px] text-[var(--muted)]">{editingId ? 'Modificá los datos de esta posición' : 'Registrá una posición en tu cartera'}</p></div><button onClick={closeModal} aria-label="Cerrar" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
                 <form onSubmit={add} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{(['rate', 'cedear', 'stock', 'crypto'] as const).map(k => <button type="button" key={k} onClick={() => pickKind(k)} aria-pressed={kind === k && !indexMode} className={`flex items-center justify-center gap-2 rounded-[10px] border px-2 py-2.5 text-[12px] ${kind === k && !indexMode ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}><span className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf(k) }} />{titleFor(k)}</button>)}<button type="button" aria-pressed={indexMode} onClick={() => { setIndexMode(true); setKind('cedear'); setCurrency('ARS'); setCoin('SPY'); setName('S&P 500 (SPY)'); setAssetQuote(null); setError(''); }} className={`flex items-center justify-center gap-2 rounded-[10px] border px-2 py-2.5 text-[12px] ${indexMode ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}><span className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf('index') }} />Índices</button></div>
-                    {indexMode && <div><label htmlFor="invest-index" className={label}>Índice de referencia</label><Select id="invest-index" label="Índice de referencia" value={coin} onChange={ticker => { setCoin(ticker); setName(`${indexName(ticker)} (${ticker})`.slice(0, 70)); setAssetQuote(null); setError(''); }} options={INDEXES.map(i => ({ value: i.symbol, label: `${i.name} · ${i.symbol}` }))} /><p className="mt-2 text-[11px] text-[var(--muted)]">Se registra el CEDEAR del ETF en pesos, que sigue al índice de referencia.</p></div>}
-                    <div><label htmlFor="invest-name" className={label}>Nombre</label><input id="invest-name" required maxLength={70} className={field} value={name} onChange={e => setName(e.target.value)} placeholder="Ej: S&P 500, plazo fijo..." /></div>
-                    <div className="grid grid-cols-2 gap-3"><div><label htmlFor="invest-amount" className={label}>{kind === 'rate' ? 'Monto' : priceMode === 'purchase' ? 'Monto de compra' : 'Valor actual'} ({currency})</label><input id="invest-amount" required type="number" min="0.000001" step="any" className={field} value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000" /></div><div><label htmlFor="invest-currency" className={label}>Moneda</label>{kind === 'stock' || kind === 'cedear' ? <div className={field}>{kind === 'stock' ? 'USD (USDC)' : currency === 'USD' ? 'USD (registro anterior)' : 'ARS'}</div> : <Select<Currency> id="invest-currency" label="Moneda" value={currency} onChange={setCurrency} options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }]} />}</div><div><label htmlFor="invest-date" className={label}>Fecha de compra</label><input id="invest-date" required type="date" max={localISO()} className={field} value={date} onChange={e => { setDate(e.target.value); setError(''); }} /></div></div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{(['rate', 'cedear', 'stock', 'crypto'] as const).map(k => <button type="button" key={k} onClick={() => pickKind(k)} aria-pressed={kind === k} className={`flex items-center justify-center gap-2 rounded-[10px] border px-2 py-2.5 text-[12px] ${kind === k ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}><span className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf(k) }} />{titleFor(k)}</button>)}</div>
+                    {kind === 'cedear' && <div className="flex gap-2" role="group" aria-label="Tipo de CEDEAR"><button type="button" aria-pressed={!indexMode} onClick={() => pickKind('cedear')} className="btn-ghost flex-1">CEDEAR</button><button type="button" aria-pressed={indexMode} onClick={() => { setIndexMode(true); setKind('cedear'); setCurrency('USD'); setCoin('SPY'); setName('S&P 500 (SPY)'); setAssetQuote(null); setError(''); }} className={`flex items-center justify-center gap-2 rounded-[10px] border px-2 py-2.5 text-[12px] ${indexMode ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}><span className="h-1.5 w-1.5 rounded-full" style={{ background: colorOf('index') }} />Índices</button></div>}
+                    {indexMode && <div><label htmlFor="invest-index" className={label}>Índice de referencia</label><Select id="invest-index" label="Índice de referencia" value={coin} onChange={ticker => { setCoin(ticker); setName(`${indexName(ticker)} (${ticker})`.slice(0, 70)); setAssetQuote(null); setError(''); }} options={INDEXES.map(i => ({ value: i.symbol, label: `${i.name} · ${i.symbol}` }))} /><p className="mt-2 text-[11px] text-[var(--muted)]">Se usa la cotización en pesos del CEDEAR del ETF y se convierte a USDC.</p></div>}
+                    <div><label htmlFor="invest-name" className={label}>Nombre</label><input id="invest-name" required={kind === 'rate'} maxLength={70} className={field} value={name} onChange={e => setName(e.target.value)} placeholder="Ej: S&P 500, plazo fijo..." />{kind !== 'rate' && <p className="mt-1 text-[11px] text-[var(--muted)]">Si lo dejás vacío, se usará el nombre del activo.</p>}</div>
+                    <div className="grid grid-cols-2 gap-3"><div><label htmlFor="invest-amount" className={label}>{kind === 'rate' ? 'Monto' : priceMode === 'purchase' ? 'Monto de compra' : 'Valor actual'} ({currency})</label><input id="invest-amount" required type="number" min="0.000001" step="any" className={field} value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000" /></div><div><label htmlFor="invest-currency" className={label}>Moneda</label>{kind === 'stock' || kind === 'cedear' ? <div className={field}>{kind === 'stock' || (indexMode && currency === 'USD') ? 'USD (USDC)' : currency === 'USD' ? 'USD (registro anterior)' : 'ARS'}</div> : <Select<Currency> id="invest-currency" label="Moneda" value={currency} onChange={setCurrency} options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }]} />}</div><div><label htmlFor="invest-date" className={label}>Fecha de compra</label><input id="invest-date" required type="date" max={localISO()} className={field} value={date} onChange={e => { setDate(e.target.value); setError(''); }} /></div></div>
                     {kind !== 'rate' && <fieldset><legend className={label}>¿Qué valor querés ingresar?</legend><div className="grid grid-cols-2 gap-2">{([{ value: 'current', label: 'Valor actual' }, { value: 'purchase', label: 'Valor de compra' }] as const).map(option => <button key={option.value} type="button" aria-pressed={priceMode === option.value} onClick={() => { setPriceMode(option.value); setError(''); }} className={`rounded-[10px] border px-3 py-2.5 text-[12px] ${priceMode === option.value ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)] text-[var(--muted)]'}`}>{option.label}</button>)}</div>{priceMode === 'purchase' && <div className="mt-3"><label htmlFor="purchase-price" className={label}>Precio de compra por unidad ({quoteCurrency})</label><input id="purchase-price" required type="number" min="0.000000000001" step="any" className={field} value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} placeholder="Precio que pagaste por unidad" /><p className="mt-2 text-[11px] text-[var(--muted)]">Se calcula la cantidad de unidades con el monto y el precio de compra ingresados.</p></div>}</fieldset>}
                     {kind !== 'rate' && currency !== quoteCurrency && <p className="text-[11px] text-[var(--muted)]">Para calcular las unidades y el valor en {currency} se usa el precio actual de USDC en pesos{officialRate ? ` (${money(officialRate, 'ARS')})` : ', no disponible en este momento'}. En compras anteriores no se usa la cotización histórica.</p>}
                     {kind === 'rate' ? <div className="grid grid-cols-2 gap-3"><div><label htmlFor="invest-rate" className={label}>Tasa (%)</label><input id="invest-rate" type="number" step="any" className={field} value={rate} onChange={e => setRate(e.target.value)} placeholder="8" /></div><div><label htmlFor="invest-period" className={label}>Período</label><Select<Period> id="invest-period" label="Período" value={period} onChange={setPeriod} options={[{ value: 'year', label: 'Anual' }, { value: 'month', label: 'Mensual' }]} /></div></div> : <div>

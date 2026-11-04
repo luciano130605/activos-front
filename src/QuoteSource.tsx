@@ -3,7 +3,7 @@ const sources = {
     dollar: { name: 'DolarAPI', url: 'https://dolarapi.com/v1/dolares' },
     usdc: { name: 'CoinGecko · USDC/ARS', url: 'https://www.coingecko.com/en/coins/usd-coin' },
     crypto: { name: 'CoinGecko', url: 'https://www.coingecko.com/' },
-    stock: { name: 'Data912', url: 'https://data912.com/live/usa_stocks' },
+    stock: { name: 'Data912 o Yahoo Finance', url: 'https://finance.yahoo.com/' },
     cedear: { name: 'Data912', url: 'https://data912.com/live/arg_cedears' },
 };
 

@@ -43,10 +43,24 @@ export async function cedearPriceOn(ticker: string, iso: string, today: string, 
 // Cotizaciones de acciones estadounidenses, expresadas en USD por acción.
 export async function stockPricesNow(ids: string[], signal?: AbortSignal): Promise<Record<string, number>> {
     if (!ids.length) return {};
-    let rows: LivePrice[];
+    let rows: LivePrice[] = [];
+    let data912Failed = false;
     try { rows = await request<LivePrice>('/live/usa_stocks', signal); }
-    catch (error) { if (signal?.aborted) throw error; throw new Error('No se pudo consultar la cotización de acciones en Data912. Volvé a intentar.'); }
-    return Object.fromEntries(rows.filter(row => ids.includes(row.symbol?.toUpperCase()) && Number.isFinite(row.c) && row.c > 0).map(row => [`stock:${row.symbol.toUpperCase()}`, row.c]));
+    catch (error) { if (signal?.aborted) throw error; data912Failed = true; }
+    const prices = Object.fromEntries(rows.filter(row => ids.includes(row.symbol?.toUpperCase()) && Number.isFinite(row.c) && row.c > 0).map(row => [`stock:${row.symbol.toUpperCase()}`, row.c]));
+    const missing = ids.filter(id => prices[`stock:${id}`] == null);
+    if (missing.length) {
+        try {
+            const response = await fetch(`/api/stocks/quotes?symbols=${encodeURIComponent(missing.join(','))}`, { credentials: 'include', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
+            if (!response.ok) throw new Error('Proveedor no disponible');
+            const fallback: Record<string, unknown> = await response.json();
+            for (const id of missing) if (typeof fallback[id] === 'number' && Number.isFinite(fallback[id]) && fallback[id] > 0) prices[`stock:${id}`] = fallback[id];
+        } catch (error) {
+            if (signal?.aborted) throw error;
+            if (data912Failed || missing.length === ids.length) throw new Error('No se pudo consultar la cotización de acciones. Volvé a intentar.');
+        }
+    }
+    return prices;
 }
 export async function stockPrice(ticker: string, signal?: AbortSignal): Promise<CedearQuote> {
     if (!/^[A-Z0-9.\-]+$/.test(ticker)) throw new Error('Ingresá un ticker válido, por ejemplo AAPL o MSFT.');
