@@ -13,7 +13,27 @@ const usd = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency
 const isoDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 const daysUntil = (iso: string) => Math.round((at(iso).getTime() - at(isoDate(new Date())).getTime()) / 86_400_000);
 
-function PortfolioDividends({ dirty, hidden }: { dirty: boolean; hidden: boolean }) {
+const CACHE_AGE = 24 * 60 * 60 * 1000;
+const pendingRequests = new Map<string, Promise<unknown>>();
+function cachedDividends<T>(key: string, fingerprint: string, path: string, cacheable: (value: T) => boolean): Promise<T> {
+    try {
+        const cached = JSON.parse(localStorage.getItem(key) ?? 'null');
+        if (cached && cached.fingerprint === fingerprint && typeof cached.time === 'number' && Date.now() >= cached.time && Date.now() - cached.time < CACHE_AGE && cacheable(cached.data)) return Promise.resolve(cached.data as T);
+    } catch { /* Si el almacenamiento no está disponible, se consulta normalmente. */ }
+    const requestKey = `${key}:${fingerprint}`;
+    const existing = pendingRequests.get(requestKey);
+    if (existing) return existing as Promise<T>;
+    const promise = request<T>(path).then(data => {
+        if (cacheable(data)) {
+            try { localStorage.setItem(key, JSON.stringify({ fingerprint, time: Date.now(), data })); } catch { /* El almacenamiento puede estar lleno o bloqueado. */ }
+        }
+        return data;
+    }).finally(() => { pendingRequests.delete(requestKey); });
+    pendingRequests.set(requestKey, promise);
+    return promise;
+}
+
+function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: boolean; hidden: boolean; userId: string; portfolioKey: string }) {
     const [result, setResult] = useState<Result | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -22,9 +42,10 @@ function PortfolioDividends({ dirty, hidden }: { dirty: boolean; hidden: boolean
     const [selected, setSelected] = useState<string | null>(null);
     useEffect(() => {
         let active = true;
-        request<Result>('dividends').then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudieron consultar los dividendos. Volvé a intentar más tarde.'); }).finally(() => { if (active) setLoading(false); });
+        setLoading(true); setError('');
+        cachedDividends<Result>(`activos:dividendos:${userId}`, portfolioKey, 'dividends', data => Boolean(data?.configured && Array.isArray(data.items) && data.items.every(item => item.status !== 'unavailable'))).then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudieron consultar los dividendos. Volvé a intentar más tarde.'); }).finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
-    }, []);
+    }, [userId, portfolioKey]);
     const money = (n: number) => hidden ? '****' : usd(n);
     const events = useMemo<Row[]>(() => (result?.items ?? []).flatMap(position => (position.events ?? []).map(event => ({ ...event, position }))).sort((a, b) => a.payDate.localeCompare(b.payDate)), [result]);
     const todayIso = isoDate(new Date());
@@ -98,37 +119,52 @@ function PortfolioDividends({ dirty, hidden }: { dirty: boolean; hidden: boolean
 type MarketEvent = { ticker: string; payDate: string; exDate: string | null; amountPerShare: number; currency: string | null };
 type MarketResult = { configured: boolean; items: MarketEvent[]; truncated: boolean; start?: string; end?: string };
 
-function MarketDividends() {
+function MarketDividends({ userId }: { userId: string }) {
     const [result, setResult] = useState<MarketResult | null>(null);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
+    const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
+    const [selected, setSelected] = useState<string | null>(null);
     useEffect(() => {
         let active = true;
-        request<MarketResult>('dividends/market').then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudo consultar el calendario. Volvé a intentar más tarde.'); });
+        cachedDividends<MarketResult>(`activos:dividendos-mercado:${userId}`, isoDate(new Date()), 'dividends/market', data => Boolean(data?.configured && Array.isArray(data.items) && !data.truncated)).then(data => { if (active) setResult(data); }).catch(() => { if (active) setError('No se pudo consultar el calendario. Volvé a intentar más tarde.'); });
         return () => { active = false; };
-    }, []);
+    }, [userId]);
     const events = (result?.items ?? []).filter(event => event.ticker.toLowerCase().includes(search.trim().toLowerCase()));
+    const monthKey = isoDate(month).slice(0, 7);
+    const monthEvents = events.filter(event => event.payDate.startsWith(monthKey));
+    const shownEvents = selected ? monthEvents.filter(event => event.payDate === selected) : monthEvents;
+    const offset = (month.getDay() + 6) % 7;
+    const dayCount = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    const cells = Array.from({ length: Math.ceil((offset + dayCount) / 7) * 7 }, (_, i) => i - offset + 1);
+    const changeMonth = (step: number) => { setMonth(value => new Date(value.getFullYear(), value.getMonth() + step, 1)); setSelected(null); };
     return <section className="card p-5 sm:p-6" aria-labelledby="market-dividends-title">
         <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="lb">MERCADO</p><h2 id="market-dividends-title" className="mt-2 text-[20px] font-light tracking-tight">Calendario general</h2><p className="mu mt-2 text-[12px]">Pagos anunciados para las próximas 4 semanas, tengas o no el activo en tu cartera.</p></div>
         <label className="text-[11px] text-[var(--muted)]">Buscar ticker<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Ej. AAPL" className="mt-1 block w-full rounded-lg border border-[var(--line2)] bg-[var(--raised)] px-3 py-2 text-[13px] text-[var(--ink)]" /></label></div>
         <p className="mu mt-4 text-[11px] leading-5">Cobertura de Massive: principalmente valores de EE. UU. Se muestran pagos informados con fecha y monto; la cobertura no incluye todas las bolsas del mundo.</p>
         {error ? <p role="alert" className="mt-6 text-[12px] text-[var(--neg)]">{error}</p> : !result ? <p role="status" className="mu mt-6 text-[12px]">Consultando dividendos…</p> : !result.configured ? <p className="mu mt-6 text-[12px]">Para consultar dividendos, configurá MASSIVE_API_KEY en el backend.</p> : <>
             {result.truncated && <p role="status" className="mu mt-4 text-[11px]">La fuente devolvió muchos resultados: esta lista puede estar incompleta.</p>}
-            <p className="mu mt-5 text-[11px]">{events.length} pagos {result.start && result.end ? `· ${date(result.start)} — ${date(result.end)}` : ''}</p>
-            {events.length ? <div className="mt-2">{events.map((event, index) => <article key={`${event.ticker}-${event.payDate}-${event.exDate}-${index}`} className="flex items-start gap-4 border-t border-[var(--line)] py-4">
+            <div className="mt-5 flex items-center justify-between gap-2"><h3 className="text-[16px] font-medium capitalize">{month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</h3><div className="flex items-center gap-1">{selected && <button type="button" onClick={() => setSelected(null)} className="mu mr-2 underline">Ver todo el mes</button>}<button type="button" onClick={() => changeMonth(-1)} disabled={!result.start || monthKey <= result.start.slice(0, 7)} aria-label="Mes anterior" className="ibtn !h-9 !w-9 disabled:opacity-30"><HugeiconsIcon icon={ChevronLeftIcon} size={16} /></button><button type="button" onClick={() => changeMonth(1)} disabled={!result.end || monthKey >= result.end.slice(0, 7)} aria-label="Mes siguiente" className="ibtn !h-9 !w-9 disabled:opacity-30"><HugeiconsIcon icon={ChevronRightIcon} size={16} /></button></div></div>
+            <p className="mu mt-2 text-[11px]">Pagos disponibles {result.start && result.end ? `del ${date(result.start)} al ${date(result.end)}` : ''}</p>
+            <div className="mt-4 grid grid-cols-7 gap-1 sm:gap-1.5" role="group" aria-label={`Días de ${month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`}>
+                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => <div key={day} className="mu pb-2 text-center text-[10px]">{day}</div>)}
+                {cells.map((day, index) => { if (day < 1 || day > dayCount) return <div key={`blank-${index}`} />; const key = `${monthKey}-${String(day).padStart(2, '0')}`; const daily = monthEvents.filter(event => event.payDate === key); return <button key={key} type="button" onClick={() => setSelected(selected === key ? null : key)} aria-pressed={selected === key} aria-label={`${date(key)}: ${daily.length} pagos`} className={`relative flex min-h-[53px] flex-col items-center rounded-lg border p-1 text-[12px] sm:min-h-[76px] sm:items-start sm:p-2 ${selected === key ? 'border-[var(--sig)] bg-[var(--sigbg)]' : 'border-[var(--line)] hover:bg-[var(--raised)]'} ${key === isoDate(new Date()) ? 'font-semibold text-[var(--sig)]' : 'text-[var(--muted)]'}`}><span>{day}</span>{daily.length > 0 && <><span className="mt-auto hidden max-w-full truncate rounded bg-[var(--sigbg)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--sig)] sm:block">{daily[0].ticker}{daily.length > 1 ? ` +${daily.length - 1}` : ''}</span><span className="mb-1 mt-auto h-1.5 w-1.5 rounded-full bg-[var(--sig)] sm:hidden" /></>}</button>; })}
+            </div>
+            <p className="mu mt-5 text-[11px]">{shownEvents.length} pagos {selected ? `· ${date(selected)}` : 'en el mes'}</p>
+            {shownEvents.length ? <div className="mt-2">{shownEvents.map((event, index) => <article key={`${event.ticker}-${event.payDate}-${event.exDate}-${index}`} className="flex items-start gap-4 border-t border-[var(--line)] py-4">
                 <div className="dd">{at(event.payDate).getDate()}<small>{at(event.payDate).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '')}</small></div>
                 <div className="min-w-0 flex-1"><p className="text-[14px] font-medium">{event.ticker}</p><p className="mu mt-1 text-[11px]">Pago: {date(event.payDate)} · Fecha ex: {event.exDate ? date(event.exDate) : 'no informada'}</p></div>
                 <span className="text-right text-[12px] font-medium tabular-nums">{event.amountPerShare.toLocaleString('es-AR', { maximumFractionDigits: 6 })} {event.currency ?? 'moneda no informada'}<small className="mu mt-1 block text-[10px] font-normal">por acción · bruto</small></span>
-            </article>)}</div> : <p className="mu mt-6 text-[12px]">{search ? 'No encontramos pagos para ese ticker.' : 'No hay pagos anunciados para este período.'}</p>}
+            </article>)}</div> : <p className="mu mt-6 text-[12px]">{search ? 'No encontramos pagos para ese ticker en esta selección.' : 'No hay pagos anunciados en esta selección.'}</p>}
         </>}
         <p className="mu mt-5 text-[11px]">Datos de <a className="underline" href="https://massive.com/docs/rest/stocks/corporate-actions/dividends" target="_blank" rel="noreferrer">Massive</a>. Los montos y fechas pueden cambiar.</p>
     </section>;
 }
 
-export default function Dividends(props: { dirty: boolean; hidden: boolean }) {
+export default function Dividends(props: { dirty: boolean; hidden: boolean; userId: string; portfolioKey: string }) {
     const [tab, setTab] = useState<'portfolio' | 'market'>('portfolio');
     return <div className="space-y-3.5">
         <div className="seg inline-flex" role="group" aria-label="Sección de dividendos"><button type="button" aria-pressed={tab === 'portfolio'} onClick={() => setTab('portfolio')}>Mi cartera</button><button type="button" aria-pressed={tab === 'market'} onClick={() => setTab('market')}>Calendario general</button></div>
-        {tab === 'portfolio' ? <PortfolioDividends {...props} /> : <MarketDividends />}
+        {tab === 'portfolio' ? <PortfolioDividends {...props} /> : <MarketDividends userId={props.userId} />}
     </div>;
 }
