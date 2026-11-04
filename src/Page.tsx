@@ -17,7 +17,6 @@ import ContributionStreak from './ContributionStreak';
 import Benchmarks from './Benchmarks';
 import Dividends from './Dividends';
 import MarketCalendar from './MarketCalendar';
-import OpportunityRadar from './OpportunityRadar';
 import Inflation from './Inflation';
 import AssetPerformance, { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
 import MarketChat from './MarketChat';
@@ -29,6 +28,10 @@ import { pages, usePage } from './navigation';
 import { cleanInvestment, cleanSale, readLegacyPortfolio, type Currency, type Investment, type Kind, type Period, type Sale } from './portfolio';
 import { request, type Account, type Snapshot } from './account';
 import { usePortfolio } from './usePortfolio';
+import { usePriceAlerts } from './usePriceAlerts';
+import PageLink from './PageLink';
+const PricesPage = lazy(() => import('./PricesPage'));
+
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, Cancel01Icon, Upload06Icon, Upload01Icon } from '@hugeicons/core-free-icons';
 type Filter = 'all' | Kind | 'index';
@@ -277,6 +280,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const allCount = (kind: Filter) => kind === 'all' ? items.length : items.filter(i => categoryOf(i) === kind).length;
     const colorOf = (k: Filter) => kinds.find(v => v.id === k)!.color;
     const valueOf = (list: Investment[]) => list.reduce((s, i) => s + fx(valueAt(i, today, prices, today, officialRate), i.currency), 0);
+    const alerts = view.portfolio.alerts ?? [];
+    const alertStatuses = usePriceAlerts(alerts, items.map(item => ({ kind: item.kind, id: item.coin ?? '', value: fx(valueAt(item, today, prices, today, officialRate), item.currency) })));
+    const triggeredAlerts = alerts.filter(alert => alertStatuses[alert.id]?.state === 'triggered');
     const byKind = (['rate', 'cedear', 'index', 'stock', 'crypto'] as const).map(k => { const list = items.filter(i => categoryOf(i) === k); return { id: k, label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(list), count: list.length }; });
     const byCurrency = [
         { label: 'Dólares (USD)', color: 'var(--sig)', value: valueOf(items.filter(i => i.currency === 'USD')), count: items.filter(i => i.currency === 'USD').length },
@@ -740,9 +746,10 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {notice && <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-4 py-3 text-[12px]"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Cerrar aviso" className="text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={14} /></button></div>}
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
+                {triggeredAlerts.length > 0 && page !== 'prices' && <div role="status" className="mb-4 rounded-xl border border-[var(--sig)] bg-[var(--sigbg)] px-4 py-3 text-[12px]"><span>{triggeredAlerts.length === 1 ? `Tenés una alerta activa: ${triggeredAlerts[0].assetName} · ${alertStatuses[triggeredAlerts[0].id].message}` : `Tenés ${triggeredAlerts.length} alertas activas.`}</span> <PageLink page="prices" className="ml-2 underline">Ver alertas</PageLink></div>}
                 <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
+                {page === 'prices' && <Suspense fallback={<p role="status" className="mu p-5">Cargando precios…</p>}><PricesPage items={items} alerts={alerts} statuses={alertStatuses} onAdd={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} onDelete={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} /></Suspense>}
                 {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} onMailSettings={() => setEmailSettings(true)} mailRevision={emailSettingsRevision} />}
-                {page === 'radar' && <OpportunityRadar items={items} dirty={view.dirty} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
 
