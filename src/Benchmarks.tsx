@@ -1,4 +1,5 @@
 import Select from './Select';
+import { toPng } from 'html-to-image';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -267,6 +268,8 @@ export default function Benchmarks({
     const [retry, setRetry] = useState(0);
     const [exportPreview, setExportPreview] = useState<string | null>(null);
     const [exportError, setExportError] = useState('');
+    const [exporting, setExporting] = useState(false);
+    const exportRef = useRef<HTMLElement>(null);
 
     const [hoverT, setHoverT] = useState<number | null>(null);
 
@@ -778,81 +781,29 @@ export default function Benchmarks({
 
         : null;
 
-    const prepareExport = () => {
-        if (!result || !result.lines.length) return;
+    const prepareExport = async () => {
+        if (!result?.lines.length || !exportRef.current || exporting) return;
+        setExporting(true);
+        setExportError('');
         try {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1800;
-            canvas.height = 1220;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error('Canvas no disponible');
-            ctx.scale(2, 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, 900, 610);
-            ctx.fillStyle = '#65716b';
-            ctx.font = '600 11px sans-serif';
-            ctx.fillText('RENDIMIENTO COMPARADO · BASE 100', 35, 38);
-            ctx.fillStyle = '#17241d';
-            ctx.font = '600 25px sans-serif';
-            ctx.fillText('Cartera y activos vs. mercado', 35, 72);
-            ctx.fillStyle = '#65716b';
-            ctx.font = '14px sans-serif';
-            ctx.fillText(`${selectionLabel} · ${dateLabel(from)} — ${dateLabel(to)} · ARS`, 35, 100, 830);
-            if (portfolioReturn !== null) {
-                ctx.fillStyle = portfolioReturn >= 0 ? '#238a51' : '#c43e45';
-                ctx.font = '600 20px sans-serif';
-                ctx.fillText(`Variación acumulada: ${percent(portfolioReturn)}`, 35, 135);
-            }
-            ctx.save();
-            ctx.translate(20, 155);
-            result.ticks.forEach(v => {
-                const y = result.y(v);
-                ctx.strokeStyle = '#e2e8e3';
-                ctx.setLineDash([3, 5]);
-                ctx.beginPath(); ctx.moveTo(LEFT, y); ctx.lineTo(W - RIGHT, y); ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.fillStyle = '#65716b'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
-                ctx.fillText(v.toFixed(0), LEFT - 12, y + 4);
+            await document.fonts.ready;
+            const image = await toPng(exportRef.current, {
+                pixelRatio: 2,
+                filter: node => !(node instanceof HTMLElement && node.hasAttribute('data-export-exclude')),
             });
-            ctx.textAlign = 'center';
-            result.monthTicks.forEach(t => {
-                const label = months > 12 ? new Date(t).toLocaleDateString('es-AR', { month: 'short', year: '2-digit', timeZone: 'UTC' }) : monthLabel(t);
-                ctx.fillText(label, result.x(t), H - 8);
-            });
-            ctx.strokeStyle = '#9aa59d'; ctx.setLineDash([5, 5]);
-            ctx.beginPath(); ctx.moveTo(LEFT, result.y(100)); ctx.lineTo(W - RIGHT, result.y(100)); ctx.stroke();
-            ctx.setLineDash([]);
-            result.lines.forEach(line => {
-                ctx.strokeStyle = colors[line.key]; ctx.lineWidth = line.key === 'cartera' ? 3 : 2;
-                ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.beginPath();
-                line.points.forEach((point, index) => {
-                    if (index === 0) ctx.moveTo(result.x(point.t), result.y(point.value));
-                    else ctx.lineTo(result.x(point.t), result.y(point.value));
-                });
-                ctx.stroke();
-            });
-            ctx.restore();
-            let x = 35; let y = 490;
-            ctx.font = '13px sans-serif';
-            result.lines.forEach(line => {
-                const width = Math.min(ctx.measureText(line.label).width, 230) + 35;
-                if (x + width > 865) { x = 35; y += 27; }
-                ctx.fillStyle = colors[line.key]; ctx.fillRect(x, y - 9, 12, 3);
-                ctx.fillStyle = '#34443a'; ctx.fillText(line.label, x + 19, y, 230);
-                x += width;
-            });
-            ctx.fillStyle = '#87938b'; ctx.font = '11px sans-serif';
-            ctx.fillText('Comparación de rendimiento en pesos argentinos · Activos', 35, 585);
-            setExportPreview(canvas.toDataURL('image/png'));
-            setExportError('');
+            setExportPreview(image);
         } catch {
             setExportError('No se pudo generar la imagen. Intentá nuevamente.');
+        } finally {
+            setExporting(false);
         }
     };
 
     return (
 
         <section
+
+            ref={exportRef}
 
             className="card mb-3.5 p-5 sm:p-6"
 
@@ -889,7 +840,7 @@ export default function Benchmarks({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={prepareExport} disabled={!result?.lines.length || historyLoading} className="btn-ghost text-[12px] disabled:opacity-50">Exportar PNG</button>
+                <button type="button" data-export-exclude onClick={() => void prepareExport()} disabled={!result?.lines.length || historyLoading || exporting} className="btn-ghost text-[12px] disabled:opacity-50">{exporting ? 'Preparando…' : 'Exportar PNG'}</button>
                 <div className="rounded-lg border border-[var(--line)] bg-[var(--raised)] px-3 py-2">
 
                     <p className="mu text-[10px]">
@@ -908,8 +859,8 @@ export default function Benchmarks({
 
                 </div>
             </div>
-            {exportError && <p role="alert" className="mt-3 text-[12px] text-[var(--neg)]">{exportError}</p>}
-            {exportPreview && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/65 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setExportPreview(null); }} onKeyDown={event => { if (event.key === 'Escape') setExportPreview(null); }}>
+            {exportError && <p data-export-exclude role="alert" className="mt-3 text-[12px] text-[var(--neg)]">{exportError}</p>}
+            {exportPreview && <div data-export-exclude className="fixed inset-0 z-[60] grid place-items-center bg-black/65 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setExportPreview(null); }} onKeyDown={event => { if (event.key === 'Escape') setExportPreview(null); }}>
                 <div role="dialog" aria-modal="true" aria-labelledby="benchmark-export-title" className="card max-h-[90dvh] w-full max-w-[900px] overflow-y-auto p-5 shadow-2xl">
                     <div className="flex items-start justify-between gap-3"><div><h3 id="benchmark-export-title" className="text-[20px] font-medium">Vista previa</h3><p className="mu mt-1 text-[12px]">Así se verá tu comparación en PNG.</p></div><button type="button" autoFocus onClick={() => setExportPreview(null)} aria-label="Cerrar vista previa" className="btn-ghost text-[18px]">×</button></div>
                     <img src={exportPreview} alt="Vista previa de la comparación de rendimiento" className="mt-4 w-full rounded-lg border border-[var(--line)]" />
@@ -1471,7 +1422,7 @@ export default function Benchmarks({
 
                     {/* Annual results */}
 
-                    <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                    <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 
                         {result.lines.map(line => {
 
@@ -1499,7 +1450,7 @@ export default function Benchmarks({
 
                                         />
 
-                                        <span className="mu truncate text-[10px]">
+                                        <span className="mu min-w-0 break-words text-[13px] font-medium">
 
                                             {line.label}
 
@@ -1527,7 +1478,7 @@ export default function Benchmarks({
 
                                     </p>
 
-                                    <p className="mu mt-1 text-[10px]">
+                                    <p className="mu mt-1 text-[12px] leading-5">
 
                                         {dateLabel(from)} — {dateLabel(line.lastDate)}
 
