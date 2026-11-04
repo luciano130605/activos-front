@@ -33,14 +33,15 @@ export default function ImportDocuments({ portfolio, update }: { portfolio: Port
     async function checkMail(source: 'gmail' | 'resend') {
         setBusy(true); setMessage('');
         try {
-            const result = await request<{ operations: Record<string, unknown>[]; unreadable: number; truncated: boolean }>(source === 'gmail' ? 'imports/gmail/sync' : 'imports/resend', 'POST', source === 'gmail' ? { sender: sender.trim() } : undefined);
+            const result = await request<{ operations: Record<string, unknown>[]; unreadable: number; truncated: boolean; messageCount?: number; pdfCount?: number; unrecognized?: number }>(source === 'gmail' ? 'imports/gmail/sync' : 'imports/resend', 'POST', source === 'gmail' ? { sender: sender.trim() } : undefined);
             const known = new Set((portfolio.imports ?? []).map(op => op.id));
             const rows: ImportOperation[] = result.operations.filter(raw => typeof raw.importId === 'string' && !known.has(raw.importId)).map(raw => {
                 const fieldsValue = Object.fromEntries(fields.map(key => [key, value(raw[key])])) as Pick<ImportOperation, typeof fields[number]>;
                 return { ...fieldsValue, id: value(raw.importId), source: value(raw.source), status: 'pending', executions: JSON.stringify(Array.isArray(raw.executions) ? raw.executions : []) };
             });
             if (rows.length) update(current => { const ids = new Set((current.imports ?? []).map(op => op.id)); return { ...current, imports: [...(current.imports ?? []), ...rows.filter(op => !ids.has(op.id))] }; });
-            setMessage(`${rows.length ? `Se detectaron ${rows.length} operaciones nuevas. Revisá los datos antes de confirmar.` : 'No se encontraron operaciones nuevas.'}${result.unreadable ? ` No se pudieron leer ${result.unreadable} adjuntos.` : ''}${result.truncated ? ' La consulta alcanzó su límite de correos.' : ''}`);
+            const outcome = rows.length ? `Se detectaron ${rows.length} operaciones nuevas. Revisá los datos antes de confirmar.` : result.operations.length ? 'Las operaciones detectadas ya están en pendientes o en el historial.' : result.messageCount === 0 ? 'No se encontraron correos. Revisá la dirección de destino o el remitente buscado.' : result.pdfCount ? 'Se encontró el correo y su PDF, pero no se reconocieron operaciones en el formato del archivo.' : 'Se encontró el correo, pero no se detectó un PDF ni operaciones compatibles en su texto.';
+            setMessage(`${outcome}${result.unreadable ? ` No se pudieron leer ${result.unreadable} adjuntos (por ejemplo, si están dañados o superan 1,2 MB).` : ''}${result.unrecognized && rows.length ? ` ${result.unrecognized} PDF no tienen un formato reconocido.` : ''}${result.truncated ? ' La consulta alcanzó su límite de correos.' : ''}`);
         } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron consultar los correos.'); } finally { setBusy(false); }
     }
 

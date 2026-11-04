@@ -28,6 +28,14 @@
     {
       "source": "/importaciones",
       "destination": "/index.html"
+    },
+    {
+      "source": "/politicas",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/condiciones",
+      "destination": "/index.html"
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import LegalPage from './LegalPage';
 import ModalScrollLock from './ModalScrollLock';
 import './Style.css';
 
@@ -11,6 +12,6 @@ if (!root) throw new Error('No se encontró #root');
 createRoot(root).render(
   <StrictMode>
     <ModalScrollLock />
-    <App />
+    {location.pathname.replace(/\/$/, '') === '/politicas' ? <LegalPage page="privacy" /> : location.pathname.replace(/\/$/, '') === '/condiciones' ? <LegalPage page="terms" /> : <App />}
   </StrictMode>
 );

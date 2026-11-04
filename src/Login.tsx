@@ -62,7 +62,7 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
                     {onCancel && <button type="button" onClick={onCancel} className="w-full text-[12px] text-[var(--muted)]">Volver a mi cartera</button>}
                 </form>
             </section>
-            <p className="mu mt-6 text-center text-[10px] leading-5">Cripto, CEDEARs, índices y tasas.<br />Todo en tu cuenta.</p>
+            <p className="mu mt-6 text-center text-[10px] leading-5">Cripto, CEDEARs, índices y tasas.<br />Todo en tu cuenta.</p><nav aria-label="Información legal" className="mt-4 flex justify-center gap-4 text-[11px] text-[var(--muted)]"><a className="underline underline-offset-4" href="/politicas">Privacidad</a><a className="underline underline-offset-4" href="/condiciones">Condiciones</a></nav>
         </div>
     </main>;
 }
