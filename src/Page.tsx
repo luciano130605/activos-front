@@ -1,3 +1,4 @@
+import EmailSettingsDialog from './EmailSettingsDialog';
 import RefreshButton from './RefreshButton';
 import { isAiProvider, type AiProvider } from './ai-provider';
 import ImportDocuments from './ImportDocuments';
@@ -170,6 +171,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         return () => { window.removeEventListener('keydown', onKey); detailOpenerRef.current?.focus(); };
     }, [detailId]);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [emailSettings, setEmailSettings] = useState(false);
+    const [emailSettingsRevision, setEmailSettingsRevision] = useState(0);
     const [assetSearch, setAssetSearch] = useState<AssetKind | null>(null);
     const [ctx, setCtx] = useState<{ x: number; y: number; id: string } | null>(null);
     const closeCtx = useCallback(() => setCtx(null), []);
@@ -708,14 +711,14 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         return () => window.removeEventListener('keydown', onKey);
     }, []);
     const detailItem = detailId ? items.find(i => i.id === detailId) : undefined;
-    const locked = !!assetSearch || !!sellItem || !!detailItem || panelEditor || leaving;
+    const locked = !!assetSearch || !!sellItem || !!detailItem || panelEditor || emailSettings || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
     return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => setAssetSearch('crypto')} onAdd={openModal} onExport={exportJSON} onImport={() => fileRef.current?.click()}
-                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} onAiSettings={() => setAiSettingsRequest(value => value + 1)} />
+                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onMailSettings={() => setEmailSettings(true)} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} onAiSettings={() => setAiSettingsRequest(value => value + 1)} />
             <div style={page === 'assistant' || view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
@@ -732,7 +735,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
                 <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={item => { setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); }} />
-                {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} />}
+                {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} onMailSettings={() => setEmailSettings(true)} mailRevision={emailSettingsRevision} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
 
@@ -903,6 +906,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 </form>
             </div>
         </div>}
+        {emailSettings && <EmailSettingsDialog onClose={() => { setEmailSettings(false); setEmailSettingsRevision(value => value + 1); }} />}
         {benchmarkSearchOpen && <AssetSearchDialog benchmarkMode onClose={() => setBenchmarkSearchOpen(false)} footer="El activo se usa solo para esta comparación y no se guarda en tu cartera." onSelect={selectTemporaryBenchmark} />}
         {assetSearch && <AssetSearchDialog initial={assetSearch} onClose={() => setAssetSearch(null)} onSelect={selectAsset} />}
         {confirmDelete && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/65 p-4 backdrop-blur-sm"><div role="alertdialog" aria-modal="true" aria-labelledby="delete-title" className={`${panel} w-full max-w-[390px] p-6 shadow-2xl`}><h2 id="delete-title" className="text-[20px] font-medium">Eliminar inversión</h2><p className="mt-2 text-[13px] text-[var(--muted)]">Esta acción no se puede deshacer. ¿Querés eliminar esta posición de tu cartera?</p><div className="mt-6 flex justify-end gap-2"><button onClick={() => setConfirmDelete(null)} className="rounded-lg border border-[var(--line2)] px-4 py-2.5 text-[13px]">Cancelar</button><button onClick={() => { setItems(prev => prev.filter(i => i.id !== confirmDelete)); setConfirmDelete(null) }} className="rounded-lg bg-[var(--neg)] px-4 py-2.5 text-[13px] font-medium text-white">Eliminar</button></div></div></div>}

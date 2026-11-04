@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { DarkModeFreeIcons, DashboardCircleEditIcon, DashboardCircleIcon, Download02Icon, LogoutCircle01Icon, MenuTwoLineIcon, MoreHorizontalIcon, PlusIcon, ScanFaceIcon, Search01Icon, Share08Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, Key01Icon } from '@hugeicons/core-free-icons';
+import { DarkModeFreeIcons, DashboardCircleEditIcon, DashboardCircleIcon, Download02Icon, LogoutCircle01Icon, MenuTwoLineIcon, Mail01Icon, MoreHorizontalIcon, PlusIcon, ScanFaceIcon, Search01Icon, Share08Icon, Sun03Icon, Upload06Icon, ViewIcon, ViewOffIcon, Key01Icon } from '@hugeicons/core-free-icons';
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
 import PageIcon from './PageIcon';
@@ -13,7 +13,7 @@ type Props = {
     page: PageId; count: number; theme: 'light' | 'dark' | 'system'; resolvedTheme: 'light' | 'dark'; onTheme: (theme: 'light' | 'dark' | 'system') => void; hidden: boolean; onHidden: () => void;
     display: Currency; onDisplay: (c: Currency) => void; onSearch: () => void; onAdd: () => void; onExport: () => void; onImport: () => void;
     email: string; syncLabel: string; onLogout: () => void; leaving: boolean;
-    onCustomize: () => void; onPasskey: () => void; passkeyCount: number | null; onAiSettings: () => void;
+    onMailSettings: () => void; onCustomize: () => void; onPasskey: () => void; passkeyCount: number | null; onAiSettings: () => void;
 };
 
 function ThemeIcon({ size = 18 }: { size?: number }) {
@@ -69,6 +69,7 @@ export default function TopBar(p: Props) {
             { label: 'Buscar activos', icon: Search01Icon, onSelect: p.onSearch, hint: '/' },
             { label: 'Apariencia', icon: DarkModeFreeIcons, onSelect: () => setAppearance(true) },
             { label: 'Personalizar panel', icon: DashboardCircleEditIcon, onSelect: p.onCustomize },
+            { label: 'Correos y comprobantes', icon: Mail01Icon, onSelect: p.onMailSettings },
             { label: 'Api Keys', icon: Key01Icon, onSelect: p.onAiSettings },
             { label: p.passkeyCount === null ? 'Passkeys y llaves de seguridad' : p.passkeyCount > 0 ? `Passkeys activadas (${p.passkeyCount})` : 'Activar passkey o llave de seguridad', icon: ScanFaceIcon, onSelect: p.onPasskey },
             { label: 'Exportar datos', icon: Download02Icon, onSelect: p.onExport },
