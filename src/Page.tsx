@@ -320,9 +320,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const benchmarkSearchRequest = useRef(0);
     const [benchmarkHistory, setBenchmarkHistory] = useState<Record<string, HistoryPoint[]> | null>(null);
     const [benchmarkHistoryError, setBenchmarkHistoryError] = useState('');
-    const temporaryKey = temporaryBenchmark ? `${temporaryBenchmark.kind === 'index' ? 'cedear' : temporaryBenchmark.kind}:${temporaryBenchmark.id}` : '';
+    const temporaryKey = temporaryBenchmark ? `${temporaryBenchmark.kind === 'index' ? 'stock' : temporaryBenchmark.kind}:${temporaryBenchmark.id}` : '';
     const historySignature = [...new Set([...items.filter(i => i.kind !== 'rate' && i.coin).map(i => `${i.kind}:${i.coin}`), ...(temporaryKey ? [temporaryKey] : [])])].sort().join('|');
-    const needsDollarHistory = items.some(i => i.kind === 'crypto' || i.currency === 'USD') || temporaryBenchmark?.kind === 'crypto';
+    const needsDollarHistory = items.some(i => i.kind === 'crypto' || i.currency === 'USD') || (temporaryBenchmark?.kind === 'crypto' || temporaryBenchmark?.kind === 'stock' || temporaryBenchmark?.kind === 'index');
     useEffect(() => {
         if (page !== 'evolution') return;
         const controller = new AbortController();
@@ -375,9 +375,9 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         setBenchmarkSearchOpen(false);
         setBenchmarkSearchStatus(`Consultando el historial de ${asset.name}…`);
         try {
-            const kind = asset.kind === 'index' ? 'cedear' : asset.kind;
+            const kind = asset.kind === 'index' ? 'stock' : asset.kind;
             const raw = await history(kind, asset.id, new AbortController().signal);
-            const points = kind === 'cedear' || kind === 'arg-stock' ? adjustPossibleRatios(raw).points : raw;
+            const points = kind === 'cedear' ? adjustPossibleRatios(raw).points : raw;
             const last = points.at(-1);
             const coversYear = !!last && today - last.time <= 7 * 86400000 && Array.from({ length: 241 }, (_, index) => yearStart + (today - yearStart) * index / 240).every(t => {
                 const previous = points.filter(point => point.time <= t).at(-1);
@@ -417,7 +417,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             const points = benchmarkHistory?.[temporaryKey];
             const latest = points?.at(-1)?.price;
             const price = latest ? annualPriceAt(points, t, latest) : NaN;
-            return temporaryBenchmark.kind === 'crypto' ? price * benchmarkDollarAt(t) : price;
+            return temporaryBenchmark.kind !== 'cedear' ? price * benchmarkDollarAt(t) : price;
         }
         return benchmarkItems.reduce((sum, i) => {
             if (i.kind === 'rate') {
@@ -459,7 +459,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         return !previous && points[0].time - timestamp <= 3 * 86400000;
     };
     const monthlyHistoryAvailable = temporarySelected
-        ? monthlyDates.every(t => hasObservation(benchmarkHistory?.[temporaryKey], t)) && (temporaryBenchmark.kind !== 'crypto' || monthlyDates.every(t => hasObservation(benchmarkHistory?.['dollar:mep'], t)))
+        ? monthlyDates.every(t => hasObservation(benchmarkHistory?.[temporaryKey], t)) && (temporaryBenchmark.kind === 'cedear' || monthlyDates.every(t => hasObservation(benchmarkHistory?.['dollar:mep'], t)))
         : benchmarkItems.length > 0 && benchmarkItems.every(i => {
             if (i.kind === 'rate' || !i.coin) return false;
             const points = benchmarkHistory?.[`${i.kind}:${i.coin}`];
@@ -791,7 +791,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} months={effectiveMonths} onMonthsChange={setBenchmarkMonths} availablePeriods={availablePeriods} valueAt={benchmarkValue} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? temporaryBenchmark.kind !== 'crypto' : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => { benchmarkSearchRequest.current++; setBenchmarkSearchStatus(''); setBenchmarkSearchOpen(true); }} searchStatus={benchmarkSearchStatus} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
+                        {page === 'evolution' && <Benchmarks start={benchmarkStart} end={today} months={effectiveMonths} onMonthsChange={setBenchmarkMonths} availablePeriods={availablePeriods} valueAt={benchmarkValue} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? temporaryBenchmark.kind === 'cedear' : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => { benchmarkSearchRequest.current++; setBenchmarkSearchStatus(''); setBenchmarkSearchOpen(true); }} searchStatus={benchmarkSearchStatus} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}

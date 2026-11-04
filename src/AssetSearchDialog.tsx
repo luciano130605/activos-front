@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listCryptoAssets } from './coingecko';
 import { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
-import { INDEXES, cedearName, listCedears, listArgentineStocks, type SearchAsset } from './assets';
+import { INDEXES, cedearName, listCedears, listUsStocks, type SearchAsset } from './assets';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ChevronRight, LoaderIcon, Refresh04Icon, Search02Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 
-export type AssetKind = 'crypto' | 'cedear' | 'index' | 'arg-stock';
+export type AssetKind = 'crypto' | 'cedear' | 'index' | 'stock';
 export type PickedAsset = { kind: AssetKind; id: string; name: string };
 type Row = { id: string; title: string; sub: string };
 type Catalog = { status: 'ready'; rows: Row[] } | { status: 'error'; message: string };
@@ -15,7 +15,7 @@ const commonCrypto = ['bitcoin', 'ethereum', 'solana', 'tether', 'usd-coin', 'ri
 const tabs: { id: AssetKind; label: string; color: string; hint: string; placeholder: string; source: string }[] = [
     { id: 'crypto', label: 'Cripto', color: 'var(--c-crypto)', hint: 'Nombre, símbolo o ID', placeholder: 'Ej: Bitcoin, ETH, solana…', source: 'CoinGecko' },
     { id: 'cedear', label: 'CEDEARs', color: 'var(--c-cedear)', hint: 'Empresa o ticker', placeholder: 'Ej: Apple, MELI, KO…', source: 'Data912' },
-    { id: 'arg-stock', label: 'Acciones AR', color: 'var(--c-cedear)', hint: 'Empresa o ticker', placeholder: 'Ej: Galicia, YPF…', source: 'Data912 · pesos' },
+    { id: 'stock', label: 'Acciones', color: 'var(--c-cedear)', hint: 'Empresa o ticker', placeholder: 'Ej: Apple, AAPL…', source: 'Data912 · USD' },
     { id: 'index', label: 'Índices', color: 'var(--c-index)', hint: 'Índice o ticker', placeholder: 'Ej: S&P 500, QQQ…', source: 'Data912' },
 ];
 
@@ -49,7 +49,7 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
         const load = tab === 'crypto'
             ? listCryptoAssets(controller.signal).then(coins => coins.map<Row>(c => ({ id: c.id, title: c.name, sub: `${c.symbol.toUpperCase()} · ${c.id}` })))
             : tab === 'cedear' ? listCedears(controller.signal).then(list => toRows(list, 'CEDEAR en pesos'))
-                : tab === 'arg-stock' ? listArgentineStocks(controller.signal).then(list => toRows(list, 'Acción argentina en pesos')) : Promise.resolve(toRows(INDEXES, 'ETF')); 
+                : tab === 'stock' ? listUsStocks(controller.signal).then(list => toRows(list, 'Acción estadounidense en USD')) : Promise.resolve(toRows(INDEXES, 'ETF')); 
         load.then(rows => { if (!controller.signal.aborted) setCatalog({ status: 'ready', rows }); })
             .catch(error => { if (!controller.signal.aborted) setCatalog({ status: 'error', message: error instanceof Error ? error.message : 'No se pudo cargar el catálogo. Volvé a intentar.' }); });
         return () => controller.abort();
@@ -79,7 +79,7 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                 while (!controller.signal.aborted) {
                     const row = candidates[next++];
                     if (!row) return;
-                    const kind = tab === 'crypto' ? 'crypto' : tab === 'arg-stock' ? 'arg-stock' : 'cedear';
+                    const kind = tab === 'crypto' ? 'crypto' : tab === 'stock' || tab === 'index' ? 'stock' : 'cedear';
                     const key = `${kind}:${row.id}`;
                     try {
                         let valid = eligibilityCache.current.get(key);
@@ -113,7 +113,7 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
         try {
             const responses = await Promise.all([
                 fetch('https://api.argentinadatos.com/v1/finanzas/indices/inflacion', { signal: controller.signal }),
-                ...(tab === 'crypto' ? [fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa', { signal: controller.signal })] : []),
+                ...(tab !== 'cedear' ? [fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/bolsa', { signal: controller.signal })] : []),
             ]);
             if (responses.some(response => !response.ok)) throw new Error();
             const inflationRows: { fecha: string; valor: number }[] = await responses[0].json();
@@ -123,7 +123,7 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
             if (!monthly.some(row => row.time <= start) || end <= start) throw new Error();
             const inflation = (monthly.filter(row => row.time > start && row.time <= end).reduce((value, row) => value * (1 + row.value / 100), 1) - 1) * 100;
             let dollar: HistoryPoint[] = [];
-            if (tab === 'crypto') {
+            if (tab !== 'cedear') {
                 const rows: { fecha: string; venta: number }[] = await responses[1].json();
                 dollar = rows.map(row => ({ time: Date.parse(`${row.fecha.slice(0, 10)}T12:00:00Z`), price: Number(row.venta) })).filter(row => Number.isFinite(row.time) && row.price > 0).sort((a, b) => a.time - b.time);
             }
@@ -133,8 +133,8 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                 if (!previous && points[0] && points[0].time - t <= 3 * day) return points[0].price;
                 return NaN;
             };
-            const dollarStart = tab === 'crypto' ? quote(dollar, start) : 1;
-            const dollarEnd = tab === 'crypto' ? quote(dollar, end) : 1;
+            const dollarStart = tab !== 'cedear' ? quote(dollar, start) : 1;
+            const dollarEnd = tab !== 'cedear' ? quote(dollar, end) : 1;
             if (!(dollarStart > 0 && dollarEnd > 0)) throw new Error();
             let next = 0, finished = 0, failed = 0;
             const found = new Set<string>();
@@ -144,9 +144,9 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
                     if (index >= eligibleMatches.length) return;
                     const row = eligibleMatches[index];
                     try {
-                        const kind = tab === 'crypto' ? 'crypto' : tab === 'arg-stock' ? 'arg-stock' : 'cedear';
+                        const kind = tab === 'crypto' ? 'crypto' : tab === 'stock' || tab === 'index' ? 'stock' : 'cedear';
                         const raw = await history(kind, row.id, controller.signal);
-                        const points = kind !== 'crypto' ? adjustPossibleRatios(raw).points : raw;
+                        const points = kind === 'cedear' ? adjustPossibleRatios(raw).points : raw;
                         const first = quote(points, start), last = quote(points, end), recent = points.at(-1);
                         const complete = !!recent && now - recent.time <= 7 * day && Array.from({ length: 53 }, (_, i) => quote(points, start + (now - start) * i / 52)).every(value => value > 0);
                         if (complete && first > 0 && last > 0 && (last * dollarEnd / (first * dollarStart) - 1) * 100 >= inflation - 5) found.add(row.id);
@@ -174,7 +174,7 @@ export default function AssetSearchDialog({ initial = 'crypto', onClose, onSelec
         }}>
             <div className="shrink-0 border-b border-[var(--line)] p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-3"><div><p className="lb mb-2">BUSCADOR DE ACTIVOS</p><h2 id="asset-search-title" className="text-[24px] font-light tracking-tight">Buscar activo<span className="text-[var(--faint)]">.</span></h2></div><button type="button" onClick={onClose} aria-label="Cerrar buscador" className="rounded-lg p-1.5 text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={19} /></button></div>
-                <div className="tabs mt-5" role="group" aria-label="Tipo de activo">{tabs.filter(t => benchmarkMode || t.id !== 'arg-stock').map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => switchTab(t.id)}><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: t.color }} />{t.label}</button>)}</div>
+                <div className="tabs mt-5" role="group" aria-label="Tipo de activo">{tabs.filter(t => benchmarkMode || t.id !== 'stock').map(t => <button key={t.id} type="button" aria-pressed={tab === t.id} onClick={() => switchTab(t.id)}><span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: t.color }} />{t.label}</button>)}</div>
                 <label htmlFor="asset-search" className="mb-1.5 mt-4 block text-[12px] text-[var(--muted)]">{current.hint}</label>
                 <div className="relative"><HugeiconsIcon icon={Search02Icon} size={17} className="pointer-events-none absolute left-3 top-3 text-[var(--muted)]" /><input ref={input} id="asset-search" type="search" value={query} onChange={event => { resetFilter(); setQuery(event.target.value); setLimit(40); }} placeholder={current.placeholder} autoComplete="off" spellCheck={false} className="w-full rounded-[10px] border border-[var(--line2)] bg-[var(--raised)] py-2.5 pl-10 pr-3 text-[14px] outline-none focus:border-[var(--muted)]" /></div>
             </div>
