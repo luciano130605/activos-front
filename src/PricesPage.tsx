@@ -84,6 +84,12 @@ export default function PricesPage({ items, alerts, statuses, onAdd, onAddLocal 
         }).catch(() => { if (!controller.signal.aborted) setAlertQuote({ key, price: null }); });
         return () => controller.abort();
     }, [alertAsset?.id, alertKind]);
+    useEffect(() => {
+        if (!asset || !selectedKind) { setData([]); return; }
+        const controller = new AbortController(); setLoading(true); setError(''); setData([]); setIndex(null);
+        history(selectedKind, asset.id, controller.signal).then(setData).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : 'No se pudo obtener el historial.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+        return () => controller.abort();
+    }, [asset?.id, selectedKind, retry]);
     const points = useMemo(() => effectiveRange === 'all' ? data : data.filter(point => point.time >= periodStart(Number(effectiveRange))), [data, effectiveRange]);
     const chart = useMemo(() => {
         if (points.length < 2) return null;
@@ -111,7 +117,7 @@ export default function PricesPage({ items, alerts, statuses, onAdd, onAddLocal 
         values.forEach(threshold => onAdd({ id: crypto.randomUUID(), kind, assetKind: alertKind, assetId: alertAsset.id, assetName: alertAsset.name, threshold, direction, date: kind === 'maturity' ? maturity : '', ...(['price', 'dividend'].includes(kind) ? { channels } : {}) })); setThreshold(''); setMaturity('');
     }
     return <div className="space-y-3.5">
-        <section hidden className="card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="lb">EXPLORAR PRECIOS</p><h2 className="mt-2 text-[22px] font-light tracking-tight">{asset ? asset.name : 'Elegí un activo'}</h2><p className="mu mt-1 text-[12px]">{asset ? `${asset.id} · ${assetDescription(selectedKind)}` : 'Buscá un activo o elegí uno de tu cartera.'}</p></div><button type="button" onClick={() => setSearch('chart')} className="btn-ghost text-[12px]">Buscar activo</button></div>
+        <section className="card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="lb">EXPLORAR PRECIOS</p><h2 className="mt-2 text-[22px] font-light tracking-tight">{asset ? asset.name : 'Elegí un activo'}</h2><p className="mu mt-1 text-[12px]">{asset ? `${asset.id} · ${assetDescription(selectedKind)}` : 'Buscá un activo o elegí uno de tu cartera.'}</p></div><button type="button" onClick={() => setSearch('chart')} className="btn-ghost text-[12px]">Buscar activo</button></div>
             {held.length > 0 && <div className="mt-5 flex flex-wrap items-center gap-2"><span className="mu text-[11px]">Tu cartera:</span>{held.map(item => <button type="button" key={`${item.kind}:${item.coin}`} onClick={() => { if (isPriceKind(item.kind) && item.coin) setAsset({kind: item.kind, id: item.coin, name: item.name}); }} className={`rounded-lg border px-2.5 py-1.5 text-[11px] ${asset?.id === item.coin && selectedKind === item.kind ? 'border-[var(--sig)] text-[var(--sig)]' : 'border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]'}`}>{item.coin}</button>)}</div>}
             <div className="mt-6 flex flex-wrap items-end justify-between gap-3"><div><p className="lb">EVOLUCIÓN DEL PRECIO</p><p className="mu mt-3 text-[11px]">{index === null ? 'Último dato del período' : 'Precio seleccionado'}</p><p className="mt-1 text-[28px] font-light tabular-nums">{focused ? money(focused.price, currency) : '—'}</p><p className="mu mt-1 text-[11px]">{focused ? date(focused.time) : 'Sin datos en este período'}</p></div><div className="w-[170px]"><label htmlFor="price-period" className="mb-2 block text-[11px] text-[var(--muted)]">Período</label><Select id="price-period" label="Período de precios" value={effectiveRange} onChange={value => { setRange(value); setIndex(null); }} options={[...periodOptions.map(option => ({ ...option, disabled: !availablePeriods.some(available => available.value === option.value) })), ...(effectiveRange === 'all' ? [{ value: 'all', label: 'Historial disponible' }] : [])]} /></div></div>
             {data.length > 1 && availablePeriods.length < periodOptions.length && <p className="mu mt-3 text-[11px]">Los períodos sin historial suficiente están deshabilitados.</p>}

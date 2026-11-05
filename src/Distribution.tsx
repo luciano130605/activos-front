@@ -45,11 +45,11 @@ export default function Distribution({ byKind, byCurrency, byAsset, bySector, by
                 {(view === 'sector' || view === 'country') && <p className="mu mt-3 text-[11px]">Clasificación orientativa según el emisor o el mercado del ETF. Los activos sin datos figuran como Sin clasificar.</p>}
                 {slices.length ? (
                     <div ref={box} className="relative mt-6" onPointerLeave={() => setActive(null)}>
-                        <div className="!hidden dm" role="img" aria-label={`Distribución: ${sorted.map(s => `${s.label} ${pct(s)}%`).join(', ')}`}>
+                        <div className="dm" role="img" aria-label={`Distribución: ${sorted.map(s => `${s.label} ${pct(s)}%`).join(', ')}`}>
                             {sorted.map(s => <i key={s.label} className={active === s.label ? 'on' : ''} style={{ ['--c' as string]: s.color, flex: s.value }} onPointerMove={e => move(e, s.label)} />)}
                         </div>
                         <div className="mt-6 flex flex-col items-center gap-8 sm:flex-row">
-                            <div className="!hidden relative h-[180px] w-[180px] shrink-0">
+                            <div className="relative h-[180px] w-[180px] shrink-0">
                                 <svg key={view} viewBox="0 0 120 120" className="chart-animate donut-animate h-full w-full" aria-hidden="true">
                                     <circle cx="60" cy="60" r={R} fill="none" stroke="var(--raised)" strokeWidth="14" />
                                     {sorted.map(s => {
