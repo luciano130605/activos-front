@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { request } from './account';
+import Select from './Select';
 
 type Wallet = { id: string; address: string; network: string; label: string };
-const networks: Record<string, string> = { ethereum: 'Ethereum', polygon: 'Polygon', base: 'Base', arbitrum: 'Arbitrum', optimism: 'Optimism', bnb: 'BNB Smart Chain' };
+const networks: Record<string, string> = { solana: 'Solana', ethereum: 'Ethereum', polygon: 'Polygon', base: 'Base', arbitrum: 'Arbitrum', optimism: 'Optimism', bnb: 'BNB Smart Chain', gnosis: 'Gnosis', celo: 'Celo', zksync: 'zkSync Era', scroll: 'Scroll', linea: 'Linea' };
 
 export default function WalletSettings() {
     const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -15,10 +16,10 @@ export default function WalletSettings() {
         catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo completar la operación.'); }
         finally { setBusy(false); }
     }
-    return <div className="settings-channel"><p className="text-[13px] font-medium">Wallets cripto</p><p className="mu mt-2 text-[11px] leading-5">Guardá una dirección pública por red. Por ahora solo se guarda: todavía no consulta saldos. Nunca ingreses tu frase de recuperación ni tu clave privada.</p>
+    return <div className="settings-channel"><p className="text-[13px] font-medium">Wallets cripto</p><p className="mu mt-2 text-[11px] leading-5">Guardá una dirección pública por red para consultar sus saldos desde Importar. Nunca ingreses tu frase de recuperación ni tu clave privada.</p>
         <form className="mt-3 grid gap-3" onSubmit={event => { event.preventDefault(); void change('POST', { address, label, network }); }}>
-            <label className="mu text-[11px]">Red<select value={network} onChange={event => setNetwork(event.target.value)} className="settings-time mt-1 block w-full">{Object.entries(networks).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></label>
-            <label className="mu text-[11px]">Dirección pública<input required value={address} onChange={event => setAddress(event.target.value)} placeholder="0x…" autoComplete="off" className="settings-time mt-1 block w-full" /></label>
+            <div><p className="mu mb-1 text-[11px]">Red</p><Select className="w-full" label="Red de la wallet" value={network} onChange={setNetwork} options={Object.entries(networks).map(([value, name]) => ({ value, label: name }))} /></div>
+            <label className="mu text-[11px]">Dirección pública<input required value={address} onChange={event => setAddress(event.target.value)} placeholder={network === 'solana' ? 'Dirección de Solana' : '0x…'} autoComplete="off" className="settings-time mt-1 block w-full" /></label>
             <label className="mu text-[11px]">Nombre (opcional)<input maxLength={60} value={label} onChange={event => setLabel(event.target.value)} placeholder="Mi wallet" className="settings-time mt-1 block w-full" /></label>
             <button className="btn-ghost !min-h-10 justify-self-start text-[12px]" disabled={busy || loading}>Guardar dirección</button>
         </form>
