@@ -13,6 +13,7 @@ export type Investment = {
     coin?: string;
     units?: number;
     purchasePrice?: number;
+    costUnknown?: true;
     purchaseFx?: number;
     maturityDate?: string;
 };
@@ -121,10 +122,11 @@ export function cleanInvestment(raw: unknown): Investment | null {
     const parsedDate = new Date(`${date}T12:00:00Z`);
     if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) return null;
     const amount = Number(r.amount);
-    if (typeof r.name !== 'string' || !r.name.trim() || !Number.isFinite(amount) || amount <= 0) return null;
+    const costUnknown = kind === 'crypto' && r.costUnknown === true && amount === 0;
+    if (typeof r.name !== 'string' || !r.name.trim() || !Number.isFinite(amount) || (amount <= 0 && !costUnknown)) return null;
     const inv: Investment = {
         id: typeof r.id === 'string' && r.id ? r.id : crypto.randomUUID(),
-        name: r.name.trim().slice(0, 70), amount, currency, date, kind,
+        name: r.name.trim().slice(0, 70), amount, currency, date, kind, ...(costUnknown ? { costUnknown: true } : {}),
     };
     if (kind === 'rate') {
         const rate = Number(r.rate);

@@ -75,6 +75,7 @@ export default function ImportDocuments({ portfolio, update, onMailSettings, mai
         const quantity = Number(op.quantity), amount = Number(op.amount), price = Number(op.price);
         if ([op.quantity, op.amount, op.price].some((x, i) => canonical(x) !== canonical(String([quantity, amount, price][i])))) { setMessage('La cartera no admite esta precisión decimal. No se aplicó la operación.'); return; }
         const position = portfolio.investments.find(i => i.id === selection[op.id]);
+        if (op.side === 'sell' && position?.costUnknown) { setMessage('Primero editá la posición para completar su costo de compra.'); return; }
         if (op.side === 'sell' && (!position || position.kind !== op.kind || position.coin?.toUpperCase() !== op.asset.toUpperCase() || !position.units || quantity > position.units)) { setMessage('Elegí una posición del mismo activo con suficientes unidades para registrar la venta.'); return; }
         update(current => {
             const existing = current.imports?.find(row => row.id === op.id);
