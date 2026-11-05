@@ -68,6 +68,11 @@
   margin-top: 18px;
 }
 
+
+html {
+  outline: none;
+}
+
 .appearance-choices button {
   display: flex;
   align-items: center;
