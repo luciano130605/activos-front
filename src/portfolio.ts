@@ -53,7 +53,7 @@ export type ImportOperation = {
     quantity: string; price: string; amount: string; currency: string; fee: string; externalId: string; executions: string;
 };
 
-export type PriceAlert = { id: string; kind: 'price' | 'variation' | 'concentration' | 'dividend' | 'maturity'; assetKind: 'cedear' | 'stock' | 'crypto' | 'arg-stock' | 'bond' | 'fund'; assetId: string; assetName: string; threshold: number; direction: 'above' | 'below'; date: string };
+export type PriceAlert = { id: string; kind: 'price' | 'variation' | 'concentration' | 'dividend' | 'maturity'; assetKind: 'cedear' | 'stock' | 'crypto' | 'arg-stock' | 'bond' | 'fund'; assetId: string; assetName: string; threshold: number; direction: 'above' | 'below'; date: string; channels?: 'push' | 'telegram' | 'both' };
 
 export type Portfolio = {
     alerts?: PriceAlert[];
