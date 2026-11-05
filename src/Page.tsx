@@ -27,6 +27,7 @@ import PanelEditor from './PanelEditor';
 import TopBar from './TopBar';
 import Select from './Select';
 import QuoteSource from './QuoteSource';
+import MarketHours from './MarketHours';
 import { pages, usePage } from './navigation';
 import { cleanInvestment, cleanSale, readLegacyPortfolio, type Currency, type Investment, type Kind, type Period, type Sale } from './portfolio';
 import { request, type Account, type Snapshot } from './account';
@@ -767,6 +768,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             <div style={page === 'assistant' || view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                 {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
+                <MarketHours />
                 <span role="status">{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
                 <span className="ml-auto"><span className={statusDot} aria-hidden="true" style={{ alignSelf: 'center' }} />{syncLabel}</span>
             </div>
