@@ -311,6 +311,9 @@ export default function Benchmarks({
     });
 
     const svgRef = useRef<SVGSVGElement>(null);
+    const [mobileZoom, setMobileZoom] = useState(1);
+    const pinch = useRef<{ distance: number; zoom: number } | null>(null);
+    const touchDistance = (touches: React.TouchList) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
 
     const from = start;
 
@@ -1184,7 +1187,12 @@ export default function Benchmarks({
 
                 <>
 
-                    <div className="relative mt-6 select-none touch-pan-y">
+                    <div className="evolution-chart-viewport mt-6" onTouchStart={event => {
+                        if (event.touches.length === 2) { pinch.current = { distance: touchDistance(event.touches), zoom: mobileZoom }; setHoverT(null); setHoverKey(null); }
+                    }} onTouchMove={event => {
+                        if (event.touches.length === 2 && pinch.current?.distance) setMobileZoom(Math.max(1, Math.min(4, pinch.current.zoom * touchDistance(event.touches) / pinch.current.distance)));
+                    }} onTouchEnd={event => { if (event.touches.length < 2) pinch.current = null; }} onTouchCancel={() => { pinch.current = null; }}>
+                    <div className="evolution-chart-inner relative select-none" style={{ '--mobile-chart-zoom': mobileZoom } as React.CSSProperties}>
 
                         <svg
 
@@ -1198,8 +1206,8 @@ export default function Benchmarks({
 
                             aria-label="Gráfico de rendimiento comparado, base 100"
 
-                            onPointerDown={handlePointerMove}
-                            onPointerMove={handlePointerMove}
+                            onPointerDown={event => { if (!pinch.current) handlePointerMove(event); }}
+                            onPointerMove={event => { if (!pinch.current) handlePointerMove(event); }}
 
                             onPointerLeave={() => { setHoverT(null); setHoverKey(null); }}
 
@@ -1496,9 +1504,12 @@ export default function Benchmarks({
 
                     </div>
 
+                    </div>
+                    {mobileZoom > 1.01 && <button type="button" className="evolution-reset-zoom mu mt-2 text-[11px] underline" onClick={() => setMobileZoom(1)}>Restablecer zoom</button>}
+
                     {/* Annual results */}
 
-                    <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="evolution-results mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 
                         {result.lines.map(line => {
 
@@ -1512,7 +1523,7 @@ export default function Benchmarks({
 
                                     key={line.key}
 
-                                    className="min-w-0 rounded-lg border border-[var(--line)] p-3"
+                                    className="evolution-result min-w-0 rounded-lg border border-[var(--line)] p-3"
 
                                 >
 

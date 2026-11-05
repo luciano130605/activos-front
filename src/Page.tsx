@@ -1,3 +1,4 @@
+import AlertToast from './AlertToast';
 import EmailSettingsDialog from './EmailSettingsDialog';
 import type { ArgentineKind, LocalSelection } from './ArgentineMarket';
 import { localQuotes, isLocal } from './local-market';
@@ -5,7 +6,7 @@ import { fixedTermValue } from './fixed-term';
 import RefreshButton from './RefreshButton';
 import { isAiProvider, type AiProvider } from './ai-provider';
 import ImportDocuments from './ImportDocuments';
-import { createPasskey, passkeyStatus, preparePasskey, supportsPasskeys, type RegistrationOptions } from './passkeys';
+import { createPasskey, passkeyStatus, preparePasskey, removePasskey, supportsPasskeys, type RegistrationOptions, type SavedPasskey } from './passkeys';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { coinPriceOn, coinPricesNow, usdcArsNow } from './coingecko';
 import { cedearPriceOn, cedearPricesNow, stockPrice, stockPricesNow } from './cedears';
@@ -154,13 +155,15 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         } catch { return null; }
     });
     const [passkeyCount, setPasskeyCount] = useState<number | null>(null);
+    const [savedPasskeys, setSavedPasskeys] = useState<SavedPasskey[]>([]);
     const [passkeyDialog, setPasskeyDialog] = useState(false);
     const [passkeyOptions, setPasskeyOptions] = useState<RegistrationOptions | null>(null);
     const [passkeyMessage, setPasskeyMessage] = useState('');
     const [passkeyBusy, setPasskeyBusy] = useState(false);
-    useEffect(() => { void passkeyStatus().then(result => setPasskeyCount(result.count)).catch(() => setPasskeyCount(null)); }, []);
+    useEffect(() => { void passkeyStatus().then(result => { setPasskeyCount(result.count); setSavedPasskeys(result.keys); }).catch(() => setPasskeyCount(null)); }, []);
     async function preparePasskeyDialog() {
         setPasskeyDialog(true); setPasskeyOptions(null); setPasskeyMessage('');
+        void passkeyStatus().then(result => { setPasskeyCount(result.count); setSavedPasskeys(result.keys); }).catch(() => {});
         if (!supportsPasskeys()) { setPasskeyMessage('Este dispositivo o navegador no admite passkeys. Abrí la app en Safari con HTTPS.'); return; }
         setPasskeyBusy(true);
         try { setPasskeyOptions(await preparePasskey()); }
@@ -174,7 +177,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             await createPasskey(passkeyOptions);
             setPasskeyOptions(null);
             setPasskeyCount(count => count === null ? 1 : count + 1);
-            void passkeyStatus().then(result => setPasskeyCount(result.count)).catch(() => { });
+            void passkeyStatus().then(result => { setPasskeyCount(result.count); setSavedPasskeys(result.keys); }).catch(() => { });
             setPasskeyMessage('Passkey activada. Ya podés usarla para ingresar.');
         } catch (error) {
             setPasskeyOptions(null);
@@ -348,6 +351,32 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const alerts = view.portfolio.alerts ?? [];
     const alertStatuses = usePriceAlerts(alerts, items.map(item => ({ kind: item.kind, id: item.coin ?? '', value: fx(valueAt(item, today, prices, today, officialRate), item.currency) })));
     const triggeredAlerts = alerts.filter(alert => alertStatuses[alert.id]?.state === 'triggered');
+    const shownAlertKey = `alza-shown-alerts:${account.user.id}`;
+    const [shownAlerts, setShownAlerts] = useState<string[]>(() => { try { const value = JSON.parse(localStorage.getItem(`alza-shown-alerts:${account.user.id}`) || '[]'); return Array.isArray(value) ? value.filter(id => typeof id === 'string') : []; } catch { return []; } });
+    const unseenAlerts = triggeredAlerts.filter(alert => !shownAlerts.includes(alert.id));
+    const alertSignature = unseenAlerts.map(alert => alert.id).sort().join('|');
+    useEffect(() => {
+        if (!alertSignature || page === 'prices') return;
+        try { const saved = JSON.parse(localStorage.getItem(shownAlertKey) || '[]'); const prior = Array.isArray(saved) ? saved.filter(id => typeof id === 'string') : []; localStorage.setItem(shownAlertKey, JSON.stringify([...new Set([...prior, ...unseenAlerts.map(alert => alert.id)])])); } catch { /* almacenamiento no disponible */ }
+    }, [alertSignature, page, shownAlertKey]);
+    const dismissAlerts = () => setShownAlerts(current => [...new Set([...current, ...unseenAlerts.map(alert => alert.id)])]);
+    const notificationKey = `alza-alert-history:${account.user.id}`;
+    const [alertHistory, setAlertHistory] = useState<{ id: string; alertId: string; title: string; message: string; time: number }[]>(() => { try { const value = JSON.parse(localStorage.getItem(`alza-alert-history:${account.user.id}`) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } });
+    const previousAlertStates = useRef<Record<string, string>>((() => { try { return JSON.parse(localStorage.getItem(`${notificationKey}:states`) || '{}'); } catch { return {}; } })());
+    useEffect(() => {
+        const previous = previousAlertStates.current;
+        const additions = alerts.flatMap(alert => {
+            const status = alertStatuses[alert.id];
+            if (!status || status.state === 'unavailable') return [];
+            const was = previous[alert.id];
+            previous[alert.id] = status.state;
+            return status.state === 'triggered' && was !== 'triggered' ? [{ id: crypto.randomUUID(), alertId: alert.id, title: alert.assetName, message: status.message, time: Date.now() }] : [];
+        });
+        try { localStorage.setItem(`${notificationKey}:states`, JSON.stringify(previous)); } catch { /* almacenamiento no disponible */ }
+        if (additions.length) setAlertHistory(current => [...additions, ...current].slice(0, 100));
+    }, [JSON.stringify(alertStatuses), JSON.stringify(alerts)]);
+    useEffect(() => { try { localStorage.setItem(notificationKey, JSON.stringify(alertHistory)); } catch { /* almacenamiento no disponible */ } }, [notificationKey, alertHistory]);
+
     const byKind = (['rate', 'cedear', 'index', 'stock', 'crypto', 'arg-stock', 'bond', 'fund'] as const).map(k => { const list = items.filter(i => categoryOf(i) === k); return { id: k, label: kinds.find(v => v.id === k)!.label, color: colorOf(k), value: valueOf(list), count: list.length }; });
     const byCurrency = [
         { label: 'Dólares (USD)', color: 'var(--sig)', value: valueOf(items.filter(i => i.currency === 'USD')), count: items.filter(i => i.currency === 'USD').length },
@@ -775,6 +804,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         setSellId(item.id); setSellPercent('100'); setSellInputMode('percent'); setSellInputAmount(''); setSellCurrency(item.currency); setSellError(''); setSellFee('0');
         setSellExecutionPrice(!hidden && Number.isFinite(initial) && initial > 0 ? String(initial) : '');
     }
+
+  
     const sellItem = items.find(item => item.id === sellId);
     const sellPrice = Number(sellExecutionPrice);
     const sellTotal = sellItem && Number.isFinite(sellPrice) && sellPrice > 0 ? sellItem.kind === 'rate' ? sellPrice : (sellItem.units ?? 0) * sellPrice : NaN;
@@ -838,7 +869,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => { setInitialLocalSearch(undefined); setAssetSearch('crypto'); }} onAdd={openModal} onExport={exportJSON} onImport={() => fileRef.current?.click()}
-                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onMailSettings={() => { setSpaceSubscreen('mail'); setEmailSettings(true); }} onCustomize={() => setPanelEditor(true)} customizing={panelEditor} spaceSubscreen={spaceSubscreen !== null} onPasskey={() => { setSpaceSubscreen('passkey'); void preparePasskeyDialog(); }} passkeyCount={passkeyCount} onAiSettings={() => { setSpaceSubscreen('ai'); setAiSettingsRequest(value => value + 1); }} quietHours={view.portfolio.preferences.quietHours} onQuietHours={value => sync.update(current => ({ ...current, preferences: { ...current.preferences, quietHours: value } }))} alertCount={alerts.length} triggeredCount={triggeredAlerts.length} />
+                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onMailSettings={() => { setSpaceSubscreen('mail'); setEmailSettings(true); }} onCustomize={() => setPanelEditor(true)} customizing={panelEditor} spaceSubscreen={spaceSubscreen !== null} onPasskey={() => { setSpaceSubscreen('passkey'); void preparePasskeyDialog(); }} passkeyCount={passkeyCount} alerts={alerts} alertStatuses={alertStatuses} onDeleteAlert={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} onSaveAlert={alert => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).map(item => item.id === alert.id ? { ...alert, id: crypto.randomUUID() } : item) }))} alertHistory={alertHistory} onClearHistory={() => setAlertHistory([])} onAiSettings={() => { setSpaceSubscreen('ai'); setAiSettingsRequest(value => value + 1); }} quietHours={view.portfolio.preferences.quietHours} onQuietHours={value => sync.update(current => ({ ...current, preferences: { ...current.preferences, quietHours: value } }))} alertCount={alerts.length} triggeredCount={triggeredAlerts.length} />
             <div style={page === 'assistant' || view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
                 <div className="ticker-track">
                     {[false, true].map(duplicate => <div className="ticker-group" key={String(duplicate)} aria-hidden={duplicate || undefined}>
@@ -859,10 +890,10 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {notice && <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-4 py-3 text-[12px]"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Cerrar aviso" className="text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={14} /></button></div>}
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
-                {triggeredAlerts.length > 0 && page !== 'prices' && <div role="status" className="mb-4 rounded-xl border border-[var(--sig)] bg-[var(--sigbg)] px-4 py-3 text-[12px]"><span>{triggeredAlerts.length === 1 ? `Tenés una alerta activa: ${triggeredAlerts[0].assetName} · ${alertStatuses[triggeredAlerts[0].id].message}` : `Tenés ${triggeredAlerts.length} alertas activas.`}</span> <PageLink page="prices" className="ml-2 underline">Ver alertas</PageLink></div>}
+                {unseenAlerts.length > 0 && page !== 'prices' && <AlertToast key={alertSignature} title={unseenAlerts.length === 1 ? 'Alerta activa' : `${unseenAlerts.length} alertas activas`} message={unseenAlerts.length === 1 ? `${unseenAlerts[0].assetName} · ${alertStatuses[unseenAlerts[0].id].message}` : 'Hay novedades en tus activos.'} onClose={dismissAlerts} onOpen={() => { window.dispatchEvent(new CustomEvent('open-alert-settings')); dismissAlerts(); }} />}
                 <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} returnToSpace={spaceSubscreen === 'ai'} onSettingsClose={() => setSpaceSubscreen(null)} onAdd={investment => setItems(prev => [...prev, investment])} onSell={openSale} />
                 {page === 'goals' && <Suspense fallback={<p role="status" className="mu p-5">Cargando objetivos…</p>}><Goals provider={aiProvider} setProvider={setAiProvider} onAiSettings={() => setAiSettingsRequest(value => value + 1)} categories={byKind} targets={view.portfolio.preferences.allocationTargets} format={fmt} incompleteQuotes={items.some(item => item.kind !== 'rate' && !!item.coin && prices[`${item.kind}:${item.coin}`] == null)} onSave={targets => sync.update(current => ({ ...current, preferences: { ...current.preferences, allocationTargets: targets } }))} /></Suspense>}
-                {page === 'prices' && <Suspense fallback={<p role="status" className="mu p-5">Cargando precios…</p>}><PricesPage items={items} onAddLocal={investment => setItems(prev => [...prev, investment])} onChooseLocal={selectLocalAsset} alerts={alerts} statuses={alertStatuses} onAdd={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} onDelete={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} /></Suspense>}
+                {page === 'prices' && <Suspense fallback={<p role="status" className="mu p-5">Cargando precios…</p>}><PricesPage items={items} onAddLocal={investment => setItems(prev => [...prev, investment])} onChooseLocal={selectLocalAsset} alerts={alerts} statuses={alertStatuses} onAdd={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} /></Suspense>}
                 {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} onMailSettings={() => setEmailSettings(true)} mailRevision={emailSettingsRevision} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} items={items} alerts={alerts} onAddAlert={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} />}
@@ -986,6 +1017,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {spaceSubscreen === 'passkey' && <button type="button" className="btn-ghost mb-6" disabled={passkeyBusy} onClick={() => { setPasskeyDialog(false); setSpaceSubscreen(null); }}><span aria-hidden="true"><HugeiconsIcon icon={ChevronLeft} size={20} /></span> </button>}<h2 id="passkey-title" className="text-xl font-light">Passkeys y llaves de seguridad</h2>
                 <p className="mu mt-3 text-[13px] leading-6">{passkeyCount === null ? 'No se pudo consultar el estado de tus passkeys.' : passkeyCount ? `Tenés ${passkeyCount} ${passkeyCount === 1 ? 'passkey registrada' : 'passkeys registradas'} en tu cuenta.` : 'Todavía no tenés passkeys registradas.'}</p>
                 <p className="mu mt-2 text-[12px] leading-5">Podés agregar una passkey para ingresar con Face ID, otro dispositivo o una llave de seguridad.</p>
+                {savedPasskeys.length > 0 && <div className="mt-4 space-y-2">{savedPasskeys.map((key, index) => <div key={key.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-3"><div><p className="text-[12px] font-medium">Passkey {index + 1}</p><p className="mu mt-1 text-[11px]">{key.createdAt ? `Agregada el ${new Date(key.createdAt).toLocaleDateString('es-AR')}` : 'Fecha de registro no disponible'}{key.lastUsedAt ? ` · Último uso: ${new Date(key.lastUsedAt).toLocaleDateString('es-AR')}` : ''}</p></div><button type="button" className="text-[12px] text-[var(--neg)] underline" disabled={passkeyBusy} aria-label={`Eliminar passkey ${index + 1}`} onClick={() => { if (!window.confirm('¿Eliminar esta passkey de tu cuenta?')) return; setPasskeyBusy(true); setPasskeyMessage(''); void removePasskey(key.id).then(() => { setSavedPasskeys(current => current.filter(item => item.id !== key.id)); setPasskeyCount(count => count === null ? null : Math.max(0, count - 1)); setPasskeyMessage('Passkey eliminada de tu cuenta. También podés quitarla del administrador de contraseñas de tu dispositivo.'); }).catch(error => setPasskeyMessage(error instanceof Error ? error.message : 'No se pudo eliminar la passkey.')).finally(() => setPasskeyBusy(false)); }}>Eliminar</button></div>)}</div>}
                 {passkeyMessage && <p role="status" className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3 text-[12px]">{passkeyMessage}</p>}
                 <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" className="btn-ghost" disabled={passkeyBusy} onClick={() => { setPasskeyDialog(false); setSpaceSubscreen(null); }}>{spaceSubscreen === 'passkey' ? 'Volver' : 'Cerrar'}</button>{passkeyOptions ? <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void enablePasskey()}>{passkeyBusy ? 'Activando…' : 'Crear passkey'}</button> : <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void preparePasskeyDialog()}>{passkeyBusy ? 'Preparando…' : 'Agregar passkey'}</button>}</div>
             </section>

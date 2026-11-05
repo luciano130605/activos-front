@@ -5,7 +5,7 @@ import { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerform
 import { request } from './account';
 import { localQuotes, type LocalKind } from './local-market';
 import type { PriceAlert } from './portfolio';
-import { dividendAlertStatus } from './dividend-alert';
+import { portfolioDividendAlertStatus } from './dividend-alert';
 
 const DAY = 86_400_000;
 type DividendResult = { configured: boolean; items: { ticker: string; kind: string; status: string; events?: { payDate: string; eligible: boolean; estimated?: boolean }[] }[] };
@@ -14,6 +14,7 @@ export function usePriceAlerts(alerts: PriceAlert[], values: { kind: string; id:
     const [quotes, setQuotes] = useState<Record<string, number>>({});
     const [histories, setHistories] = useState<Record<string, HistoryPoint[]>>({});
     const [dividends, setDividends] = useState<DividendResult | null>(null);
+    const [dividendError, setDividendError] = useState(false);
     const [tick, setTick] = useState(0);
     const signature = JSON.stringify(alerts);
     useEffect(() => { if (!alerts.length) return; const timer = window.setInterval(() => setTick(value => value + 1), 5 * 60_000); return () => window.clearInterval(timer); }, [alerts.length]);
@@ -23,12 +24,12 @@ export function usePriceAlerts(alerts: PriceAlert[], values: { kind: string; id:
         if (!configs.length) { setQuotes({}); setHistories({}); setDividends(null); return () => controller.abort(); }
         const relevant = configs.filter(a => a.kind === 'price' || a.kind === 'variation');
         const ids = (kind: PriceAlert['assetKind']) => [...new Set(relevant.filter(a => a.assetKind === kind).map(a => a.assetId))];
-        setQuotes({}); setHistories({}); setDividends(null);
+        setQuotes({}); setHistories({}); setDividends(null); setDividendError(false);
         const local = (['arg-stock', 'bond', 'fund'] as LocalKind[]).flatMap(kind => ids(kind).map(coin => ({ kind, coin })));
         void Promise.allSettled([cedearPricesNow(ids('cedear'), controller.signal), stockPricesNow(ids('stock'), controller.signal), coinPricesNow(ids('crypto'), controller.signal), localQuotes(local, controller.signal)]).then(results => { if (!controller.signal.aborted) setQuotes(Object.assign({}, ...results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []))); });
         const varying = [...new Map(configs.filter(a => a.kind === 'variation').map(a => [`${a.assetKind}:${a.assetId}`, a])).entries()];
         void Promise.all(varying.map(async ([key, alert]) => { try { return [key, await history(alert.assetKind, alert.assetId, controller.signal)] as const; } catch { return [key, []] as const; } })).then(rows => { if (!controller.signal.aborted) setHistories(Object.fromEntries(rows)); });
-        if (configs.some(a => a.kind === 'dividend')) void request<DividendResult>('dividends').then(data => { if (!controller.signal.aborted) setDividends(data); }).catch(() => {});
+        if (configs.some(a => a.kind === 'dividend')) void request<DividendResult>('dividends').then(data => { if (!controller.signal.aborted) setDividends(data); }).catch(() => { if (!controller.signal.aborted) setDividendError(true); });
         return () => controller.abort();
     }, [signature, tick]);
     const statuses: Record<string, AlertStatus> = {};
@@ -53,11 +54,8 @@ export function usePriceAlerts(alerts: PriceAlert[], values: { kind: string; id:
         } else if (alert.kind === 'maturity') {
             const days = Math.round((new Date(`${alert.date}T12:00:00`).getTime() - today.getTime()) / DAY);
             status = { state: days >= 0 && days <= alert.threshold ? 'triggered' : 'waiting', message: days < 0 ? 'Fecha de vencimiento pasada' : days === 0 ? 'Vence hoy' : `Vence en ${days} días` };
-        } else if (dividends?.configured) {
-            const matching = dividends.items.filter(item => item.ticker.toUpperCase() === alert.assetId.toUpperCase() && item.kind === alert.assetKind);
-            if (matching.some(item => item.status === 'ok')) {
-                status = dividendAlertStatus(matching.flatMap(item => item.events ?? []), alert.threshold, now);
-            }
+        } else {
+            status = portfolioDividendAlertStatus(dividends, alert, dividendError, now);
         }
         statuses[alert.id] = status;
     }

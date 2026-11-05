@@ -17,3 +17,16 @@ export function dividendAlertStatus(events: DividendAlertEvent[], threshold: num
     const when = threshold === 0 ? 'el día del pago' : threshold === 1 ? '1 día antes' : `${threshold.toLocaleString('es-AR')} días antes`;
     return { state: days <= threshold ? 'triggered' as const : 'waiting' as const, message: `${label}: ${date}${days > threshold ? ` · Aviso ${when}` : ''}` };
 }
+
+
+type DividendResult = { configured: boolean; items: { ticker: string; kind: string; status: string; events?: DividendAlertEvent[] }[] };
+export function portfolioDividendAlertStatus(result: DividendResult | null, alert: { assetId: string; assetKind: string; threshold: number }, failed = false, now = Date.now()) {
+    if (failed) return { state: 'unavailable' as const, message: 'No se pudieron consultar los dividendos. Reintentá más tarde.' };
+    if (!result) return { state: 'unavailable' as const, message: 'Consultando dividendos…' };
+    if (!result.configured) return { state: 'unavailable' as const, message: 'Falta configurar el proveedor de dividendos en el servidor.' };
+    const matching = result.items.filter(item => item.ticker.toUpperCase() === alert.assetId.toUpperCase() && item.kind === alert.assetKind);
+    if (!matching.length) return { state: 'unavailable' as const, message: 'No hay una posición con unidades registradas para este activo. Revisá tu cartera y su sincronización.' };
+    if (matching.some(item => item.status === 'missing_ratio')) return { state: 'unavailable' as const, message: 'No se pudo obtener el ratio del CEDEAR para calcular los dividendos.' };
+    if (matching.some(item => item.status !== 'ok')) return { state: 'unavailable' as const, message: 'El proveedor de dividendos no respondió para este activo. Reintentá más tarde.' };
+    return dividendAlertStatus(matching.flatMap(item => item.events ?? []), alert.threshold, now);
+}

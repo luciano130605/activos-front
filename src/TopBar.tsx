@@ -1,26 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { DarkModeFreeIcons, LogoutCircle01Icon, MenuTwoLineIcon, Mail01Icon, PlusIcon, ScanFaceIcon, Search01Icon, Share08Icon, ViewIcon, ViewOffIcon, SolarSystem01Icon } from '@hugeicons/core-free-icons';
+import { DarkModeFreeIcons, LogoutCircle01Icon, MenuTwoLineIcon, Mail01Icon, PlusIcon, ScanFaceIcon, Search01Icon, Share08Icon, ViewIcon, ViewOffIcon, SolarSystem01Icon, Notification01Icon } from '@hugeicons/core-free-icons';
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
 import PageIcon from './PageIcon';
 import ContextMenu from './ContextMenu';
+import NotificationsMenu from './NotificationsMenu';
 import SettingsDialog from './SettingsDialog';
+import AlertsManagement from './AlertsManagement';
 import AppearanceDialog from './AppearanceDialog';
 import ShareDialog from './ShareDialog';
-import type { Currency, Preferences } from './portfolio';
+import type { Currency, Preferences, PriceAlert } from './portfolio';
+import type { AlertStatus } from './usePriceAlerts';
 
 type Props = {
     page: PageId; count: number; theme: 'light' | 'dark' | 'system'; resolvedTheme: 'light' | 'dark'; onTheme: (theme: 'light' | 'dark' | 'system') => void; hidden: boolean; onHidden: () => void;
     display: Currency; onDisplay: (c: Currency) => void; onSearch: () => void; onAdd: () => void; onExport: () => void; onImport: () => void;
     email: string; syncLabel: string; onLogout: () => void; leaving: boolean;
     onMailSettings: () => void; onCustomize: () => void; customizing: boolean; spaceSubscreen: boolean; onPasskey: () => void; passkeyCount: number | null; onAiSettings: () => void;
+    alerts: PriceAlert[]; alertStatuses: Record<string, AlertStatus>; onDeleteAlert: (id: string) => void; onSaveAlert: (alert: PriceAlert) => void; alertHistory: { id: string; alertId: string; title: string; message: string; time: number }[]; onClearHistory: () => void;
     quietHours?: Preferences['quietHours']; onQuietHours: (value: NonNullable<Preferences['quietHours']>) => void; alertCount: number; triggeredCount: number;
 };
 
 export default function TopBar(p: Props) {
     const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
     const [settings, setSettings] = useState<'personalizacion' | 'cuenta' | 'notificaciones' | null>(() => window.location.pathname.replace(/\/+$/, '') === '/espacio' ? 'personalizacion' : null);
+    const [notifications, setNotifications] = useState<{ x: number; y: number } | null>(null);
+    const [manageAlerts, setManageAlerts] = useState(false);
+    const closeNotifications = useCallback(() => setNotifications(null), []);
     const [appearance, setAppearance] = useState(false);
     const [sharing, setSharing] = useState(false);
     const closeMenu = useCallback(() => setMenu(null), []);
@@ -29,7 +36,7 @@ export default function TopBar(p: Props) {
     useEffect(() => {
         const onNavigate = () => {
             if (window.location.pathname.replace(/\/+$/, '') === '/espacio') setSettings(current => current ?? 'personalizacion');
-            else { setSettings(null); setAppearance(false); }
+            else { setSettings(null); setAppearance(false); setManageAlerts(false); }
         };
         window.addEventListener('popstate', onNavigate);
         return () => window.removeEventListener('popstate', onNavigate);
@@ -41,12 +48,13 @@ export default function TopBar(p: Props) {
         }
         setSettings(section);
     };
+    useEffect(() => { const open = () => { openSettings('notificaciones'); setManageAlerts(true); }; window.addEventListener('open-alert-settings', open); return () => window.removeEventListener('open-alert-settings', open); }, []);
     const closeSettings = () => {
         const from = window.history.state?.espacioFrom;
         const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/espacio') ? from : '/';
         window.history.replaceState(null, '', destination);
         window.dispatchEvent(new PopStateEvent('popstate'));
-        setSettings(null);
+        setSettings(null); setManageAlerts(false);
     };
     return <header className="topbar">
         <div className="brand">
@@ -63,11 +71,12 @@ export default function TopBar(p: Props) {
 
             <button type="button" className="ibtn white" onClick={p.onAdd} aria-label="Nueva inversión" title="Nueva inversión"><HugeiconsIcon icon={PlusIcon} size={18} /></button>
             <button type="button" className="ibtn" onClick={p.onSearch} aria-label="Buscar activos" title="Buscar activos"><HugeiconsIcon icon={Search01Icon} size={18} /></button>
-            <button type="button" className="ibtn" onClick={p.onHidden} aria-pressed={p.hidden} aria-label={p.hidden ? 'Mostrar montos' : 'Ocultar montos'} title={p.hidden ? 'Mostrar montos' : 'Ocultar montos'}><HugeiconsIcon icon={p.hidden ? ViewOffIcon : ViewIcon} size={18} /></button>
 
+            <button type="button" className="ibtn relative" aria-label="Notificaciones" aria-haspopup="menu" aria-expanded={!!notifications} onClick={event => { const r = event.currentTarget.getBoundingClientRect(); setNotifications(current => current ? null : { x: r.right - 340, y: r.bottom + 8 }); }}>{<HugeiconsIcon icon={Notification01Icon} size={18} />}{p.alertHistory.length > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--sig)]" />}</button>
             <button ref={more} type="button" className="ibtn" aria-haspopup="menu" aria-expanded={!!menu} aria-label="Más opciones" onClick={() => menu ? setMenu(null) : openMenu()}><HugeiconsIcon icon={MenuTwoLineIcon} size={18} /></button>
         </div>
         {menu && <ContextMenu x={menu.x} y={menu.y} title={`${p.email} · ${p.syncLabel}`} onClose={closeMenu} currency={{ value: p.display, onChange: p.onDisplay }} items={[
+            { label: p.hidden ? 'Mostrar montos' : 'Ocultar montos', icon: p.hidden ? ViewOffIcon : ViewIcon, onSelect: p.onHidden },
             { label: 'Buscar activos', icon: Search01Icon, onSelect: p.onSearch, hint: '/' },
             { label: 'Compartir página', icon: Share08Icon, onSelect: () => setSharing(true) },
             { sep: true },
@@ -77,8 +86,10 @@ export default function TopBar(p: Props) {
             { sep: true },
             { label: p.leaving ? 'Cerrando sesión…' : 'Cerrar sesión', icon: LogoutCircle01Icon, onSelect: p.onLogout, danger: true },
         ]} />}
+        {notifications && <NotificationsMenu x={notifications.x} y={notifications.y} items={p.alertHistory} onClose={closeNotifications} onClear={p.onClearHistory} onOpen={() => { openSettings('notificaciones'); setManageAlerts(true); }} />}
         {sharing && <ShareDialog onClose={() => setSharing(false)} />}
-        {settings && !appearance && !p.customizing && !p.spaceSubscreen && <SettingsDialog initial={settings} onSectionChange={setSettings} onClose={closeSettings} onAppearance={() => setAppearance(true)} onCustomize={p.onCustomize} onPasskey={p.onPasskey} passkeyCount={p.passkeyCount} onAiSettings={p.onAiSettings} onMailSettings={p.onMailSettings} onExport={p.onExport} onImport={p.onImport} quietHours={p.quietHours} onQuietHours={p.onQuietHours} alertCount={p.alertCount} triggeredCount={p.triggeredCount} />}
+        {settings && !manageAlerts && !appearance && !p.customizing && !p.spaceSubscreen && <SettingsDialog initial={settings} manageAlerts={manageAlerts} onManageAlerts={setManageAlerts} alerts={p.alerts} alertStatuses={p.alertStatuses} onDeleteAlert={p.onDeleteAlert} onSectionChange={setSettings} onClose={closeSettings} onAppearance={() => setAppearance(true)} onCustomize={p.onCustomize} onPasskey={p.onPasskey} passkeyCount={p.passkeyCount} onAiSettings={p.onAiSettings} onMailSettings={p.onMailSettings} onExport={p.onExport} onImport={p.onImport} quietHours={p.quietHours} onQuietHours={p.onQuietHours} alertCount={p.alertCount} triggeredCount={p.triggeredCount} />}
+        {settings && manageAlerts && !appearance && !p.spaceSubscreen && <div className="settings-subscreen settings-subscreen-narrow fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4"><section role="dialog" aria-modal="true" aria-labelledby="alerts-management-title" className="card w-full max-w-md overflow-y-auto p-6 shadow-2xl"><AlertsManagement alerts={p.alerts} statuses={p.alertStatuses} onDelete={p.onDeleteAlert} onSave={p.onSaveAlert} onBack={() => setManageAlerts(false)} /></section></div>}
         {appearance && <AppearanceDialog theme={p.theme} onTheme={p.onTheme} onClose={() => setAppearance(false)} />}
     </header>;
 }
