@@ -43,6 +43,7 @@ export type Preferences = {
     panels?: string[];
     showChatButton?: boolean;
     showQuotesBar?: boolean;
+    quietHours?: { enabled: boolean; start: string; end: string };
 };
 
 export type ImportOperation = {

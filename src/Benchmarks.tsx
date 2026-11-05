@@ -34,7 +34,7 @@ type Series = {
 
 type Key = keyof Series | 'cartera';
 
-type Point = { t: number; value: number; original?: number; observedAt?: number };
+type Point = { t: number; value: number; original?: number; unitPrice?: number; observedAt?: number };
 
 type Line = {
 
@@ -138,20 +138,6 @@ const time = (date: string) =>
 
     Date.parse(`${date.slice(0, 10)}T12:00:00Z`);
 
-const dateLabel = (t: number) =>
-
-    new Date(t).toLocaleDateString('es-AR', {
-
-        day: 'numeric',
-
-        month: 'short',
-
-        year: 'numeric',
-
-        timeZone: 'UTC',
-
-    });
-
 const monthLabel = (t: number) =>
 
     new Date(t).toLocaleDateString('es-AR', {
@@ -161,6 +147,10 @@ const monthLabel = (t: number) =>
         timeZone: 'UTC',
 
     });
+
+const shortDateLabel = (t: number) => new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC',
+}).format(new Date(t));
 
 const percent = (value: number) =>
 
@@ -184,9 +174,12 @@ const at = (rows: Point[], t: number) => {
 
 const getValue = (points: Point[], t: number) => {
 
-    if (!points.length || t < points[0].t) return null;
-
-    return at(points, t)?.value ?? null;
+    if (!points.length || t < points[0].t || t > points[points.length - 1].t) return null;
+    const index = points.findIndex(point => point.t >= t);
+    if (index <= 0) return points[0].value;
+    const previous = points[index - 1], next = points[index];
+    const ratio = (t - previous.t) / (next.t - previous.t);
+    return previous.value + (next.value - previous.value) * ratio;
 
 };
 
@@ -211,6 +204,8 @@ export default function Benchmarks({
     availablePeriods,
 
     valueAt,
+
+    priceAt,
 
     available,
 
@@ -251,6 +246,8 @@ export default function Benchmarks({
     availablePeriods: number[];
 
     valueAt: (t: number) => number;
+
+    priceAt: (t: number) => number | undefined;
 
     available: boolean;
 
@@ -295,6 +292,7 @@ export default function Benchmarks({
     const [exporting, setExporting] = useState(false);
 
     const [hoverT, setHoverT] = useState<number | null>(null);
+    const [hoverKey, setHoverKey] = useState<Key | null>(null);
 
     const [visible, setVisible] = useState<Record<keyof Series, boolean>>({
 
@@ -487,7 +485,7 @@ export default function Benchmarks({
         if (available) {
             const initial = valueAt(from);
             if (Number.isFinite(initial) && initial > 0) {
-                const points = times.map(t => { const original = valueAt(t); return { t, value: original / initial * 100, original }; });
+                const points = times.map(t => { const original = valueAt(t); return { t, value: original / initial * 100, original, unitPrice: priceAt(t) }; });
                 if (points.every(p => Number.isFinite(p.value) && p.value > 0)) {
                     lines.push({ key: 'cartera', label: selectionLabel, points, lastDate: to });
                 }
@@ -730,7 +728,7 @@ export default function Benchmarks({
 
         };
 
-    }, [data, available, from, to, valueAt, visible, selectionLabel, months]);
+    }, [data, available, from, to, valueAt, priceAt, visible, selectionLabel, months]);
 
     const handlePointerMove = (
 
@@ -752,15 +750,32 @@ export default function Benchmarks({
 
         );
 
-        setHoverT(from + ratio * (to - from));
+        const t = from + ratio * (to - from);
+        const pointerY = e.clientY - rect.top;
+        let nearest: { key: Key; distance: number } | null = null;
+        for (const line of result.lines) {
+            const value = getValue(line.points, t);
+            if (value === null) continue;
+            const distance = Math.abs(result.y(value) / H * rect.height - pointerY);
+            if (!nearest || distance < nearest.distance) nearest = { key: line.key, distance };
+        }
+        if (nearest && nearest.distance <= (e.pointerType === 'touch' ? 28 : 16)) {
+            setHoverT(t);
+            setHoverKey(nearest.key);
+        } else {
+            setHoverT(null);
+            setHoverKey(null);
+        }
 
     };
 
     const hover = useMemo(() => {
 
-        if (!result || hoverT === null) return null;
+        if (!result || hoverT === null || hoverKey === null) return null;
 
         const points = result.lines.flatMap(line => {
+
+            if (line.key !== hoverKey) return [];
 
             const point = at(line.points, hoverT);
             const value = getValue(line.points, hoverT);
@@ -779,6 +794,7 @@ export default function Benchmarks({
 
                 change: value - 100,
                 original: point.original,
+                unitPrice: point.unitPrice,
                 observedAt: point.observedAt,
 
             }];
@@ -795,7 +811,7 @@ export default function Benchmarks({
 
         };
 
-    }, [result, hoverT]);
+    }, [result, hoverT, hoverKey]);
 
     const portfolio = result?.lines.find(
 
@@ -838,7 +854,7 @@ export default function Benchmarks({
             ctx.fillStyle = '#a9b1a8'; ctx.font = '16px Geist, sans-serif';
             ctx.fillText('Variación en pesos argentinos · Base 100', 60, 145);
             ctx.fillStyle = '#e0e5da'; ctx.font = '500 15px Geist, sans-serif';
-            ctx.fillText(`${dateLabel(from)} — ${dateLabel(to)}`, 60, 173);
+            ctx.fillText(`${shortDateLabel(from)} — ${shortDateLabel(to)}`, 60, 173);
             if (portfolioReturn !== null) {
                 rounded(708, 53, 230, 117, 16, '#1c231c', '#354035');
                 ctx.fillStyle = '#a9b1a8'; ctx.font = '13px Geist, sans-serif';
@@ -887,7 +903,7 @@ export default function Benchmarks({
                 ctx.textAlign = 'right'; ctx.fillStyle = variation >= 0 ? '#d6f6ae' : '#ff9999'; ctx.font = '600 19px Geist, sans-serif';
                 ctx.fillText(percent(variation), x + 414, y + 28);
                 ctx.textAlign = 'left'; ctx.fillStyle = '#b7c0b5'; ctx.font = '14px Geist, sans-serif';
-                ctx.fillText(`${dateLabel(from)} — ${dateLabel(line.lastDate)}`, x + 15, y + 62, 400);
+                ctx.fillText(`${shortDateLabel(from)} — ${shortDateLabel(line.lastDate)}`, x + 15, y + 62, 400);
             });
             ctx.fillStyle = '#899588'; ctx.font = '12px Geist, sans-serif';
             ctx.fillText('ALZA  ·  Comparación de rendimiento en ARS', 60, height - 55);
@@ -962,7 +978,7 @@ export default function Benchmarks({
 
                         <p className="mt-0.5 text-[12px] font-medium tabular-nums">
 
-                            {dateLabel(from)} — {dateLabel(to)}
+                            {shortDateLabel(from)} — {shortDateLabel(to)}
 
                         </p>
 
@@ -980,7 +996,8 @@ export default function Benchmarks({
                 </div>
             </div>}
 
-            <div className="mt-5 max-w-sm">
+            <div className="mt-5 grid max-w-2xl grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-start gap-3 sm:gap-4">
+            <div className="min-w-0">
                 <label htmlFor="benchmark-period" className="mb-2 block text-[11px] text-[var(--muted)]">Período</label>
                 <Select id="benchmark-period" label="Período de comparación" value={String(months)} onChange={value => onMonthsChange(Number(value))} options={[
                     { value: '1', label: '1 mes' }, { value: '6', label: '6 meses' },
@@ -990,7 +1007,7 @@ export default function Benchmarks({
                 {availablePeriods.length < 6 && <p className="mu mt-2 text-[11px]">Los períodos sin historial suficiente para la selección están deshabilitados.</p>}
             </div>
 
-            <div className="mt-5 max-w-sm">
+            <div className="min-w-0">
 
                 <label htmlFor="benchmark-selection" className="mb-2 block text-[11px] text-[var(--muted)]">Comparar</label>
 
@@ -999,6 +1016,7 @@ export default function Benchmarks({
                 <p className="mu mt-2 text-[11px]">El activo buscado se usa solo para comparar y no se guarda en tu cartera.</p>
                 {searchStatus && <p role="status" className="mu mt-2 text-[12px]">{searchStatus}</p>}
 
+            </div>
             </div>
 
             {selection === 'all' && <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
@@ -1092,7 +1110,7 @@ export default function Benchmarks({
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
 
-                {result?.lines.some(line => line.key === 'cartera') && (selection === 'all' ? <Explanation label="Ver composición actual de mi cartera" content={compositionContent}><span className="h-2 w-2 rounded-full" style={{ background: colors.cartera }} />{selectionLabel}<span aria-hidden="true" className="text-[var(--muted)]">ⓘ</span></Explanation> : <span className="mr-1 inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium"><span className="h-2 w-2 rounded-full" style={{ background: colors.cartera }} />{selectionLabel}</span>)}
+                {result?.lines.some(line => line.key === 'cartera') && (selection === 'all' ? <Explanation label="Ver composición actual de mi cartera" content={compositionContent}>{selectionLabel}<span aria-hidden="true" className="text-[var(--muted)]">ⓘ</span></Explanation> : <span className="mr-1 inline-flex items-center gap-2 rounded-md border border-[var(--line2)] px-3 py-2 text-[11px] font-medium">{selectionLabel}</span>)}
 
 
                 {keys.map(key => (
@@ -1174,7 +1192,7 @@ export default function Benchmarks({
 
                             viewBox={`0 0 ${W} ${H}`}
 
-                            className="block w-full overflow-visible"
+                            className="chart-animate line-chart block w-full overflow-visible"
 
                             role="img"
 
@@ -1183,7 +1201,7 @@ export default function Benchmarks({
                             onPointerDown={handlePointerMove}
                             onPointerMove={handlePointerMove}
 
-                            onPointerLeave={event => { if (event.pointerType === 'mouse') setHoverT(null); }}
+                            onPointerLeave={() => { setHoverT(null); setHoverKey(null); }}
 
                         >
 
@@ -1281,38 +1299,6 @@ export default function Benchmarks({
 
                             />
 
-                            {/* Area under portfolio */}
-
-                            {portfolio && (
-
-                                <path
-
-                                    d={[
-
-                                        `M ${result.x(portfolio.points[0].t)} ${result.y(100)}`,
-
-                                        ...portfolio.points.map(
-
-                                            p => `L ${result.x(p.t)} ${result.y(p.value)}`
-
-                                        ),
-
-                                        `L ${result.x(portfolio.points[portfolio.points.length - 1].t)} ${result.y(100)}`,
-
-                                        'Z',
-
-                                    ].join(' ')}
-
-                                    fill={colors.cartera}
-
-                                    opacity=".055"
-
-                                    pointerEvents="none"
-
-                                />
-
-                            )}
-
                             {/* Curves */}
 
                             {result.lines.map(line => (
@@ -1339,7 +1325,7 @@ export default function Benchmarks({
 
                                     vectorEffect="non-scaling-stroke"
 
-                                    opacity={hover ? .8 : 1}
+                                    opacity={hover && hoverKey !== line.key ? .45 : 1}
 
                                     pointerEvents="none"
 
@@ -1443,7 +1429,7 @@ export default function Benchmarks({
 
                                 <p className="border-b border-[var(--line)] pb-2 text-[12px] font-semibold capitalize">
 
-                                    {dateLabel(hover.t)}
+                                    {shortDateLabel(hover.t)}
 
                                 </p>
 
@@ -1491,9 +1477,10 @@ export default function Benchmarks({
 
                                                 </p>
                                                 {point.original != null && Number.isFinite(point.original) && <p className="mu mt-1 text-[10px] tabular-nums">
-                                                    {point.key === 'inflation' ? `Inflación mensual: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'deposit' ? `TNA: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'merval' ? `Índice: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })} pts` : `${point.key === 'cartera' ? (selection === 'all' ? 'Valor estimado' : 'Valor de la selección') : 'Cotización'}: ${point.original.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}`}
+                                                    {point.key === 'inflation' ? `Inflación mensual: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'deposit' ? `TNA: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'merval' ? `Índice: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })} pts` : `${point.key === 'cartera' ? (selection === 'all' ? 'Valor estimado' : selection === 'temporary' ? 'Precio por unidad' : 'Valor de la selección') : 'Cotización'}: ${point.original.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}`}
                                                 </p>}
-                                                {point.observedAt != null && <p className="mu text-[10px]">Dato del {dateLabel(point.observedAt)}</p>}
+                                                {point.unitPrice != null && Number.isFinite(point.unitPrice) && <p className="mu mt-1 text-[10px] tabular-nums">Precio por unidad: {point.unitPrice.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 4 })}</p>}
+                                                {point.observedAt != null && <p className="mu text-[10px]">Dato del {shortDateLabel(point.observedAt)}</p>}
 
                                             </div>
 
@@ -1569,7 +1556,7 @@ export default function Benchmarks({
 
                                     <p className="mu mt-1 text-[12px] leading-5">
 
-                                        {dateLabel(from)} — {dateLabel(line.lastDate)}
+                                        {shortDateLabel(from)} — {shortDateLabel(line.lastDate)}
 
                                     </p>
 

@@ -5,9 +5,10 @@ import { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerform
 import { request } from './account';
 import { localQuotes, type LocalKind } from './local-market';
 import type { PriceAlert } from './portfolio';
+import { dividendAlertStatus } from './dividend-alert';
 
 const DAY = 86_400_000;
-type DividendResult = { configured: boolean; items: { ticker: string; kind: string; status: string; events?: { payDate: string; estimated?: boolean }[] }[] };
+type DividendResult = { configured: boolean; items: { ticker: string; kind: string; status: string; events?: { payDate: string; eligible: boolean; estimated?: boolean }[] }[] };
 export type AlertStatus = { state: 'triggered' | 'waiting' | 'unavailable'; message: string };
 export function usePriceAlerts(alerts: PriceAlert[], values: { kind: string; id: string; value: number }[]) {
     const [quotes, setQuotes] = useState<Record<string, number>>({});
@@ -53,11 +54,9 @@ export function usePriceAlerts(alerts: PriceAlert[], values: { kind: string; id:
             const days = Math.round((new Date(`${alert.date}T12:00:00`).getTime() - today.getTime()) / DAY);
             status = { state: days >= 0 && days <= alert.threshold ? 'triggered' : 'waiting', message: days < 0 ? 'Fecha de vencimiento pasada' : days === 0 ? 'Vence hoy' : `Vence en ${days} días` };
         } else if (dividends?.configured) {
-            const matching = dividends.items.filter(item => item.ticker === alert.assetId && item.kind === alert.assetKind);
+            const matching = dividends.items.filter(item => item.ticker.toUpperCase() === alert.assetId.toUpperCase() && item.kind === alert.assetKind);
             if (matching.some(item => item.status === 'ok')) {
-                const end = today.getTime() + alert.threshold * DAY;
-                const event = matching.flatMap(item => item.events ?? []).filter(event => { const time = new Date(`${event.payDate}T12:00:00`).getTime(); return time >= today.getTime() && time <= end; }).sort((a, b) => a.payDate.localeCompare(b.payDate))[0];
-                status = { state: event ? 'triggered' : 'waiting', message: event ? `${event.estimated ? 'Pago estimado' : 'Pago anunciado'}: ${event.payDate}` : 'Sin pagos próximos en el plazo elegido' };
+                status = dividendAlertStatus(matching.flatMap(item => item.events ?? []), alert.threshold, now);
             }
         }
         statuses[alert.id] = status;

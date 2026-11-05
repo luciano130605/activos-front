@@ -15,6 +15,11 @@ export const pages = {
 
 export type PageId = keyof typeof pages;
 
+export function isAppPath(path: string): boolean {
+    const normalized = path.replace(/\/+$/, '') || '/';
+    return normalized === '/espacio' || Object.values(pages).some(page => page.path === normalized);
+}
+
 function currentPage(): PageId {
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
     return (Object.keys(pages) as PageId[]).find(id => pages[id].path === path) ?? 'summary';

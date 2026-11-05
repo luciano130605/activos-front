@@ -50,12 +50,12 @@ export default function Distribution({ byKind, byCurrency, byAsset, bySector, by
                         </div>
                         <div className="mt-6 flex flex-col items-center gap-8 sm:flex-row">
                             <div className="relative h-[180px] w-[180px] shrink-0">
-                                <svg viewBox="0 0 120 120" className="h-full w-full" aria-hidden="true">
+                                <svg key={view} viewBox="0 0 120 120" className="chart-animate donut-animate h-full w-full" aria-hidden="true">
                                     <circle cx="60" cy="60" r={R} fill="none" stroke="var(--raised)" strokeWidth="14" />
                                     {sorted.map(s => {
                                         const frac = s.value / total;
                                         const len = Math.max(0, frac * C - gap);
-                                        const el = <circle key={s.label} cx="60" cy="60" r={R} fill="none" strokeWidth={active === s.label ? 18 : 14} strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc * C} transform="rotate(-90 60 60)" opacity={active && active !== s.label ? .3 : 1} style={{ stroke: s.color, transition: 'stroke-width .15s, opacity .15s', cursor: 'default' }} onPointerMove={e => move(e, s.label)} />;
+                                        const el = <circle key={s.label} className="donut-slice" cx="60" cy="60" r={R} fill="none" strokeWidth={active === s.label ? 18 : 14} strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc * C} transform="rotate(-90 60 60)" opacity={active && active !== s.label ? .3 : 1} style={{ stroke: s.color, transition: 'stroke-width .15s, opacity .15s', cursor: 'default', ['--slice-dash' as string]: `${len} ${C - len}`, ['--slice-circumference' as string]: C }} onPointerMove={e => move(e, s.label)} />;
                                         acc += frac;
                                         return el;
                                     })}

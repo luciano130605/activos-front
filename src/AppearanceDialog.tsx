@@ -5,7 +5,7 @@ import {
     Sun03Icon,
     Moon02Icon,
     ComputerIcon,
-    Cancel01Icon,
+    ChevronLeft,
 } from '@hugeicons/core-free-icons';
 
 type Theme = 'dark' | 'light' | 'system';
@@ -92,7 +92,7 @@ export default function AppearanceDialog({
 
     return (
         <div
-            className="appearance-overlay"
+            className="appearance-overlay appearance-screen"
             onMouseDown={(event) => {
                 if (event.target === event.currentTarget) {
                     onClose();
@@ -110,16 +110,17 @@ export default function AppearanceDialog({
                     <div>
                         <p className="lb">TU ESPACIO</p>
                         <h2 id="appearance-title">Apariencia</h2>
-                        <p>Elegí cómo querés ver tu cartera.</p>    
+                        <p>Elegí cómo querés ver tu cartera.</p>
                     </div>
 
                     <button
                         type="button"
-                        className="ibtn"
-                        aria-label="Cerrar apariencia"
+                        className="btn-ghost"
+                        aria-label="Volver"
                         onClick={onClose}
                     >
-                        <HugeiconsIcon icon={Cancel01Icon} size={20} />
+                        <span aria-hidden="true"><HugeiconsIcon icon={ChevronLeft} size={19} /></span>
+
                     </button>
                 </header>
 

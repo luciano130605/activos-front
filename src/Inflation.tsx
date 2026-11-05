@@ -28,6 +28,7 @@ export default function Inflation() {
     const [data, setData] = useState<Result | null>(null);
     const [loading, setLoading] = useState(true);
     const [retry, setRetry] = useState(0);
+    const [progress, setProgress] = useState(0);
     useEffect(() => {
         const controller = new AbortController();
         setLoading(true);
@@ -43,6 +44,20 @@ export default function Inflation() {
         });
         return () => controller.abort();
     }, [country, retry]);
+    useEffect(() => {
+        if (loading) { setProgress(0); return; }
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setProgress(1); return; }
+        let frame = 0;
+        let start: number | undefined;
+        const tick = (time: number) => {
+            start ??= time;
+            const elapsed = Math.min((time - start) / 700, 1);
+            setProgress(1 - Math.pow(1 - elapsed, 3));
+            if (elapsed < 1) frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(frame);
+    }, [loading, country]);
     const months = data?.monthly.slice(0, 12) ?? [];
     const years = data?.yearly.filter(row => row.fecha.slice(5, 7) === '12').slice(0, 5) ?? [];
     const latestMonthly = months[0];
@@ -53,9 +68,9 @@ export default function Inflation() {
         <div role="group" aria-label="País de inflación" className="inline-flex rounded-xl border border-[var(--line)] bg-[var(--raised)] p-1">{(['ar', 'us'] as const).map(option => <button key={option} type="button" aria-label={option === 'ar' ? 'Argentina' : 'Estados Unidos'} aria-pressed={country === option} onClick={() => setCountry(option)} className={`rounded-lg px-4 py-2 text-[12px] transition-colors ${country === option ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--muted)]'}`}><span aria-hidden="true" className="text-[20px] leading-none sm:hidden">{option === 'ar' ? '🇦🇷' : '🇺🇸'}</span><span className="hidden sm:inline">{option === 'ar' ? 'Argentina' : 'Estados Unidos'}</span></button>)}</div>
         {loading ? <div className="card grid min-h-[200px] place-items-center text-[13px] text-[var(--muted)]" role="status">Consultando inflación…</div> : <>
             {!!data?.errors.length && <div className="rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]" role="status">No se pudo consultar la inflación {data.errors.join(' ni ')}. <button type="button" className="underline" onClick={() => setRetry(value => value + 1)}>Reintentar</button></div>}
-            <div className="grid gap-3.5 md:grid-cols-2"><article className="card p-6"><p className="lb">ÚLTIMA INFLACIÓN MENSUAL</p><p className="mt-4 text-[clamp(2rem,4vw,3rem)] font-light">{latestMonthly ? percent(latestMonthly.valor) : '—'}</p><p className="mu mt-2 text-[12px]">{latestMonthly ? monthLabel(latestMonthly.fecha) : 'Dato no disponible'}</p></article><article className="card p-6"><p className="lb">ÚLTIMA INFLACIÓN INTERANUAL</p><p className="mt-4 text-[clamp(2rem,4vw,3rem)] font-light">{latestYearly ? percent(latestYearly.valor) : '—'}</p><p className="mu mt-2 text-[12px]">{latestYearly ? `12 meses hasta ${monthLabel(latestYearly.fecha)}` : 'Dato no disponible'}</p></article></div>
-            <div className="grid gap-3.5 lg:grid-cols-2"><section className="card p-6"><p className="lb">ÚLTIMOS 12 MESES</p><p className="mu mt-2 text-[12px]">Variación de precios de cada mes.</p><div className="mt-4 divide-y divide-[var(--line)]">{months.length ? months.map(row => <div key={row.fecha} className="grid grid-cols-[90px_1fr_auto] items-center gap-3 py-2.5 text-[12px]"><span className="capitalize">{monthLabel(row.fecha)}</span><span className="h-1.5 overflow-hidden rounded-full bg-[var(--raised)]"><span className="block h-full rounded-full bg-[var(--sig)]" style={{ width: `${Math.abs(row.valor) / monthlyMax * 100}%` }} /></span><span className="font-mono tabular-nums">{percent(row.valor)}</span></div>) : <p className="mu py-8 text-[12px]">Sin datos mensuales disponibles.</p>}</div></section>
-            <section className="card p-6"><p className="lb">ÚLTIMOS AÑOS</p><p className="mu mt-2 text-[12px]">Inflación de enero a diciembre de cada año completo.</p><div className="mt-4 divide-y divide-[var(--line)]">{years.length ? years.map(row => <div key={row.fecha} className="grid grid-cols-[50px_1fr_auto] items-center gap-3 py-3 text-[12px]"><span>{row.fecha.slice(0, 4)}</span><span className="h-1.5 overflow-hidden rounded-full bg-[var(--raised)]"><span className="block h-full rounded-full bg-[var(--c-cedear)]" style={{ width: `${Math.abs(row.valor) / yearlyMax * 100}%` }} /></span><span className="font-mono tabular-nums">{percent(row.valor)}</span></div>) : <p className="mu py-8 text-[12px]">Sin datos anuales disponibles.</p>}</div></section></div>
+            <div className="grid gap-3.5 md:grid-cols-2"><article className="card p-6"><p className="lb">ÚLTIMA INFLACIÓN MENSUAL</p><p className="mt-4 text-[clamp(2rem,4vw,3rem)] font-light tabular-nums" aria-label={latestMonthly ? percent(latestMonthly.valor) : undefined}>{latestMonthly ? percent(latestMonthly.valor * progress) : '—'}</p><p className="mu mt-2 text-[12px]">{latestMonthly ? monthLabel(latestMonthly.fecha) : 'Dato no disponible'}</p></article><article className="card p-6"><p className="lb">ÚLTIMA INFLACIÓN INTERANUAL</p><p className="mt-4 text-[clamp(2rem,4vw,3rem)] font-light tabular-nums" aria-label={latestYearly ? percent(latestYearly.valor) : undefined}>{latestYearly ? percent(latestYearly.valor * progress) : '—'}</p><p className="mu mt-2 text-[12px]">{latestYearly ? `12 meses hasta ${monthLabel(latestYearly.fecha)}` : 'Dato no disponible'}</p></article></div>
+            <div className="grid gap-3.5 lg:grid-cols-2"><section className="card chart-animate inflation-chart p-6"><p className="lb">ÚLTIMOS 12 MESES</p><p className="mu mt-2 text-[12px]">Variación de precios de cada mes.</p><div className="mt-4 divide-y divide-[var(--line)]">{months.length ? months.map(row => <div key={row.fecha} className="grid grid-cols-[90px_1fr_auto] items-center gap-3 py-2.5 text-[12px]"><span className="capitalize">{monthLabel(row.fecha)}</span><span className="h-1.5 overflow-hidden rounded-full bg-[var(--raised)]"><span className="inflation-bar block h-full rounded-full bg-[var(--sig)]" style={{ width: `${Math.abs(row.valor) / monthlyMax * 100}%` }} /></span><span className="font-mono tabular-nums">{percent(row.valor)}</span></div>) : <p className="mu py-8 text-[12px]">Sin datos mensuales disponibles.</p>}</div></section>
+            <section className="card chart-animate inflation-chart p-6"><p className="lb">ÚLTIMOS AÑOS</p><p className="mu mt-2 text-[12px]">Inflación de enero a diciembre de cada año completo.</p><div className="mt-4 divide-y divide-[var(--line)]">{years.length ? years.map(row => <div key={row.fecha} className="grid grid-cols-[50px_1fr_auto] items-center gap-3 py-3 text-[12px]"><span>{row.fecha.slice(0, 4)}</span><span className="h-1.5 overflow-hidden rounded-full bg-[var(--raised)]"><span className="inflation-bar block h-full rounded-full bg-[var(--c-cedear)]" style={{ width: `${Math.abs(row.valor) / yearlyMax * 100}%` }} /></span><span className="font-mono tabular-nums">{percent(row.valor)}</span></div>) : <p className="mu py-8 text-[12px]">Sin datos anuales disponibles.</p>}</div></section></div>
         </>}
 
         <p className="mu text-[11px]">{country === 'us' ? <>Fuente: <a className="underline" href="https://www.bls.gov/cpi/" target="_blank" rel="noopener noreferrer">Bureau of Labor Statistics</a> · IPC-U, todos los artículos, sin ajuste estacional. Variaciones calculadas a partir del índice.</> : <>Fuente: <a className="underline" href="https://argentinadatos.com/" target="_blank" rel="noopener noreferrer">ArgentinaDatos</a> · BCRA.</>} Los datos pueden actualizarse con demora.</p>

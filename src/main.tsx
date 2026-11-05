@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import LegalPage from './LegalPage';
 import NotFound from './NotFound';
-import { pages } from './navigation';
+import { isAppPath } from './navigation';
 import ModalScrollLock from './ModalScrollLock';
 import './Style.css';
 
@@ -17,7 +17,7 @@ function Router() {
   const path = useSyncExternalStore(subscribe, currentPath, () => '/');
   if (path === '/politicas') return <LegalPage page="privacy" />;
   if (path === '/condiciones') return <LegalPage page="terms" />;
-  if (!Object.values(pages).some(page => page.path === path)) return <NotFound />;
+  if (!isAppPath(path)) return <NotFound />;
   return <App />;
 }
 

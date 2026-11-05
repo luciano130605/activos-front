@@ -38,7 +38,7 @@ const PricesPage = lazy(() => import('./PricesPage'));
 const Goals = lazy(() => import('./Goals'));
 
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, Cancel01Icon, Upload06Icon, Upload01Icon } from '@hugeicons/core-free-icons';
+import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, Cancel01Icon, Upload06Icon, Upload01Icon, ChevronLeft } from '@hugeicons/core-free-icons';
 type Filter = 'all' | Kind | 'index';
 type AssetQuote = { id: string; date: string; kind: Exclude<Kind, 'rate'> } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
 type DollarRate = { nombre: string; compra: number | null; venta: number };
@@ -66,6 +66,37 @@ const categoryOf = (investment: Investment): Exclude<Filter, 'all'> => (investme
 const localISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const dateMillis = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
 const money = (n: number, c: Currency) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: c, maximumFractionDigits: 2 }).format(Number.isFinite(n) ? n : 0);
+
+function AnimatedAmount({ value, currency, hidden, large = false }: { value: number; currency: Currency; hidden: boolean; large?: boolean }) {
+    const [shown, setShown] = useState(0);
+    const current = useRef(0);
+    useEffect(() => {
+        if (hidden || !Number.isFinite(value)) { current.current = 0; return; }
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            current.current = value;
+            setShown(value);
+            return;
+        }
+        const start = current.current;
+        let frame = 0;
+        let started: number | undefined;
+        const tick = (time: number) => {
+            started ??= time;
+            const progress = Math.min((time - started) / 650, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            current.current = start + (value - start) * eased;
+            setShown(current.current);
+            if (progress < 1) frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(frame);
+    }, [value, hidden]);
+    if (hidden) return <span className="amount-transition">{MASK}</span>;
+    if (!Number.isFinite(value)) return <>—</>;
+    if (!large) return <>{money(shown, currency)}</>;
+    const [integer, decimals] = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(shown).split(',');
+    return <><span className="cur">{currency === 'USD' ? 'US$' : '$'}</span>{integer}<span className="dec">,{decimals}</span></>;
+}
 const percent = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 const formatDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
 const chartDate = (time: number) => new Date(time).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: '2-digit' });
@@ -106,9 +137,10 @@ const panel = 'rounded-[20px] border border-[var(--line)] bg-[var(--surface)]';
 
 export default function Page({ account, onLogout }: { account: Account; onLogout: () => void }) {
     const [aiSettingsRequest, setAiSettingsRequest] = useState(0);
+    const [spaceSubscreen, setSpaceSubscreen] = useState<'passkey' | 'mail' | 'ai' | null>(null);
     const [aiProvider, setAiProviderState] = useState<AiProvider>(() => { try { const saved = localStorage.getItem(`activos:ai-provider:${account.user.id}`); return isAiProvider(saved) ? saved : 'openai'; } catch { return 'openai'; } });
     const setAiProvider = useCallback((provider: AiProvider) => { setAiProviderState(provider); try { localStorage.setItem(`activos:ai-provider:${account.user.id}`, provider); } catch { /* La selección sigue disponible durante esta sesión. */ } }, [account.user.id]);
-    useEffect(() => { let active = true; void request<{ providers: AiProvider[] }>('ai/keys').then(result => { if (active && result.providers.length && !result.providers.includes(aiProvider)) setAiProvider(result.providers[0]); }).catch(() => {}); return () => { active = false; }; }, [account.user.id, aiProvider, setAiProvider]);
+    useEffect(() => { let active = true; void request<{ providers: AiProvider[] }>('ai/keys').then(result => { if (active && result.providers.length && !result.providers.includes(aiProvider)) setAiProvider(result.providers[0]); }).catch(() => { }); return () => { active = false; }; }, [account.user.id, aiProvider, setAiProvider]);
     const { sync, view, preference, items, setItems } = usePortfolio(account);
     const savedDividendPositions = useRef(account.portfolio.investments);
     if (!view.dirty) savedDividendPositions.current = view.portfolio.investments;
@@ -191,6 +223,15 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [editingId, setEditingId] = useState<string | null>(null);
     const [emailSettings, setEmailSettings] = useState(false);
     const [emailSettingsRevision, setEmailSettingsRevision] = useState(0);
+    useEffect(() => {
+        if (!spaceSubscreen) return;
+        const onNavigate = () => {
+            if (window.location.pathname.replace(/\/+$/, '') === '/espacio') return;
+            setPasskeyDialog(false); setEmailSettings(false); setSpaceSubscreen(null);
+        };
+        window.addEventListener('popstate', onNavigate);
+        return () => window.removeEventListener('popstate', onNavigate);
+    }, [spaceSubscreen]);
     const [assetSearch, setAssetSearch] = useState<AssetKind | null>(null);
     const [initialLocalSearch, setInitialLocalSearch] = useState<ArgentineKind | undefined>();
     const openLocalSearch = (kind: ArgentineKind) => { setInitialLocalSearch(kind); setAssetSearch('crypto'); };
@@ -227,6 +268,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const [sellFee, setSellFee] = useState('0');
     const [panelEditor, setPanelEditor] = useState(false);
     const closePanelEditor = useCallback(() => setPanelEditor(false), []);
+    useEffect(() => {
+        if (!panelEditor) return;
+        const onNavigate = () => { if (window.location.pathname.replace(/\/+$/, '') !== '/espacio') setPanelEditor(false); };
+        window.addEventListener('popstate', onNavigate);
+        return () => window.removeEventListener('popstate', onNavigate);
+    }, [panelEditor]);
     const [panels] = preference('panels');
     const visiblePanels = panels ? (panels.includes('panel-v2') ? panels.filter(id => id !== 'panel-v2') : [...panels.filter(id => id !== 'inflation'), ...(panels.includes('value') ? ['macro', 'streak'] : [])]) : ['value', 'macro', 'streak', 'evolution', 'distribution', 'investments'];
     const today = Date.now();
@@ -466,6 +513,16 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             if (i.kind === 'cedear' || isLocal(i)) return sum + i.units * historicalPrice;
             return sum + i.units * historicalPrice * benchmarkDollarAt(t);
         }, 0);
+    };
+    const benchmarkUnitPrice = (t: number) => {
+        if (!selectedBenchmark || temporarySelected) return undefined;
+        const item = benchmarkItems[0];
+        if (!item || item.kind === 'rate') return undefined;
+        const key = `${item.kind}:${item.coin}`;
+        const currentPrice = prices[key];
+        if (!currentPrice) return undefined;
+        const historicalPrice = annualPriceAt(benchmarkHistory?.[key], t, currentPrice);
+        return item.kind === 'cedear' || isLocal(item) ? historicalPrice : historicalPrice * benchmarkDollarAt(t);
     };
     const periods = [1, 6, 12, 24, 36, 72];
     const canCheckPeriods = benchmarkHistory !== null && !benchmarkHistoryError && (temporarySelected || benchmarkItems.length > 0);
@@ -735,13 +792,6 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         setSellId(null); setNotice('Venta registrada con el importe neto. No se suma como efectivo a la cartera.');
     }
     const ctxItem = ctx ? items.find(i => i.id === ctx.id) : undefined;
-    const bigParts = (v: number) => {
-        if (hidden) return { cur: '', int: MASK, dec: '' };
-        if (!Number.isFinite(v)) return { cur: '', int: '—', dec: '' };
-        const [int, dec] = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v).split(',');
-        return { cur: display === 'USD' ? 'US$' : '$', int, dec: `,${dec}` };
-    };
-    const big = bigParts(summaryCurrent);
     const capShare = summaryGain >= 0 ? (summaryCurrent > 0 ? summaryInvested / summaryCurrent : 1) : (summaryInvested > 0 ? summaryCurrent / summaryInvested : 1);
     const slicesForBar = byKind.filter(k => !hiddenSummaryKinds.includes(k.id) && Number.isFinite(k.value) && k.value > 0);
     const slicesTotal = slicesForBar.reduce((s, k) => s + k.value, 0);
@@ -759,20 +809,48 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const detailItem = detailId ? items.find(i => i.id === detailId) : undefined;
     const locked = !!assetSearch || !!sellItem || !!detailItem || panelEditor || emailSettings || leaving;
     const panelOrder = (id: string) => { const index = visiblePanels.indexOf(id); return index < 0 ? 99 : index; };
+    const mainRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const animation = mainRef.current?.animate(
+            [{ opacity: .7, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }],
+            { duration: 240, easing: 'ease-out' },
+        );
+        return () => animation?.cancel();
+    }, [page]);
+    useEffect(() => {
+        const root = mainRef.current;
+        if (!root || window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+        const observed = new WeakSet<Element>();
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => entry.target.classList.toggle('chart-visible', entry.isIntersecting));
+        }, { threshold: .15 });
+        const observeCharts = () => root.querySelectorAll('.chart-animate').forEach(element => {
+            if (!observed.has(element)) { observed.add(element); observer.observe(element); }
+        });
+        observeCharts();
+        const mutations = new MutationObserver(observeCharts);
+        mutations.observe(root, { childList: true, subtree: true });
+        return () => { mutations.disconnect(); observer.disconnect(); };
+    }, []);
     return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
         <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => { setInitialLocalSearch(undefined); setAssetSearch('crypto'); }} onAdd={openModal} onExport={exportJSON} onImport={() => fileRef.current?.click()}
-                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onMailSettings={() => setEmailSettings(true)} onCustomize={() => setPanelEditor(true)} onPasskey={() => void preparePasskeyDialog()} passkeyCount={passkeyCount} onAiSettings={() => setAiSettingsRequest(value => value + 1)} />
+                email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onMailSettings={() => { setSpaceSubscreen('mail'); setEmailSettings(true); }} onCustomize={() => setPanelEditor(true)} customizing={panelEditor} spaceSubscreen={spaceSubscreen !== null} onPasskey={() => { setSpaceSubscreen('passkey'); void preparePasskeyDialog(); }} passkeyCount={passkeyCount} onAiSettings={() => { setSpaceSubscreen('ai'); setAiSettingsRequest(value => value + 1); }} quietHours={view.portfolio.preferences.quietHours} onQuietHours={value => sync.update(current => ({ ...current, preferences: { ...current.preferences, quietHours: value } }))} alertCount={alerts.length} triggeredCount={triggeredAlerts.length} />
             <div style={page === 'assistant' || view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
-                <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
-                {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
-                <MarketHours />
-                <span role="status">{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
-                <span className="ml-auto"><span className={statusDot} aria-hidden="true" style={{ alignSelf: 'center' }} />{syncLabel}</span>
+                <div className="ticker-track">
+                    {[false, true].map(duplicate => <div className="ticker-group" key={String(duplicate)} aria-hidden={duplicate || undefined}>
+                        <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
+                        {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
+                        <MarketHours />
+                        <span role={duplicate ? undefined : 'status'}>{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
+                        <span><span className={statusDot} aria-hidden="true" style={{ alignSelf: 'center' }} />{syncLabel}</span>
+                    </div>)}
+                </div>
             </div>
-            <main inert={false} className={page === 'assistant' ? 'pt-3' : undefined}>
+            <main ref={mainRef} inert={false} className={page === 'assistant' ? 'pt-3' : undefined}>
                 <header style={page === 'assistant' ? { display: 'none' } : undefined} className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
                     <div><p className="lb mb-2">PANEL PERSONAL / {pageInfo.label.toUpperCase()}</p><h1 ref={titleRef} tabIndex={-1} className="text-[clamp(2.2rem,5vw,3.3rem)] font-light leading-none tracking-[-.045em] outline-none">{pageInfo.title}<span className="sig">.</span></h1><p className="mu mt-3">{pageInfo.description}</p></div>
                 </header>
@@ -782,12 +860,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {priceError && <div role="status" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px] text-[var(--muted)]">Algunas cotizaciones no están disponibles. Los valores pueden estar incompletos o usar el monto original. <button onClick={() => void refresh()} className="ml-1 text-[var(--ink)] underline">Reintentar</button></div>}
                 {!fxRate && items.some(i => i.currency !== display) && <div className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">No se puede convertir toda la cartera a {display} sin la cotización de USDC en pesos. Los totales se muestran como —.</div>}
                 {triggeredAlerts.length > 0 && page !== 'prices' && <div role="status" className="mb-4 rounded-xl border border-[var(--sig)] bg-[var(--sigbg)] px-4 py-3 text-[12px]"><span>{triggeredAlerts.length === 1 ? `Tenés una alerta activa: ${triggeredAlerts[0].assetName} · ${alertStatuses[triggeredAlerts[0].id].message}` : `Tenés ${triggeredAlerts.length} alertas activas.`}</span> <PageLink page="prices" className="ml-2 underline">Ver alertas</PageLink></div>}
-                <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} onAdd={investment => setItems(prev => [...prev, investment])} onSell={openSale} />
+                <MarketChat provider={aiProvider} setProvider={setAiProvider} showButton={view.portfolio.preferences.showChatButton !== false} fullPage={page === 'assistant'} items={items} dirty={view.dirty} settingsRequest={aiSettingsRequest} returnToSpace={spaceSubscreen === 'ai'} onSettingsClose={() => setSpaceSubscreen(null)} onAdd={investment => setItems(prev => [...prev, investment])} onSell={openSale} />
                 {page === 'goals' && <Suspense fallback={<p role="status" className="mu p-5">Cargando objetivos…</p>}><Goals provider={aiProvider} setProvider={setAiProvider} onAiSettings={() => setAiSettingsRequest(value => value + 1)} categories={byKind} targets={view.portfolio.preferences.allocationTargets} format={fmt} incompleteQuotes={items.some(item => item.kind !== 'rate' && !!item.coin && prices[`${item.kind}:${item.coin}`] == null)} onSave={targets => sync.update(current => ({ ...current, preferences: { ...current.preferences, allocationTargets: targets } }))} /></Suspense>}
                 {page === 'prices' && <Suspense fallback={<p role="status" className="mu p-5">Cargando precios…</p>}><PricesPage items={items} onAddLocal={investment => setItems(prev => [...prev, investment])} onChooseLocal={selectLocalAsset} alerts={alerts} statuses={alertStatuses} onAdd={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} onDelete={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} /></Suspense>}
                 {page === 'imports' && <ImportDocuments portfolio={view.portfolio} update={sync.update} onMailSettings={() => setEmailSettings(true)} mailRevision={emailSettingsRevision} />}
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
-                {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} />}
+                {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} items={items} alerts={alerts} onAddAlert={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} />}
 
                 {page === 'investments' && <div className="mb-4 flex justify-end"><div className="seg" role="group" aria-label="Vista de inversiones"><button type="button" aria-pressed={investmentView === 'list'} onClick={() => setInvestmentView('list')}>Lista</button><button type="button" aria-pressed={investmentView === 'map'} onClick={() => setInvestmentView('map')}>Mapa 3D</button></div></div>}
                 {page === 'investments' && investmentView === 'map' && <Suspense fallback={<div className="card p-8 text-[13px] text-[var(--muted)]" role="status">Cargando mapa…</div>}><PortfolioMap positions={mapPositions} format={fmt} /></Suspense>}
@@ -797,7 +875,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                             <article className="card hero-glow flex min-h-[360px] flex-col overflow-hidden p-6">
                                 <div className="flex items-center justify-between"><span className="lb">VALOR ACTUAL</span></div>
                                 {items.length > 0 && <fieldset className="mt-4"><legend className="mu mb-2 text-[11px]">Incluir en el resumen</legend><div className="flex flex-wrap gap-2">{kinds.filter(k => k.id !== 'all' && allCount(k.id) > 0).map(k => { const category = k.id as Exclude<Filter, 'all'>; const selected = !hiddenSummaryKinds.includes(category); return <button key={category} type="button" aria-pressed={selected} onClick={() => setHiddenSummaryKinds(prev => prev.includes(category) ? prev.filter(id => id !== category) : [...prev, category])} className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors ${selected ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]' : 'border-[var(--line)] text-[var(--muted)] opacity-60'}`}>{k.label}</button>; })}</div></fieldset>}
-                                <p className="big mt-6" aria-label={hidden ? 'Monto oculto' : undefined}>{big.cur && <span className="cur">{big.cur}</span>}{big.int}{big.dec && <span className="dec">{big.dec}</span>}</p>
+                                <p className="big mt-6" aria-label={hidden ? 'Monto oculto' : undefined}><AnimatedAmount key={page} value={summaryCurrent} currency={display} hidden={hidden} large /></p>
                                 <div className="mt-4 flex flex-wrap items-center gap-3"><span className={`pill ${summaryGain >= 0 ? '' : 'neg'}`}>
                                     <HugeiconsIcon
                                         icon={summaryGain >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon}
@@ -807,12 +885,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                     />
                                     {Number.isFinite(summaryGainPct) ? percent(summaryGainPct) : '—'}</span><span className="mu">{fmt(summaryGain)} respecto al capital aportado</span></div>
                                 {slicesForBar.length > 0 && <div className="mt-7"><div className="dm" role="img" aria-label={`Distribución: ${slicesForBar.map(k => `${k.label} ${(k.value / slicesTotal * 100).toFixed(0)}%`).join(', ')}`}>{slicesForBar.map(k => <i key={k.label} style={{ ['--c' as string]: k.color, flex: k.value }} />)}</div><div className="lg mt-3">{slicesForBar.map(k => <span key={k.label} style={{ ['--c' as string]: k.color }}>{k.label} {(k.value / slicesTotal * 100).toFixed(0)}%</span>)}</div></div>}
-                                {summaryChart && <svg className="mt-auto -mx-6 -mb-6 block h-[100px] w-[calc(100%+3rem)] pt-4" viewBox={`0 0 ${summaryChart.w} ${summaryChart.h}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .28 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs><path d={summaryChart.area} fill="url(#hero-fill)" /><path d={summaryChart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>}
+                                {summaryChart && <svg className="chart-animate line-chart mt-auto -mx-6 -mb-6 block h-[100px] w-[calc(100%+3rem)] pt-4" viewBox={`0 0 ${summaryChart.w} ${summaryChart.h}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .28 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs><path d={summaryChart.area} fill="url(#hero-fill)" /><path d={summaryChart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>}
                             </article>
                             <div className="grid gap-3.5">
                                 <article className="card p-6">
                                     <p className="lb">CAPITAL Y RESULTADO</p>
-                                    <div className="mt-4 grid grid-cols-2 gap-4"><div><p className="mu">Aportado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight">{fmt(summaryInvested)}</p></div><div><p className="mu">Resultado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight" style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{fmt(summaryGain)}</p></div></div>
+                                    <div className="mt-4 grid grid-cols-2 gap-4"><div><p className="mu">Aportado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight"><AnimatedAmount key={page} value={summaryInvested} currency={display} hidden={hidden} /></p></div><div><p className="mu">Resultado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight" style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}><AnimatedAmount key={page} value={summaryGain} currency={display} hidden={hidden} /></p></div></div>
                                     <div className="trk mt-5" role="img" aria-label={`Capital ${(capShare * 100).toFixed(0)}% del valor actual`}><i style={{ width: `${Math.min(100, capShare * 100)}%` }} /><b style={{ width: `${Math.max(0, 100 - capShare * 100)}%`, background: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }} /></div>
                                     <div className="mu mt-2 flex justify-between text-[11px]"><span>capital</span><span style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{summaryGain >= 0 ? 'ganancia' : 'pérdida'}</span></div>
                                 </article>
@@ -842,12 +920,12 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     <div style={{ order: panelOrder('evolution') }} hidden={page !== 'evolution' && (page !== 'summary' || !visiblePanels.includes('evolution'))}>
                         <section className="card mb-3.5 p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">EVOLUCIÓN</p><p className="mu mt-2 text-[11.5px]">Estimada · no es un historial real de precios</p></div><div role="group" aria-label="Período de evolución" className="seg">{([['7d', '7D'], ['1m', '1M'], ['6m', '6M'], ['1a', '1A'], ['todo', 'Todo']] as const).map(([id, text]) => <button key={id} type="button" onClick={() => setRange(id)} aria-pressed={range === id}>{text}</button>)}</div></div>
                             {chart ? <><div className="relative mt-7 touch-pan-y" role="slider" tabIndex={0} aria-label="Explorar evolución estimada con las flechas" aria-valuemin={0} aria-valuemax={chart.points.length - 1} aria-valuenow={chartIndex ?? chart.points.length - 1} aria-valuetext={chartPoint ? `${chartDate(chartPoint.t)}: ${fmt(chartPoint.value)}` : `Hoy: ${fmt(current)}`} onBlur={() => setChartIndex(null)} onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setChartIndex(index => Math.max(0, Math.min(chart.points.length - 1, (index ?? chart.points.length - 1) + (event.key === 'ArrowRight' ? 1 : -1)))); } }} onPointerDown={event => { const rect = event.currentTarget.getBoundingClientRect(); const x = (event.clientX - rect.left) / rect.width * chart.w; setChartIndex(Math.max(0, Math.min(chart.points.length - 1, Math.round((x - 12) / (chart.w - 24) * (chart.points.length - 1))))); }} onPointerMove={event => { const rect = event.currentTarget.getBoundingClientRect(); const x = (event.clientX - rect.left) / rect.width * chart.w; setChartIndex(Math.max(0, Math.min(chart.points.length - 1, Math.round((x - 12) / (chart.w - 24) * (chart.points.length - 1))))); }} onPointerLeave={event => { if (event.pointerType === 'mouse') setChartIndex(null); }}>
-                                <svg viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" className="h-[230px] w-full overflow-visible" aria-hidden="true"><defs><linearGradient id="invest-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .24 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs>{[.25, .5, .75, 1].map(n => <line key={n} x1="12" x2={chart.w - 12} y1={chart.h * n - 5} y2={chart.h * n - 5} stroke="var(--line2)" strokeDasharray="4 6" />)}<path d={chart.area} fill="url(#invest-fill)" /><path d={chart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />{chartPoint ? <><line x1={chartPoint.x} x2={chartPoint.x} y1="4" y2={chart.h - 12} stroke="var(--muted)" strokeOpacity=".7" strokeDasharray="4 5" /><circle cx={chartPoint.x} cy={chartPoint.y} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" /></> : <circle cx={chart.nowX} cy={chart.nowY} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" />}</svg>
+                                <svg viewBox={`0 0 ${chart.w} ${chart.h}`} preserveAspectRatio="none" className="chart-animate line-chart h-[230px] w-full overflow-visible" aria-hidden="true"><defs><linearGradient id="invest-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .24 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs>{[.25, .5, .75, 1].map(n => <line key={n} x1="12" x2={chart.w - 12} y1={chart.h * n - 5} y2={chart.h * n - 5} stroke="var(--line2)" strokeDasharray="4 6" />)}{page !== 'evolution' && <path d={chart.area} fill="url(#invest-fill)" />}<path d={chart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />{chartPoint ? <><line x1={chartPoint.x} x2={chartPoint.x} y1="4" y2={chart.h - 12} stroke="var(--muted)" strokeOpacity=".7" strokeDasharray="4 5" /><circle cx={chartPoint.x} cy={chartPoint.y} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" /></> : <circle cx={chart.nowX} cy={chart.nowY} r="5" style={{ fill: 'var(--sig)' }} stroke="var(--surface)" strokeWidth="3" />}</svg>
                                 {chartPoint && <div className="pointer-events-none absolute top-2 z-10 rounded-lg border border-[var(--line2)] bg-[var(--raised)] px-3 py-2 shadow-lg" style={{ left: `${Math.max(2, Math.min(98, chartPoint.x / chart.w * 100))}%`, transform: chartPoint.x > chart.w / 2 ? 'translateX(-100%)' : 'none' }}><p className="mu whitespace-nowrap text-[10px]">{chartDate(chartPoint.t)}</p><p className="mt-1 whitespace-nowrap font-mono text-[12px]">{fmt(chartPoint.value)}</p><p className="mu mt-0.5 text-[10px]">Estimado</p></div>}
                             </div><div className="mu mt-2 flex justify-between text-[11px]"><span>{chart.first}</span><span>Hoy</span></div></> : <div className="grid h-[240px] place-items-center text-center text-[13px] text-[var(--muted)]">{items.length ? 'Sin conversión de moneda disponible.' : 'Agregá tu primera inversión para visualizar la evolución.'}</div>}
                             <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">Los valores anteriores de CEDEARs y cripto se interpolan entre la compra y el precio actual. La conversión usa el USDC actual; no refleja rendimientos históricos reales.</p>
                         </section>
-                        {page === 'evolution' && <Benchmarks composition={byKind} compositionIncomplete={items.some(item => item.kind !== 'rate' && !!item.coin && prices[`${item.kind}:${item.coin}`] == null)} start={benchmarkStart} end={today} months={effectiveMonths} onMonthsChange={setBenchmarkMonths} availablePeriods={availablePeriods} valueAt={benchmarkValue} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? ['cedear', 'arg-stock', 'bond', 'fund'].includes(temporaryBenchmark.kind) : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => { benchmarkSearchRequest.current++; setBenchmarkSearchStatus(''); setBenchmarkSearchOpen(true); }} searchStatus={benchmarkSearchStatus} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
+                        {page === 'evolution' && <Benchmarks composition={byKind} compositionIncomplete={items.some(item => item.kind !== 'rate' && !!item.coin && prices[`${item.kind}:${item.coin}`] == null)} start={benchmarkStart} end={today} months={effectiveMonths} onMonthsChange={setBenchmarkMonths} availablePeriods={availablePeriods} valueAt={benchmarkValue} priceAt={benchmarkUnitPrice} available={(temporarySelected || benchmarkItems.length > 0) && benchmarkHistory !== null && !benchmarkHistoryError && (Boolean(fxRate) || (temporarySelected ? ['cedear', 'arg-stock', 'bond', 'fund'].includes(temporaryBenchmark.kind) : benchmarkItems.every(i => i.currency === 'ARS' && i.kind !== 'crypto')))} historyLoading={benchmarkHistory === null && !benchmarkHistoryError} historyError={benchmarkHistoryError} actualReturnArs={actualReturnArs} selection={selectedBenchmark?.value ?? 'all'} onSelectionChange={setBenchmarkSelection} options={temporaryBenchmark ? [...benchmarkOptions, { value: 'temporary', label: `${temporaryBenchmark.name} · temporal` }] : benchmarkOptions} onSearch={() => { benchmarkSearchRequest.current++; setBenchmarkSearchStatus(''); setBenchmarkSearchOpen(true); }} searchStatus={benchmarkSearchStatus} selectionLabel={selectedBenchmark?.label ?? 'Mi cartera'} averageMonthlyReturn={averageMonthlyReturn} />}
                     </div>
 
                     {page === 'inflation' && <Inflation />}
@@ -863,10 +941,10 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                 const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = isLocal(i) ? `${titleFor(i.kind)} · ${i.coin?.split('~')[0]}` : i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : i.kind === 'stock' ? `Acción · ${i.coin}` : `Cripto · ${i.coin}`;
                                 return <div key={i.id} className={`li cursor-pointer ${ctx?.id === i.id ? 'menu-open' : ''}`} onClick={e => { if ((e.target as HTMLElement).closest('button, a')) return; detailOpenerRef.current = e.currentTarget.querySelector('button[data-detail]'); setDetailId(i.id); }} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
                                     <div className="tk" style={{ ['--c' as string]: colorOf(cat) }} aria-hidden="true">{tickerOf(i)}</div>
-                                    <div className="min-w-0"><button type="button" data-detail onClick={e => { detailOpenerRef.current = e.currentTarget; setDetailId(i.id); }} className="block max-w-full truncate text-left text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2" aria-label={`Ver detalle de ${i.name}`}>{i.name}</button><p className="mu mt-1 truncate text-[11.5px]">{sub} <span className="hidden sm:inline">· {formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">Sin precio · se muestra el monto original</p>}</div>
-                                    <div className="r hid"><p>{mny(i.amount, i.currency)}</p><p className="mu mt-1 text-[10px]">Invertido</p></div>
-                                    <div className="r hid"><p>{mny(v, i.currency)}</p><div className="mt-1 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada por vos</span> : <QuoteSource source={i.kind === 'fund' ? 'fund' : i.kind === 'arg-stock' || i.kind === 'bond' ? 'local' : i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
-                                    <div className="r"><span className={`pill ${change >= 0 ? '' : 'neg'}`}>{missing ? '—' : percent(change)}</span><p className="mu mt-1 text-[10px] min-[861px]:hidden">{mny(v, i.currency)}</p></div>
+                                    <div className="min-w-0"><button type="button" data-detail onClick={e => { detailOpenerRef.current = e.currentTarget; setDetailId(i.id); }} className="block max-w-full truncate text-left text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2" aria-label={`Ver detalle de ${i.name}`}>{i.name}</button><p className="mu mt-1 text-[11.5px]">{sub} <span>· {formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">Sin precio · se muestra el monto original</p>}</div>
+                                    <div className="r hid"><p><span key={mny(i.amount, i.currency)} className="amount-transition">{mny(i.amount, i.currency)}</span></p><p className="mu mt-1 text-[10px]">Invertido</p></div>
+                                    <div className="r hid"><p><span key={mny(v, i.currency)} className="amount-transition">{mny(v, i.currency)}</span></p><div className="mt-1 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada por vos</span> : <QuoteSource source={i.kind === 'fund' ? 'fund' : i.kind === 'arg-stock' || i.kind === 'bond' ? 'local' : i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
+                                    <div className="r"><span className={`pill ${change >= 0 ? '' : 'neg'}`}>{missing ? '—' : percent(change)}</span></div>
                                     <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setCtx(ctx?.id === i.id ? null : { x: r.right - 220, y: r.bottom + 6, id: i.id }); }} aria-haspopup="menu" aria-expanded={ctx?.id === i.id} aria-label={`Acciones de ${i.name}`} className="ibtn !h-9 !w-9 !border-transparent !bg-transparent"><HugeiconsIcon icon={MoreHorizontalIcon} size={17} /></button>
                                 </div>;
                             }) : <div className="flex flex-col items-center px-4 py-16 text-center"><div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--raised)]"><HugeiconsIcon icon={CoinsBitcoinIcon} size={21} className="text-[var(--muted)]" /></div><h3 className="text-[14px] font-medium">{items.length ? 'No hay inversiones con este filtro' : 'Tu cartera está vacía'}</h3><p className="mt-2 max-w-xs text-[12px] text-[var(--muted)]">{items.length ? 'Probá otra categoría o búsqueda.' : 'Empezá cargando una inversión o importá un archivo exportado.'}</p>{!items.length && <div className="mt-5 flex gap-2"><button onClick={openModal} className="btn-primary !min-h-10 !text-[13px]">Agregar inversión</button><button onClick={() => fileRef.current?.click()} className="btn-ghost">Importar datos</button></div>}</div>}</div>
@@ -876,7 +954,6 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {page === 'investments' && investmentView === 'list' && <AssetPerformance items={items} hidden={hidden} />}
                 {page === 'investments' && investmentView === 'list' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>Neto {mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}{sale.fee != null ? ` · comisión ${mny(sale.fee, sale.currency)}` : ''}{sale.executionPrice != null ? ` · precio ${mny(sale.executionPrice, sale.currency)} por unidad` : ''}{sale.currency === sale.costCurrency ? ` · resultado ${mny(sale.proceeds - sale.cost, sale.currency)}` : ''}</span></div>)}</div></section>}
                 <footer className="mu mt-8 space-y-2 text-[10px]">
-                    <div className="flex flex-wrap items-center justify-between gap-2"><span>ACTIVOS / PANEL PERSONAL</span><span>Precios orientativos · No es asesoramiento financiero.</span></div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Fuentes de las cotizaciones"><QuoteSource source="usdc" label="USDC" /><QuoteSource source="dollar" label="Dólares" /><QuoteSource source="crypto" label="Cripto" /><QuoteSource source="cedear" label="CEDEARs e índices" /></div>
                     <nav aria-label="Información legal" className="flex flex-wrap gap-2 pt-2"><a href="/politicas" className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[11px] hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2">Política de privacidad</a><a href="/condiciones" className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[11px] hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2">Términos y condiciones</a></nav>
                 </footer>
@@ -904,16 +981,16 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             </div>;
         })()}
         {ctx && ctxItem && <ContextMenu x={ctx.x} y={ctx.y} title={ctxItem.name} items={menuFor(ctxItem)} onClose={closeCtx} />}
-        {passkeyDialog && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !passkeyBusy) setPasskeyDialog(false); }}>
+        {passkeyDialog && <div className="settings-subscreen settings-subscreen-narrow fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !passkeyBusy) { setPasskeyDialog(false); setSpaceSubscreen(null); } }}>
             <section role="dialog" aria-modal="true" aria-labelledby="passkey-title" className="card w-full max-w-md p-6 shadow-2xl">
-                <h2 id="passkey-title" className="text-xl font-light">Passkeys y llaves de seguridad</h2>
+                {spaceSubscreen === 'passkey' && <button type="button" className="btn-ghost mb-6" disabled={passkeyBusy} onClick={() => { setPasskeyDialog(false); setSpaceSubscreen(null); }}><span aria-hidden="true"><HugeiconsIcon icon={ChevronLeft} size={20} /></span> </button>}<h2 id="passkey-title" className="text-xl font-light">Passkeys y llaves de seguridad</h2>
                 <p className="mu mt-3 text-[13px] leading-6">{passkeyCount === null ? 'No se pudo consultar el estado de tus passkeys.' : passkeyCount ? `Tenés ${passkeyCount} ${passkeyCount === 1 ? 'passkey registrada' : 'passkeys registradas'} en tu cuenta.` : 'Todavía no tenés passkeys registradas.'}</p>
                 <p className="mu mt-2 text-[12px] leading-5">Podés agregar una passkey para ingresar con Face ID, otro dispositivo o una llave de seguridad.</p>
                 {passkeyMessage && <p role="status" className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3 text-[12px]">{passkeyMessage}</p>}
-                <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" className="btn-ghost" disabled={passkeyBusy} onClick={() => setPasskeyDialog(false)}>Cerrar</button>{passkeyOptions ? <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void enablePasskey()}>{passkeyBusy ? 'Activando…' : 'Crear passkey'}</button> : <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void preparePasskeyDialog()}>{passkeyBusy ? 'Preparando…' : 'Agregar passkey'}</button>}</div>
+                <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" className="btn-ghost" disabled={passkeyBusy} onClick={() => { setPasskeyDialog(false); setSpaceSubscreen(null); }}>{spaceSubscreen === 'passkey' ? 'Volver' : 'Cerrar'}</button>{passkeyOptions ? <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void enablePasskey()}>{passkeyBusy ? 'Activando…' : 'Crear passkey'}</button> : <button type="button" className="btn-primary" disabled={passkeyBusy} onClick={() => void preparePasskeyDialog()}>{passkeyBusy ? 'Preparando…' : 'Agregar passkey'}</button>}</div>
             </section>
         </div>}
-        {panelEditor && <PanelEditor selected={visiblePanels} showChatButton={view.portfolio.preferences.showChatButton !== false} showQuotesBar={view.portfolio.preferences.showQuotesBar !== false} onClose={closePanelEditor} onSave={(next, options) => { sync.update(current => ({ ...current, preferences: { ...current.preferences, panels: [...next, 'panel-v2'], ...options } })); setPanelEditor(false); if (page !== 'summary') goTo('/'); }} />}
+        {panelEditor && <PanelEditor selected={visiblePanels} showChatButton={view.portfolio.preferences.showChatButton !== false} showQuotesBar={view.portfolio.preferences.showQuotesBar !== false} onClose={closePanelEditor} onSave={(next, options) => { sync.update(current => ({ ...current, preferences: { ...current.preferences, panels: [...next, 'panel-v2'], ...options } })); setPanelEditor(false); }} />}
         {sellItem && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setSellId(null); }}>
             <section role="dialog" aria-modal="true" aria-label="Registrar venta" className="card max-h-[90dvh] w-full max-w-md overflow-y-auto p-6">
                 <h2 className="text-xl">Registrar venta</h2>
@@ -964,7 +1041,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 </form>
             </div>
         </div>}
-        {emailSettings && <EmailSettingsDialog onClose={() => { setEmailSettings(false); setEmailSettingsRevision(value => value + 1); }} />}
+        {emailSettings && <EmailSettingsDialog returnToSpace={spaceSubscreen === 'mail'} onClose={() => { setEmailSettings(false); setSpaceSubscreen(null); setEmailSettingsRevision(value => value + 1); }} />}
         {benchmarkSearchOpen && <AssetSearchDialog benchmarkMode onCompareLocal={selectTemporaryBenchmark} onClose={() => setBenchmarkSearchOpen(false)} footer="El activo se usa solo para esta comparación y no se guarda en tu cartera." onSelect={selectTemporaryBenchmark} />}
         {assetSearch && <AssetSearchDialog initial={assetSearch} initialLocal={initialLocalSearch} onChooseLocal={selectLocalAsset} onClose={() => { setAssetSearch(null); setInitialLocalSearch(undefined); }} onSelect={selectAsset} onAddLocal={investment => { setItems(prev => [...prev, investment]); setAssetSearch(null); setInitialLocalSearch(undefined); setModal(false); setNotice('Inversión agregada. Se está guardando en tu cuenta.'); }} />}
         {confirmDelete && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/65 p-4 backdrop-blur-sm"><div role="alertdialog" aria-modal="true" aria-labelledby="delete-title" className={`${panel} w-full max-w-[390px] p-6 shadow-2xl`}><h2 id="delete-title" className="text-[20px] font-medium">Eliminar inversión</h2><p className="mt-2 text-[13px] text-[var(--muted)]">Esta acción no se puede deshacer. ¿Querés eliminar esta posición de tu cartera?</p><div className="mt-6 flex justify-end gap-2"><button onClick={() => setConfirmDelete(null)} className="rounded-lg border border-[var(--line2)] px-4 py-2.5 text-[13px]">Cancelar</button><button onClick={() => { setItems(prev => prev.filter(i => i.id !== confirmDelete)); setConfirmDelete(null) }} className="rounded-lg bg-[var(--neg)] px-4 py-2.5 text-[13px] font-medium text-white">Eliminar</button></div></div></div>}

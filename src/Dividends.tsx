@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { request } from './account';
 import { cedearName } from './assets';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Calendar01Icon, Calendar03Icon, CalendarMinusIcon, ChevronLeftIcon, ChevronRightIcon, ListViewIcon, RightToLeftListBulletIcon } from '@hugeicons/core-free-icons';
+import Select from './Select';
+import type { Investment, PriceAlert } from './portfolio';
+import DividendPushSettings from './DividendPushSettings';
+import AlertDays from './AlertDays';
 
 type Event = { payDate: string; exDate: string; amountPerShare: number; eligible: boolean; estimatedGross: number; estimated?: boolean; sourcePayDate?: string };
 type Position = { id: string; name: string; ticker: string; kind: 'stock' | 'cedear'; units: number; ratio?: number; status: 'ok' | 'missing_ratio' | 'unavailable'; events?: Event[] };
@@ -13,6 +17,29 @@ const date = (value: string) => at(value).toLocaleDateString('es-AR', { day: 'nu
 const usd = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value);
 const isoDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 const daysUntil = (iso: string) => Math.round((at(iso).getTime() - at(isoDate(new Date())).getTime()) / 86_400_000);
+
+function AnimatedDividend({ value, hidden = false, count = false }: { value: number; hidden?: boolean; count?: boolean }) {
+    const [shown, setShown] = useState(0);
+    const current = useRef(0);
+    useEffect(() => {
+        if (hidden) { current.current = 0; return; }
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { current.current = value; setShown(value); return; }
+        const from = current.current;
+        let frame = 0;
+        let start: number | undefined;
+        const tick = (time: number) => {
+            start ??= time;
+            const progress = Math.min((time - start) / 700, 1);
+            current.current = from + (value - from) * (1 - Math.pow(1 - progress, 3));
+            setShown(current.current);
+            if (progress < 1) frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(frame);
+    }, [value, hidden]);
+    if (hidden) return <>****</>;
+    return <span aria-label={count ? String(value) : usd(value)}>{count ? Math.round(shown) : usd(shown)}</span>;
+}
 
 const CACHE_AGE = 24 * 60 * 60 * 1000;
 const pendingRequests = new Map<string, Promise<unknown>>();
@@ -34,13 +61,19 @@ function cachedDividends<T>(key: string, fingerprint: string, path: string, cach
     return promise;
 }
 
-function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: boolean; hidden: boolean; userId: string; portfolioKey: string }) {
+function PortfolioDividends({ dirty, hidden, userId, portfolioKey, items, alerts, onAddAlert }: { dirty: boolean; hidden: boolean; userId: string; portfolioKey: string; items: Investment[]; alerts: PriceAlert[]; onAddAlert: (alert: PriceAlert) => void }) {
     const [result, setResult] = useState<Result | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'agenda' | 'calendar'>('agenda');
     const [month, setMonth] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
     const [selected, setSelected] = useState<string | null>(null);
+    const [alertSelection, setAlertSelection] = useState('');
+    const [alertDays, setAlertDays] = useState<number[]>([7]);
+    const [alertMessage, setAlertMessage] = useState('');
+    const dividendAssets = [...new Map(items.filter(item => (item.kind === 'stock' || item.kind === 'cedear') && item.coin).map(item => [`${item.kind}:${item.coin}`, item])).entries()];
+    const chosenAlert = dividendAssets.find(([key]) => key === alertSelection)?.[1];
+    const dividendAlerts = alerts.filter(alert => alert.kind === 'dividend');
     useEffect(() => {
         let active = true;
         setLoading(true); setError('');
@@ -74,7 +107,7 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
         return [...map.entries()].sort((a, b) => b[1] - a[1]);
     }, [upcoming]);
     const ready = !loading && !error && result?.configured;
-    const kpi = (label: string, value: string, note: string, accent = false) => <section className="card p-5 sm:p-6"><p className="lb">{label}</p><p className={`mt-4 text-[clamp(1.7rem,3.6vw,2.4rem)] font-light tracking-tight tabular-nums ${accent ? 'sig' : ''}`}>{value}</p><p className="mu mt-2 text-[11px]">{note}</p></section>;
+    const kpi = (label: string, value: ReactNode, note: string, accent = false) => <section className="card p-5 sm:p-6"><p className="lb">{label}</p><p className={`mt-4 text-[clamp(1.7rem,3.6vw,2.4rem)] font-light tracking-tight tabular-nums ${accent ? 'sig' : ''}`}>{value}</p><p className="mu mt-2 text-[11px]">{note}</p></section>;
     const when = (iso: string) => { const d = daysUntil(iso); return d === 0 ? 'hoy' : d === 1 ? 'mañana' : d > 0 ? `en ${d} días` : `hace ${-d} días`; };
     const payRow = (e: Row, key: string) => <article key={key} className="flex items-start gap-4 border-t border-[var(--line)] py-4 first:border-0">
         <div className="dd">{at(e.payDate).getDate()}<small>{at(e.payDate).toLocaleDateString('es-AR', { month: 'short' }).replace('.', '')}</small></div>
@@ -89,11 +122,20 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
     return <div className="space-y-3.5">
         <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
             {kpi('01 — PRÓXIMO PAGO', ready && next ? date(next.payDate) : '—', next ? `${next.position.ticker} · ${next.estimated ? 'estimado · ' : ''}${when(next.payDate)}` : 'Sin pagos anunciados')}
-            {kpi('02 — A COBRAR (ANUNCIADO)', ready ? money(upcomingTotal) : '—', 'Bruto · pagos futuros con derecho', true)}
-            {kpi('03 — ESTIMADO DEL MES', ready ? money(monthTotal) : '—', month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }))}
-            {kpi('04 — PAGOS ANUNCIADOS', ready ? String(upcoming.filter(e => !e.estimated).length) : '—', 'Solo pagos anunciados')}
+            {kpi('02 — A COBRAR (ANUNCIADO)', ready ? <AnimatedDividend value={upcomingTotal} hidden={hidden} /> : '—', 'Bruto · pagos futuros con derecho', true)}
+            {kpi('03 — ESTIMADO DEL MES', ready ? <AnimatedDividend value={monthTotal} hidden={hidden} /> : '—', month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }))}
+            {kpi('04 — PAGOS ANUNCIADOS', ready ? <AnimatedDividend value={upcoming.filter(e => !e.estimated).length} count /> : '—', 'Solo pagos anunciados')}
         </div>
         {dirty && <p className="rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]">Hay cambios sin guardar: los dividendos usan la última cartera guardada en tu cuenta.</p>}
+        <section className="card p-5 sm:p-6" aria-labelledby="dividend-alerts-title"><p className="lb">ALERTAS</p><h2 id="dividend-alerts-title" className="mt-2 text-[20px] font-light">Seguí tus próximos dividendos</h2><p className="mu mt-2 text-[12px]">Elegí un activo de tu cartera y cuántos días antes querés recibir el aviso.</p>
+            {dividendAssets.length ? <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); if (!chosenAlert?.coin || (chosenAlert.kind !== 'stock' && chosenAlert.kind !== 'cedear')) return setAlertMessage('Elegí un activo de tu cartera.'); if (!alertDays.length) return setAlertMessage('Elegí al menos un momento para el aviso.'); const newDays = alertDays.filter(days => !dividendAlerts.some(alert => alert.assetKind === chosenAlert.kind && alert.assetId.toUpperCase() === chosenAlert.coin!.toUpperCase() && alert.threshold === days)); if (!newDays.length) return setAlertMessage('Ya tenés alertas para los días seleccionados.'); if (alerts.length + newDays.length > 200) return setAlertMessage('Alcanzaste el límite de 200 alertas.'); newDays.forEach(days => onAddAlert({ id: crypto.randomUUID(), kind: 'dividend', assetKind: chosenAlert.kind as 'stock' | 'cedear', assetId: chosenAlert.coin!, assetName: chosenAlert.name, threshold: days, direction: 'above', date: '' })); setAlertMessage(`${newDays.length === 1 ? 'Alerta creada' : 'Alertas creadas'} para ${chosenAlert.name}.`); }}>
+                <div className="min-w-[180px] flex-1"><label htmlFor="dividend-alert-asset" className="mb-1.5 block text-[11px] text-[var(--muted)]">Activo de tu cartera</label><Select id="dividend-alert-asset" label="Activo para alerta de dividendos" value={alertSelection} onChange={value => { setAlertSelection(value); setAlertMessage(''); }} options={[{ value: '', label: 'Elegí un activo' }, ...dividendAssets.map(([key, item]) => ({ value: key, label: `${item.name} · ${item.coin}` }))]} /></div>
+                <div className="w-full"><AlertDays values={alertDays} onChange={setAlertDays} /></div><button type="submit" className="btn-ghost text-[12px]">Crear alerta</button>
+            </form> : <p className="mu mt-4 text-[12px]">Agregá acciones o CEDEARs a tu cartera para crear alertas.</p>}
+            {alertMessage && <p role="status" className="mu mt-3 text-[12px]">{alertMessage}</p>}
+            {dividendAlerts.length > 0 && <p className="mu mt-3 text-[11px]">Alertas creadas: {dividendAlerts.map(alert => `${alert.assetName} (${alert.threshold === 0 ? 'en el día' : `${alert.threshold} ${alert.threshold === 1 ? 'día' : 'días'} antes`})`).join(' · ')}. Podés administrarlas en Precios y alertas.</p>}
+            <DividendPushSettings />
+        </section>
         {loading ? <p className="p-4 text-[13px] text-[var(--muted)]" role="status">Consultando dividendos…</p> : error ? <p className="p-4 text-[13px] text-[var(--neg)]" role="alert">{error}</p> : !result?.configured ? <p className="card p-5 text-[13px] text-[var(--muted)]">Para consultar dividendos, configurá MASSIVE_API_KEY en el backend.</p> : <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
             <section className="card p-5 sm:p-6" aria-label="Pagos de dividendos">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -109,8 +151,8 @@ function PortfolioDividends({ dirty, hidden, userId, portfolioKey }: { dirty: bo
                     {shownEvents.length > 0 && <div className="mt-5">{shownEvents.map((e, i) => payRow(e, `c-${e.position.id}-${e.exDate}-${i}`))}</div>}
                 </>}
             </section>
-            <section className="card p-5 sm:p-6"><p className="lb">POR ACTIVO</p><h2 className="mt-2 text-[20px] font-light tracking-tight">Quién paga más</h2>
-                {byTicker.length ? <ul className="mt-5 space-y-4">{byTicker.map(([ticker, amount]) => <li key={ticker}><div className="mb-1.5 flex items-baseline justify-between"><span className="font-mono text-[12px]">{ticker}</span><span className="font-mono text-[12px] tabular-nums">{money(amount)}</span></div><div className="trk !h-2"><b style={{ left: 0, width: `${amount / byTicker[0][1] * 100}%`, right: 'auto' }} /></div></li>)}</ul> : <p className="mu mt-6 text-[12px]">Todavía no hay pagos con derecho para mostrar.</p>}
+            <section className="card chart-animate dividend-chart p-5 sm:p-6"><p className="lb">POR ACTIVO</p><h2 className="mt-2 text-[20px] font-light tracking-tight">Quién paga más</h2>
+                {byTicker.length ? <ul className="mt-5 space-y-4">{byTicker.map(([ticker, amount]) => <li key={ticker}><div className="mb-1.5 flex items-baseline justify-between"><span className="font-mono text-[12px]">{ticker}</span><span className="font-mono text-[12px] tabular-nums"><AnimatedDividend value={amount} hidden={hidden} /></span></div><div className="trk !h-2"><b className="dividend-bar" style={{ left: 0, width: `${amount / byTicker[0][1] * 100}%`, right: 'auto' }} /></div></li>)}</ul> : <p className="mu mt-6 text-[12px]">Todavía no hay pagos con derecho para mostrar.</p>}
                 {unavailable.length > 0 && <div className="mt-6 rounded-xl border border-[var(--line2)] bg-[var(--raised)] p-3 text-[11px] leading-5 text-[var(--muted)]">No se pudo calcular {unavailable.map(i => i.ticker).join(', ')}: falta el ratio o la cotización de dividendos.</div>}
             </section>
         </div>}
@@ -202,7 +244,7 @@ function MarketDividends({ userId }: { userId: string }) {
     </section>;
 }
 
-export default function Dividends(props: { dirty: boolean; hidden: boolean; userId: string; portfolioKey: string }) {
+export default function Dividends(props: { dirty: boolean; hidden: boolean; userId: string; portfolioKey: string; items: Investment[]; alerts: PriceAlert[]; onAddAlert: (alert: PriceAlert) => void }) {
     const [tab, setTab] = useState<'portfolio' | 'market'>('portfolio');
     return <div className="space-y-3.5">
         <div className="seg inline-flex" role="group" aria-label="Sección de dividendos"><button type="button" aria-pressed={tab === 'portfolio'} onClick={() => setTab('portfolio')}>Mi cartera</button><button type="button" aria-pressed={tab === 'market'} onClick={() => setTab('market')}>Calendario general</button></div>

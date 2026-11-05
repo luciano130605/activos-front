@@ -1,0 +1,9 @@
+{
+  "name": "Alza — Tus inversiones",
+  "short_name": "Alza",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a09",
+  "theme_color": "#0a0a09",
+  "icons": [{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }, { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
