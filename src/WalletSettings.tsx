@@ -1,0 +1,28 @@
+import { useEffect, useState } from 'react';
+import { request } from './account';
+
+type Wallet = { id: string; address: string; network: string; label: string };
+const networks: Record<string, string> = { ethereum: 'Ethereum', polygon: 'Polygon', base: 'Base', arbitrum: 'Arbitrum', optimism: 'Optimism', bnb: 'BNB Smart Chain' };
+
+export default function WalletSettings() {
+    const [wallets, setWallets] = useState<Wallet[]>([]);
+    const [address, setAddress] = useState(''), [label, setLabel] = useState(''), [network, setNetwork] = useState('ethereum');
+    const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [message, setMessage] = useState('');
+    useEffect(() => { let active = true; request<{ wallets: Wallet[] }>('wallets').then(data => { if (active) setWallets(data.wallets); }).catch(() => { if (active) setMessage('No se pudieron cargar las direcciones. Cerrá y volvé a abrir la configuración para reintentar.'); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
+    async function change(method: 'POST' | 'DELETE', body: unknown) {
+        setBusy(true); setMessage('');
+        try { const data = await request<{ wallets: Wallet[] }>('wallets', method, body); setWallets(data.wallets); if (method === 'POST') { setAddress(''); setLabel(''); } setMessage(method === 'POST' ? 'Dirección guardada.' : 'Dirección eliminada.'); }
+        catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo completar la operación.'); }
+        finally { setBusy(false); }
+    }
+    return <div className="settings-channel"><p className="text-[13px] font-medium">Wallets cripto</p><p className="mu mt-2 text-[11px] leading-5">Guardá una dirección pública por red. Por ahora solo se guarda: todavía no consulta saldos. Nunca ingreses tu frase de recuperación ni tu clave privada.</p>
+        <form className="mt-3 grid gap-3" onSubmit={event => { event.preventDefault(); void change('POST', { address, label, network }); }}>
+            <label className="mu text-[11px]">Red<select value={network} onChange={event => setNetwork(event.target.value)} className="settings-time mt-1 block w-full">{Object.entries(networks).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></label>
+            <label className="mu text-[11px]">Dirección pública<input required value={address} onChange={event => setAddress(event.target.value)} placeholder="0x…" autoComplete="off" className="settings-time mt-1 block w-full" /></label>
+            <label className="mu text-[11px]">Nombre (opcional)<input maxLength={60} value={label} onChange={event => setLabel(event.target.value)} placeholder="Mi wallet" className="settings-time mt-1 block w-full" /></label>
+            <button className="btn-ghost !min-h-10 justify-self-start text-[12px]" disabled={busy || loading}>Guardar dirección</button>
+        </form>
+        {loading ? <p className="mu mt-3 text-[11px]">Cargando direcciones…</p> : wallets.map(wallet => <div key={wallet.id} className="mt-3 rounded-xl border border-[var(--line)] p-3"><p className="text-[12px]">{wallet.label || 'Wallet'} · {networks[wallet.network]}</p><p className="mu mt-1 break-all font-mono text-[11px]">{wallet.address}</p><button type="button" disabled={busy} className="btn-ghost mt-2 text-[11px]" onClick={() => void change('DELETE', { id: wallet.id })}>Eliminar</button></div>)}
+        {message && <p role="status" className="mu mt-3 text-[11px]">{message}</p>}
+    </div>;
+}
