@@ -19,7 +19,13 @@ export async function enableDividendPush(test = false, alertId?: string) {
         const expected = keyBytes(publicKey);
         if (!existing || new Uint8Array(existing).length !== expected.length || !new Uint8Array(existing).every((byte, index) => byte === expected[index])) { await subscription.unsubscribe(); subscription = null; }
     }
-    subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });
+    if (!subscription) {
+        try { subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }); }
+        catch (error) {
+            if (error instanceof Error && /push service error/i.test(error.message)) throw new Error('El navegador no pudo conectarse al servicio de notificaciones. En Brave, revisá que esté activada la opción «Usar los servicios de Google para la mensajería push» en Privacidad y seguridad.');
+            throw error;
+        }
+    }
     await request('push/subscribe', 'POST', subscription.toJSON());
     if (test) await request('push/test', 'POST', { endpoint: subscription.endpoint, ...(alertId ? { alertId } : {}) });
 }
