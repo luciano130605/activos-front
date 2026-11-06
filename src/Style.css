@@ -138,6 +138,157 @@ html {
   border: 5px solid var(--sig);
 }
 
+.header-search-icon { position: relative; display: inline-flex; }
+.header-search-dollar { position: absolute; left: 40%; top: 40%; transform: translate(-50%, -50%); display: grid; place-items: center; width: 8px; height: 8px; font: 600 8px/1 sans-serif; opacity: 0; }
+.header-search:hover .header-search-dollar,
+.header-search:focus-visible .header-search-dollar,
+.menu-search:hover .header-search-dollar,
+.menu-search:focus-visible .header-search-dollar { opacity: 1; }
+
+.nav-summary[aria-current="page"] svg path { fill: currentColor; fill-opacity: .2; }
+.nav-calendar .calendar-date, .nav-dividends .dividends-dollar, .nav-imports .imports-plus { opacity: 0; }
+.nav-calendar:hover .calendar-date, .nav-calendar:focus-visible .calendar-date,
+.nav-calendar[aria-current="page"] .calendar-date,
+.nav-dividends:hover .dividends-dollar, .nav-dividends:focus-visible .dividends-dollar,
+.nav-dividends[aria-current="page"] .dividends-dollar,
+.nav-imports:hover .imports-plus, .nav-imports:focus-visible .imports-plus,
+.nav-imports[aria-current="page"] .imports-plus { opacity: 1; }
+.nav-calendar[aria-current="page"] .calendar-background { fill: currentColor; fill-opacity: .3; }
+.nav-dividends[aria-current="page"] .dividends-background { fill: currentColor; fill-opacity: .3; }
+.nav-imports[aria-current="page"] .imports-background { fill: currentColor; fill-opacity: .3; }
+.nav-goals svg path:nth-child(2) { opacity: 0; }
+.nav-goals:hover svg path:nth-child(2),
+.nav-goals:focus-visible svg path:nth-child(2),
+.nav-goals[aria-current="page"] svg path:nth-child(2) { opacity: 1; }
+.nav-investments[aria-current="page"] .investment-slice { fill: currentColor; fill-opacity: .35; }
+.nav-prices[aria-current="page"] svg path:nth-child(-n+2) { fill: currentColor; fill-opacity: .35; }
+.inflation-icon { position: relative; display: inline-flex; flex: none; }
+.inflation-icon-fill { position: absolute; inset: 0; opacity: 0; }
+.nav-inflation[aria-current="page"] .inflation-icon-fill { opacity: .4; }
+.nav-inflation[aria-current="page"] .inflation-icon > svg:not(.inflation-icon-fill) * { stroke: currentColor; }
+.nav-evolution .evolution-chart-line { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.nav-evolution:hover .evolution-chart-line,
+.nav-evolution[aria-current="page"] .evolution-chart-line { stroke-dashoffset: 0; }
+
+.account-mouth-smile { opacity: 0; }
+.menu-notification-dot { opacity: 0; transform: scale(0); transform-origin: 19px 5px; }
+.menu-notification:hover .menu-notification-dot,
+.menu-notification:focus-visible .menu-notification-dot { opacity: 1; transform: scale(1); }
+.menu-account:hover .account-mouth-serious,
+.menu-account:focus-visible .account-mouth-serious { opacity: 0; }
+.menu-account:hover .account-mouth-smile,
+.menu-account:focus-visible .account-mouth-smile { opacity: 1; }
+
+.menu-visibility-icon .menu-eye-open,
+.menu-visibility-icon .menu-eye-closed { transform-origin: 50% 50%; }
+.menu-visibility-icon .menu-eye-closed,
+.menu-visibility-icon.is-hidden .menu-eye-open { opacity: 0; transform: scaleY(0); }
+.menu-visibility-icon.is-hidden .menu-eye-closed,
+.menu-visibility:hover .menu-eye-closed,
+.menu-visibility:focus-visible .menu-eye-closed { opacity: 1; transform: scaleY(1); }
+.menu-visibility:hover .menu-eye-open,
+.menu-visibility:focus-visible .menu-eye-open { opacity: 0; transform: scaleY(0); }
+.menu-visibility:hover .menu-visibility-icon.is-hidden .menu-eye-open,
+.menu-visibility:focus-visible .menu-visibility-icon.is-hidden .menu-eye-open { opacity: 1; transform: scaleY(1); }
+.menu-visibility:hover .menu-visibility-icon.is-hidden .menu-eye-closed,
+.menu-visibility:focus-visible .menu-visibility-icon.is-hidden .menu-eye-closed { opacity: 0; transform: scaleY(0); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .nav-calendar .calendar-date, .nav-dividends .dividends-dollar, .nav-imports .imports-plus { transition: opacity 200ms ease; }
+  .nav-prices:not([aria-current="page"]):hover svg path:nth-child(1),
+  .nav-prices:not([aria-current="page"]):focus-visible svg path:nth-child(1) { animation: candle-rise 650ms ease-in-out; }
+  .nav-prices:not([aria-current="page"]):hover svg path:nth-child(2),
+  .nav-prices:not([aria-current="page"]):focus-visible svg path:nth-child(2) { animation: candle-fall 650ms ease-in-out; }
+  @keyframes candle-rise { 50% { transform: translateY(-2px); } }
+  @keyframes candle-fall { 50% { transform: translateY(2px); } }
+  .nav-goals svg path:nth-child(2) { transition: opacity 200ms ease; }
+  .nav-investments .investment-slice { transition: transform 300ms cubic-bezier(.22, 1, .36, 1); }
+  .nav-investments:not([aria-current="page"]):hover .investment-slice-top,
+  .nav-investments:not([aria-current="page"]):focus-visible .investment-slice-top { transform: translate(1px, -1px); }
+  .nav-investments:not([aria-current="page"]):hover .investment-slice-right,
+  .nav-investments:not([aria-current="page"]):focus-visible .investment-slice-right { transform: translate(1px, 1px); }
+  .nav-investments:not([aria-current="page"]):hover .investment-slice-left,
+  .nav-investments:not([aria-current="page"]):focus-visible .investment-slice-left { transform: translate(-1px, 0); }
+  .nav-inflation:not([aria-current="page"]):hover .inflation-icon,
+  .nav-inflation:not([aria-current="page"]):focus-visible .inflation-icon { animation: inflation-coins 650ms ease-in-out; }
+
+  @keyframes inflation-coins {
+    0%, 100% { transform: scaleX(1); }
+    40% { transform: scaleX(.55); }
+    70% { transform: scaleX(1.08); }
+  }
+
+  .nav-evolution:not([aria-current="page"]):hover .evolution-chart-line { animation: evolution-line-draw 700ms ease-out; }
+  @keyframes evolution-line-draw {
+    from { stroke-dasharray: 1; stroke-dashoffset: 1; }
+    to { stroke-dasharray: 1; stroke-dashoffset: 0; }
+  }
+  .menu-logout .menu-logout-arrow { transition: transform 250ms ease; }
+  .menu-logout:hover .menu-logout-arrow,
+  .menu-logout:focus-visible .menu-logout-arrow { transform: translateX(2px); }
+  .menu-notification-dot { transition: opacity 180ms ease, transform 350ms cubic-bezier(.2, 1.7, .4, 1); }
+  .account-mouth-serious, .account-mouth-smile { transition: opacity 180ms ease; }
+  .menu-space:hover .space-planet-inner,
+  .menu-space:focus-visible .space-planet-inner { animation: space-orbit 3s linear infinite; transform-origin: 12px 12px; }
+  .menu-space:hover .space-planet-outer,
+  .menu-space:focus-visible .space-planet-outer { animation: space-orbit 5s linear infinite reverse; transform-origin: 12px 12px; }
+
+  @keyframes space-orbit { to { transform: rotate(360deg); } }
+
+  .menu-share:hover .menu-share-arrow,
+  .menu-share:focus-visible .menu-share-arrow { animation: menu-share-send 700ms cubic-bezier(.22, 1, .36, 1); }
+
+  @keyframes menu-share-send {
+    0%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-3px); }
+    65% { transform: translateY(1px); }
+  }
+
+  .menu-visibility-icon .menu-eye-open,
+  .menu-visibility-icon .menu-eye-closed { transition: transform 220ms ease, opacity 160ms ease; }
+  .nav-summary:not([aria-current="page"]):hover svg,
+  .nav-summary:not([aria-current="page"]):focus-visible svg { animation: summary-bubble 500ms ease-in-out; }
+
+  @keyframes summary-bubble {
+    40% { transform: scale(1.15) rotate(-8deg); }
+    70% { transform: scale(.95) rotate(4deg); }
+  }
+
+  .refresh-button:not(:disabled):hover svg,
+  .refresh-button:not(:disabled):focus-visible svg {
+    animation: refresh-hover 600ms ease-in-out;
+  }
+
+  @keyframes refresh-hover {
+    to { transform: rotate(360deg); }
+  }
+
+  .header-notifications:hover svg,
+  .header-notifications:focus-visible svg {
+    transform-origin: 50% 15%;
+    animation: header-bell-ring 650ms ease-in-out;
+  }
+
+  @keyframes header-bell-ring {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(16deg); }
+    40% { transform: rotate(-13deg); }
+    60% { transform: rotate(8deg); }
+    80% { transform: rotate(-4deg); }
+  }
+
+  .header-menu svg path {
+    transform-origin: 4px center;
+    transition: transform 250ms ease;
+  }
+
+  .header-menu:hover .header-menu-top,
+  .header-menu:focus-visible .header-menu-top { transform: scaleX(.625); }
+
+  .header-menu:hover .header-menu-bottom,
+  .header-menu:focus-visible .header-menu-bottom { transform: scaleX(1.6); }
+}
+
 @keyframes appearance-in {
   from {
     opacity: 0;

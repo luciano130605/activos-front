@@ -92,9 +92,9 @@ export default function Sidebar(props: Props) {
             <div className={`mb-8 flex min-h-7 items-center px-2.5 text-[17px] font-medium tracking-[-.025em] ${compact ? 'gap-0' : 'gap-2.5'}`}><img src="/icon.png" alt="" width="28" height="28" className="shrink-0 rounded-lg" /><span className={labelClass}>Inversiones</span></div>
             <p className={headingClass}><span className={labelClass}>GENERAL</span></p>
             <nav className="space-y-1" aria-label="Navegación principal">
-                {(Object.keys(pages) as PageId[]).map(id => <PageLink key={id} page={id} className={itemClass(page === id)} aria-current={page === id ? 'page' : undefined} aria-label={pages[id].label} title={pages[id].label}
+                {(Object.keys(pages) as PageId[]).map(id => <PageLink key={id} page={id} className={`${itemClass(page === id)}${id === 'summary' ? ' nav-summary' : id === 'inflation' ? ' nav-inflation' : id === 'investments' ? ' nav-investments' : id === 'goals' ? ' nav-goals' : id === 'prices' ? ' nav-prices' : id === 'marketCalendar' ? ' nav-calendar' : id === 'dividends' ? ' nav-dividends' : id === 'imports' ? ' nav-imports' : ''}`} aria-current={page === id ? 'page' : undefined} aria-label={pages[id].label} title={pages[id].label}
                     onClick={() => { if (id === 'summary' || id === 'investments') onFilter('all'); onClose(); }}>
-                    <span className={iconClass}><PageIcon page={id} /></span><span className={`${labelClass} flex-1`}>{pages[id].label}</span>
+                    <span className={iconClass}><PageIcon page={id} active={page === id} /></span><span className={`${labelClass} flex-1`}>{pages[id].label}</span>
                     {(id === 'summary' || id === 'investments') && <span className={countClass}>{count('all')}</span>}
                 </PageLink>)}
             </nav>
