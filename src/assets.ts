@@ -52,16 +52,20 @@ export async function listCedears(signal?: AbortSignal): Promise<SearchAsset[]> 
     return list;
 }
 
+const US_EXTRAS: SearchAsset[] = [{ symbol: 'YPF', name: 'YPF (ADR · NYSE)' }];
 export async function listUsStocks(signal?: AbortSignal): Promise<SearchAsset[]> {
     const response = await fetch('https://data912.com/live/usa_stocks', { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('No se pudo cargar el listado de acciones estadounidenses.');
     const rows: unknown = await response.json();
     if (!Array.isArray(rows)) throw new Error('El listado de acciones no es vÃ¡lido.');
     const seen = new Set<string>();
-    return rows.flatMap((row: { symbol?: unknown; c?: unknown }) => {
+    const list = rows.flatMap((row: { symbol?: unknown; c?: unknown }) => {
         const symbol = typeof row?.symbol === 'string' ? row.symbol.toUpperCase() : '';
         if (!/^[A-Z0-9]+$/.test(symbol) || seen.has(symbol) || !(Number(row.c) > 0)) return [];
         seen.add(symbol);
         return [{ symbol, name: cedearName(symbol) }];
-    }).sort((a, b) => a.symbol.localeCompare(b.symbol));
+    });
+    // ADRs que Data912 no lista pero Yahoo Finance sí cotiza en USD.
+    for (const extra of US_EXTRAS) if (!seen.has(extra.symbol)) list.push(extra);
+    return list.sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
