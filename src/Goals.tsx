@@ -6,7 +6,7 @@ import GoalsAssistant from './GoalsAssistant';
 
 type Category = { id: AllocationCategory; label: string; color: string; value: number; count: number };
 type Props = { provider: AiProvider; setProvider: (provider: AiProvider) => void; onAiSettings: () => void; categories: Category[]; targets?: AllocationTargets; format: (value: number) => string; onSave: (targets: AllocationTargets) => void; incompleteQuotes: boolean };
-const empty: AllocationTargets = { rate: 0, cedear: 0, index: 0, stock: 0, crypto: 0, 'arg-stock': 0, bond: 0, fund: 0 };
+const empty: AllocationTargets = { rate: 0, cedear: 0, index: 0, stock: 0, crypto: 0, 'arg-stock': 0, bond: 0, fund: 0, morpho: 0 };
 const percentage = (value: number) => `${value.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
 export default function Goals({ categories, targets, format, onSave, incompleteQuotes, provider, setProvider, onAiSettings }: Props) {
     const [draft, setDraft] = useState<Record<AllocationCategory, string>>(() => Object.fromEntries(allocationKeys.map(key => [key, String(targets?.[key] ?? 0)])) as Record<AllocationCategory, string>);

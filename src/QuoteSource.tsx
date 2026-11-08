@@ -7,6 +7,7 @@ const sources = {
     crypto: { name: 'CoinGecko', url: 'https://www.coingecko.com/' },
     stock: { name: 'Data912 o Yahoo Finance', url: 'https://finance.yahoo.com/' },
     cedear: { name: 'Data912', url: 'https://data912.com/live/arg_cedears' },
+    morpho: { name: 'Morpho', url: 'https://app.morpho.org/' },
 };
 
 export default function QuoteSource({ source, asset, historical = false, label = 'Fuente', className = '' }: {

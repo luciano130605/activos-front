@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import ArgentineMarket, { type ArgentineKind, type LocalSelection } from './ArgentineMarket';
 import type { Investment } from './portfolio';
 import { listCryptoAssets } from './coingecko';
+import { listMorphoVaults } from './morpho';
 import { history, adjustPossibleRatios, type HistoryPoint } from './AssetPerformance';
 import { INDEXES, cedearName, listCedears, listUsStocks, type SearchAsset } from './assets';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ChevronRight, LoaderIcon, Refresh04Icon, Search02Icon, Cancel01Icon } from '@hugeicons/core-free-icons';
 
-export type AssetKind = 'crypto' | 'cedear' | 'index' | 'stock';
+export type AssetKind = 'crypto' | 'cedear' | 'index' | 'stock' | 'morpho';
 export type PickedAsset = { kind: AssetKind; id: string; name: string };
 type Row = { id: string; title: string; sub: string };
 type Catalog = { status: 'ready'; rows: Row[] } | { status: 'error'; message: string };
@@ -19,6 +20,7 @@ const tabs: { id: AssetKind; label: string; color: string; hint: string; placeho
     { id: 'cedear', label: 'CEDEARs', color: 'var(--c-cedear)', hint: 'Empresa o ticker', placeholder: 'Ej: Apple, MELI, KO…', source: 'Data912' },
     { id: 'stock', label: 'Acciones', color: '#9b8cff', hint: 'Empresa o ticker', placeholder: 'Ej: Apple, AAPL…', source: 'Data912 · USD' },
     { id: 'index', label: 'Índices', color: 'var(--c-index)', hint: 'Índice o ticker', placeholder: 'Ej: S&P 500, QQQ…', source: 'Data912' },
+    { id: 'morpho', label: 'Morpho', color: '#6e8bff', hint: 'Vault, token o red', placeholder: 'Ej: Steakhouse, USDC, Base…', source: 'Morpho · USD' },
 ];
 
 export default function AssetSearchDialog({ initial = 'crypto', initialLocal, onClose, onSelect, onAddLocal, onChooseLocal, onCompareLocal, benchmarkMode = false, footer = 'Elegí un activo para consultar su precio y cargar la inversión.' }: { initial?: AssetKind; initialLocal?: ArgentineKind; onClose: () => void; onSelect: (asset: PickedAsset) => void; onAddLocal?: (investment: Investment) => void; onChooseLocal?: (asset: LocalSelection) => void; onCompareLocal?: (asset: LocalSelection) => void; benchmarkMode?: boolean; footer?: string }) {
@@ -51,6 +53,7 @@ export default function AssetSearchDialog({ initial = 'crypto', initialLocal, on
         const toRows = (list: SearchAsset[], fallback: string): Row[] => list.map(a => ({ id: a.symbol, title: a.name || a.symbol, sub: a.name ? a.symbol : fallback }));
         const load = tab === 'crypto'
             ? listCryptoAssets(controller.signal).then(coins => coins.map<Row>(c => ({ id: c.id, title: c.name, sub: `${c.symbol.toUpperCase()} · ${c.id}` })))
+            : tab === 'morpho' ? listMorphoVaults(controller.signal).then(vaults => vaults.map<Row>(v => ({ id: v.id, title: v.name, sub: `${v.symbol || v.name} · ${v.asset} · ${v.network}${v.apy ? ` · APY ${(v.apy * 100).toFixed(2)}%` : ''}` })))
             : tab === 'cedear' ? listCedears(controller.signal).then(list => toRows(list, 'CEDEAR en pesos'))
                 : tab === 'stock' ? listUsStocks(controller.signal).then(list => toRows(list, 'Acción estadounidense en USD')) : Promise.resolve(toRows(INDEXES, 'ETF')); 
         load.then(rows => { if (!controller.signal.aborted) setCatalog({ status: 'ready', rows }); })
@@ -82,7 +85,7 @@ export default function AssetSearchDialog({ initial = 'crypto', initialLocal, on
                 while (!controller.signal.aborted) {
                     const row = candidates[next++];
                     if (!row) return;
-                    const kind = tab === 'crypto' ? 'crypto' : tab === 'stock' || tab === 'index' ? 'stock' : 'cedear';
+                    const kind = tab === 'crypto' || tab === 'morpho' ? tab : tab === 'stock' || tab === 'index' ? 'stock' : 'cedear';
                     const key = `${kind}:${row.id}`;
                     try {
                         let valid = eligibilityCache.current.get(key);
@@ -147,7 +150,7 @@ export default function AssetSearchDialog({ initial = 'crypto', initialLocal, on
                     if (index >= eligibleMatches.length) return;
                     const row = eligibleMatches[index];
                     try {
-                        const kind = tab === 'crypto' ? 'crypto' : tab === 'stock' || tab === 'index' ? 'stock' : 'cedear';
+                        const kind = tab === 'crypto' || tab === 'morpho' ? tab : tab === 'stock' || tab === 'index' ? 'stock' : 'cedear';
                         const raw = await history(kind, row.id, controller.signal);
                         const points = kind === 'cedear' ? adjustPossibleRatios(raw).points : raw;
                         const first = quote(points, start), last = quote(points, end), recent = points.at(-1);
@@ -193,7 +196,7 @@ export default function AssetSearchDialog({ initial = 'crypto', initialLocal, on
                 {!catalog ? <p role="status" className="flex items-center justify-center gap-2 py-12 text-[13px] text-[var(--muted)]"><HugeiconsIcon icon={LoaderIcon} size={17} className="animate-spin" />Cargando {current.label.toLowerCase()}…</p> : catalog.status === 'error' ? <div className="p-4"><p role="alert" className="text-[13px] text-[var(--neg)]">{catalog.message}</p><button type="button" onClick={() => { setCatalog(null); setAttempt(value => value + 1); }} className="mt-4 inline-flex items-center gap-2 text-[12px] underline"><HugeiconsIcon icon={Refresh04Icon} size={14} />Reintentar</button></div> : <>
                     <p role="status" className="mu px-2 pb-2 text-[10px]">{displayed.length.toLocaleString('es-AR')} {query.trim() ? 'resultados' : 'disponibles'} · {current.source}</p>
                     {displayed.length === 0 ? <p className="px-2 py-10 text-center text-[13px] text-[var(--muted)]">{checkingHistory ? 'Verificando historiales…' : 'No encontramos activos disponibles. Probá otro nombre o ticker.'}</p> : displayed.slice(0, limit).map(row => <button key={row.id} type="button" onClick={() => onSelect({ kind: tab, id: row.id, name: tab === 'cedear' ? (cedearName(row.id) || row.id) : tab === 'index' ? `${row.title} (${row.id})` : row.title })} className="group flex w-full items-center gap-3 rounded-xl px-2 py-3 text-left hover:bg-[var(--raised)] focus-visible:bg-[var(--raised)]">
-                        <span className="tk !h-9 !w-9 !rounded-[10px] !text-[9.5px]" style={{ ['--c' as string]: current.color }}>{(tab === 'crypto' ? row.sub.split(' ')[0] : row.id).slice(0, 5)}</span>
+                        <span className="tk !h-9 !w-9 !rounded-[10px] !text-[9.5px]" style={{ ['--c' as string]: current.color }}>{(tab === 'crypto' || tab === 'morpho' ? row.sub.split(' ')[0] : row.id).slice(0, 5)}</span>
                         <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-medium">{row.title}</span><span className="mu mt-1 block truncate text-[10px]">{row.sub}</span></span><HugeiconsIcon icon={ChevronRight} size={16} className="shrink-0 text-[var(--muted)] group-hover:text-[var(--ink)]" />
                     </button>)}
                     {(benchmarkMode ? matches.length > limit && qualified === null : displayed.length > limit) && <button type="button" disabled={benchmarkMode && checkingHistory} onClick={() => setLimit(value => value + 40)} className="my-3 w-full rounded-lg border border-[var(--line2)] py-2.5 text-[12px] disabled:opacity-50">Mostrar más</button>}
