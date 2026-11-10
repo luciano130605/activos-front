@@ -1,4 +1,4 @@
-type LivePrice = { symbol: string; c: number };
+bactype LivePrice = { symbol: string; c: number };
 type HistoricalPrice = { date: string; c: number };
 export type CedearQuote = { price: number; sourceDate?: string };
 
