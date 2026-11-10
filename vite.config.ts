@@ -8,12 +8,22 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       port: 5173, strictPort: true,
-      proxy: { '/api': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/' },
+      proxy: {
+        '/api': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/mcp': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/oauth': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/.well-known': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+      },
       fs: { deny: ['**/*.env', '**/.env', '**/.env.*', '**/*.{crt,pem}', '**/.git/**'] },
     },
     preview: {
       port: 5173, strictPort: true,
-      proxy: { '/api': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/' },
+      proxy: {
+        '/api': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/mcp': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/oauth': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/.well-known': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+      },
     },
   };
 });

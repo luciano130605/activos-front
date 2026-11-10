@@ -24,7 +24,7 @@ type Props = {
 
 export default function TopBar(p: Props) {
     const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-    const [settings, setSettings] = useState<'personalizacion' | 'cuenta' | 'notificaciones' | null>(() => window.location.pathname.replace(/\/+$/, '') === '/espacio' ? 'personalizacion' : null);
+    const [settings, setSettings] = useState<'personalizacion' | 'cuenta' | 'notificaciones' | 'integracion' | null>(() => window.location.pathname.replace(/\/+$/, '') === '/espacio' ? 'personalizacion' : null);
     const [notifications, setNotifications] = useState<{ x: number; y: number } | null>(null);
     const [manageAlerts, setManageAlerts] = useState(false);
     const closeNotifications = useCallback(() => setNotifications(null), []);
@@ -41,7 +41,7 @@ export default function TopBar(p: Props) {
         window.addEventListener('popstate', onNavigate);
         return () => window.removeEventListener('popstate', onNavigate);
     }, []);
-    const openSettings = (section: 'personalizacion' | 'cuenta' | 'notificaciones') => {
+    const openSettings = (section: 'personalizacion' | 'cuenta' | 'notificaciones' | 'integracion') => {
         if (window.location.pathname !== '/espacio') {
             window.history.pushState({ espacioFrom: `${window.location.pathname}${window.location.search}${window.location.hash}` }, '', '/espacio');
             window.dispatchEvent(new PopStateEvent('popstate'));

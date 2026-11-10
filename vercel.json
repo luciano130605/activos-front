@@ -1,6 +1,9 @@
 {
   "framework": "vite",
   "rewrites": [
+    { "source": "/.well-known/:path*", "destination": "https://activos-back-production.up.railway.app/.well-known/:path*" },
+    { "source": "/oauth/:path*", "destination": "https://activos-back-production.up.railway.app/oauth/:path*" },
+    { "source": "/mcp", "destination": "https://activos-back-production.up.railway.app/mcp" },
     { "source": "/api/:path*", "destination": "https://activos-back-production.up.railway.app/api/:path*" },
     { "source": "/:path*", "destination": "/index.html" }
   ]
