@@ -1,4 +1,4 @@
-import { StrictMode, useSyncExternalStore } from 'react';
+import { StrictMode, Suspense, lazy, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import LegalPage from './LegalPage';
@@ -6,6 +6,8 @@ import NotFound from './NotFound';
 import { isAppPath } from './navigation';
 import ModalScrollLock from './ModalScrollLock';
 import './Style.css';
+
+const Widgets = lazy(() => import('./Widgets'));
 
 const root = document.getElementById('root');
 
@@ -21,9 +23,6 @@ function Router() {
   return <App />;
 }
 
-createRoot(root).render(
-  <StrictMode>
-    <ModalScrollLock />
-    <Router />
-  </StrictMode>
-);
+const widgetMode = new URLSearchParams(window.location.search).has('widget');
+
+createRoot(root).render(<StrictMode>{widgetMode ? <Suspense fallback={<main className="grid min-h-dvh place-items-center bg-[#0a0a09] font-mono text-[12px] text-[#9a9a94]">Abriendo widget…</main>}><Widgets /></Suspense> : <><ModalScrollLock /><Router /></>}</StrictMode>);

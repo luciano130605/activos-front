@@ -3,6 +3,28 @@ import { request } from './account';
 
 type Authorization = { id: string; name: string; scopes: string[]; updatedAt?: string | null };
 type AuthorizationResponse = { authorizations: Authorization[] };
+type AgentFamily = 'chatgpt' | 'claude' | 'codex' | 'other';
+
+function agentInfo(name: string): { family: AgentFamily; label: string; accent: string } {
+    const normalized = name.trim().toLowerCase();
+    if (normalized.includes('claude') || normalized.includes('anthropic')) return { family: 'claude', label: 'Claude', accent: '#e58a68' };
+    if (normalized.includes('codex')) return { family: 'codex', label: 'Codex', accent: '#c6f26b' };
+    if (normalized.includes('chatgpt') || normalized.includes('openai')) return { family: 'chatgpt', label: 'ChatGPT', accent: '#79c8b1' };
+    return { family: 'other', label: name.trim() || 'Agente MCP', accent: '#a6aaa0' };
+}
+
+function AgentGlyph({ family }: { family: AgentFamily }) {
+    return family === 'claude'
+        ? <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-6 w-6"><path d="M12 2.75v18.5M2.75 12h18.5M5.45 5.45l13.1 13.1m0-13.1-13.1 13.1" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+        : <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-6 w-6"><path d="M12 3.5v2M9.5 5.5h5M7 8h10a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-5a3 3 0 0 1 3-3Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /><path d="M8.5 12.25h.01m7-.01h.01M9 15.25c.75.55 1.7.8 3 .8s2.25-.25 3-.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M2.5 12.5H4m16 0h1.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>;
+}
+
+function connectionDate(value?: string | null) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(date);
+}
+
 const endpoint = 'https://activos-nu.vercel.app/mcp';
 const chatGptSetupPrompt = `Quiero conectar mi cartera personal de Activos a ChatGPT mediante un conector remoto MCP. Guiame paso a paso usando la interfaz actual de ChatGPT. El servidor MCP es ${endpoint}. Explicame dónde agregar un conector personalizado/remoto, dónde pegar esa URL, cómo guardar y completar la autorización OAuth de Activos, y cómo habilitarlo en una conversación. Aclará que la disponibilidad depende del plan o de los permisos del espacio de trabajo. No inventes pasos si la interfaz cambió: decime qué buscar. El conector puede consultar mis inversiones y, solo si yo lo autorizo, agregar, editar o eliminar posiciones.`;
 const chatGptUrl = new URL('https://chatgpt.com/');
@@ -114,10 +136,33 @@ export default function McpSettings() {
             </div>
             {loading ? <p className="mu mt-3 text-[11px]">Cargando conexiones…</p> : authorizations.length === 0
                 ? <p className="mu mt-3 text-[11px]">Todavía no hay agentes conectados.</p>
-                : <ul className="mt-2 divide-y divide-[var(--line)]">{authorizations.map(client => <li key={client.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                    <div><p className="text-[12px] font-medium">{client.name}</p><p className="mu mt-1 text-[10px]">{client.scopes.includes('portfolio:write') ? 'Lectura y cambios de cartera' : 'Solo lectura'}</p></div>
-                    <button type="button" className="btn-ghost !min-h-9 text-[11px]" disabled={busy === client.id} onClick={() => void revoke(client)}>{busy === client.id ? 'Revocando…' : 'Revocar'}</button>
-                </li>)}</ul>}
+                : <ul className="mt-3 grid gap-3">{authorizations.map(client => {
+                    const agent = agentInfo(client.name);
+                    const canWrite = client.scopes.includes('portfolio:write');
+                    const connectedDate = connectionDate(client.updatedAt);
+                    return <li key={client.id} className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
+                        <div className="flex items-start gap-3">
+                            <span aria-hidden="true" className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border" style={{ color: agent.accent, backgroundColor: `${agent.accent}14`, borderColor: `${agent.accent}38` }}>
+                                <AgentGlyph family={agent.family} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-[14px] font-medium">{agent.family === 'other' ? agent.label : `Conectado con ${agent.label}`}</p>
+                                    <span className="rounded-full border px-2 py-0.5 text-[9px] font-medium tracking-wide" style={{ color: agent.accent, borderColor: `${agent.accent}38`, backgroundColor: `${agent.accent}12` }}>{agent.family === 'other' ? 'AGENTE MCP' : agent.label.toUpperCase()}</span>
+                                </div>
+                                <p className="mu mt-1 truncate text-[10px]">Cliente: {client.name}</p>
+                                {connectedDate && <p className="mu mt-1 text-[10px]">Conectado el {connectedDate}</p>}
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                    <span className="rounded-lg border border-[var(--line)] bg-[var(--raised)] px-2.5 py-1 text-[10px] text-[var(--muted)]">Puede consultar tu cartera</span>
+                                    {canWrite && <span className="rounded-lg border px-2.5 py-1 text-[10px]" style={{ color: agent.accent, borderColor: `${agent.accent}38`, backgroundColor: `${agent.accent}12` }}>Puede agregar, editar y eliminar posiciones</span>}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-4 flex justify-end border-t border-[var(--line)] pt-3">
+                            <button type="button" className="btn-ghost !min-h-9 text-[11px] text-[var(--neg)]" disabled={busy === client.id} onClick={() => void revoke(client)}>{busy === client.id ? 'Revocando…' : 'Revocar acceso'}</button>
+                        </div>
+                    </li>;
+                })}</ul>}
         </div>
         {message && <p role="status" className="mu mt-3 text-[11px]">{message}</p>}
     </section>;

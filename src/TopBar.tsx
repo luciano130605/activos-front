@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { DarkModeFreeIcons, PlusIcon, Search01Icon, Share08Icon, Notification01Icon } from '@hugeicons/core-free-icons';
+import { DarkModeFreeIcons, PlusIcon, Search01Icon, Share08Icon, Notification01Icon, DashboardSquare02Icon } from '@hugeicons/core-free-icons';
 import { pages, type PageId } from './navigation';
 import PageLink from './PageLink';
 import PageIcon from './PageIcon';
@@ -12,6 +12,7 @@ import AppearanceDialog from './AppearanceDialog';
 import ShareDialog from './ShareDialog';
 import type { Currency, Preferences, PriceAlert } from './portfolio';
 import type { AlertStatus } from './usePriceAlerts';
+import { isTauriApp } from './account';
 
 type Props = {
     page: PageId; count: number; theme: 'light' | 'dark' | 'system'; resolvedTheme: 'light' | 'dark'; onTheme: (theme: 'light' | 'dark' | 'system') => void; hidden: boolean; onHidden: () => void;
@@ -79,6 +80,7 @@ export default function TopBar(p: Props) {
         {menu && <ContextMenu x={menu.x} y={menu.y} title={`${p.email} · ${p.syncLabel}`} onClose={closeMenu} currency={{ value: p.display, onChange: p.onDisplay }} items={[
             { label: p.hidden ? 'Mostrar montos' : 'Ocultar montos', visibilityHidden: p.hidden, onSelect: p.onHidden },
             { label: 'Buscar activos', icon: Search01Icon, searchIcon: true, onSelect: p.onSearch, hint: '/' },
+            ...(isTauriApp ? [{ label: 'Widgets de escritorio', icon: DashboardSquare02Icon, onSelect: () => window.dispatchEvent(new Event('open-desktop-widgets')) }] : []),
             { label: 'Compartir página', icon: Share08Icon, shareIcon: true, onSelect: () => setSharing(true) },
             { sep: true },
             { label: 'Tu espacio', spaceIcon: true, onSelect: () => openSettings('personalizacion') },

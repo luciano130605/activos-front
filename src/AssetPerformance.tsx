@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Investment } from './portfolio';
 import { adjustLocalSplits } from './localSplits';
+import { apiUrl } from './account';
 import { morphoHistory } from './morpho';
 
 export type HistoryPoint = { time: number; price: number };
@@ -56,7 +57,7 @@ export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock' 
     }
     const [fundSlug, fundId, classId] = id.split('~');
     const url = kind === 'fund' ? `https://api.argentinadatos.com/v1/finanzas/fci/fondos/${encodeURIComponent(fundSlug)}/historico` : kind === 'bond' ? `https://data912.com/historical/bonds/${encodeURIComponent(id)}` : kind === 'stock' ? `/api/stocks/history?symbol=${encodeURIComponent(id)}` : kind === 'cedear' || kind === 'arg-stock' ? `https://data912.com/historical/${kind === 'arg-stock' ? 'stocks' : 'cedears'}/${encodeURIComponent(id)}` : `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365`;
-    const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]) });
+    const response = await fetch(apiUrl(url), { signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]) });
     if (!response.ok) throw new Error(response.status === 429 ? 'Límite de consultas del proveedor.' : 'Historial no disponible.');
     const raw: unknown = await response.json();
     if (kind === 'fund' && (String((raw as { fondoId?: unknown }).fondoId) !== fundId || String((raw as { claseId?: unknown }).claseId) !== classId)) throw new Error('La clase del fondo no coincide con el historial.');

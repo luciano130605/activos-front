@@ -1,3 +1,5 @@
+import { apiUrl } from './account';
+
 type LivePrice = { symbol: string; c: number };
 type HistoricalPrice = { date: string; c: number };
 export type CedearQuote = { price: number; sourceDate?: string };
@@ -51,7 +53,7 @@ export async function stockPricesNow(ids: string[], signal?: AbortSignal): Promi
     const missing = ids.filter(id => prices[`stock:${id}`] == null);
     if (missing.length) {
         try {
-            const response = await fetch(`/api/stocks/quotes?symbols=${encodeURIComponent(missing.join(','))}`, { credentials: 'include', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
+            const response = await fetch(apiUrl(`/api/stocks/quotes?symbols=${encodeURIComponent(missing.join(','))}`), { credentials: 'include', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
             if (!response.ok) throw new Error('Proveedor no disponible');
             const fallback: Record<string, unknown> = await response.json();
             for (const id of missing) if (typeof fallback[id] === 'number' && Number.isFinite(fallback[id]) && fallback[id] > 0) prices[`stock:${id}`] = fallback[id];

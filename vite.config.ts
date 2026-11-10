@@ -9,20 +9,20 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173, strictPort: true,
       proxy: {
-        '/api': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
-        '/mcp': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
-        '/oauth': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
-        '/.well-known': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/api': env.BACKEND_URL || 'http://localhost:3000',
+        '/mcp': env.BACKEND_URL || 'http://localhost:3000',
+        '/oauth': env.BACKEND_URL || 'http://localhost:3000',
+        '/.well-known': env.BACKEND_URL || 'http://localhost:3000',
       },
       fs: { deny: ['**/*.env', '**/.env', '**/.env.*', '**/*.{crt,pem}', '**/.git/**'] },
     },
     preview: {
       port: 5173, strictPort: true,
       proxy: {
-        '/api': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
-        '/mcp': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
-        '/oauth': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
-        '/.well-known': env.BACKEND_URL || 'https://activos-back-production.up.railway.app/',
+        '/api': env.BACKEND_URL || 'http://localhost:3000',
+        '/mcp': env.BACKEND_URL || 'http://localhost:3000',
+        '/oauth': env.BACKEND_URL || 'http://localhost:3000',
+        '/.well-known': env.BACKEND_URL || 'http://localhost:3000',
       },
     },
   };

@@ -9,13 +9,15 @@ export class ApiError extends Error {
     constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
-// La API se sirve bajo el mismo dominio para que Safari conserve la cookie de sesión.
-const apiBase = '';
+// Web conserva el proxy del mismo origen; el bundle de escritorio usa el dominio de la app.
+export const isTauriApp = typeof window !== 'undefined' && !!window.__TAURI__?.core;
+const apiBase = isTauriApp && !import.meta.env.DEV ? 'https://activos-nu.vercel.app' : '';
+export const apiUrl = (path: string) => /^https?:\/\//i.test(path) ? path : `${apiBase}${path.startsWith('/') ? path : `/${path}`}`;
 
 export async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     let response: Response;
     try {
-        response = await fetch(`${apiBase}/api/${path}`, {
+        response = await fetch(apiUrl(`/api/${path}`), {
             method, credentials: 'include', cache: 'no-store',
             headers: { 'Content-Type': 'application/json', 'X-Activos-Request': '1' },
             body: body === undefined ? undefined : JSON.stringify(body),
