@@ -204,6 +204,42 @@ function QuoteChange({ value }: { value: number | null }) {
     return <span className={`widget-change is-${sign}`}><span className="widget-change-mark" aria-hidden="true">{value == null || value === 0 ? '·' : value > 0 ? '↗' : '↘'}</span>{percent(value)}</span>;
 }
 
+function ExpandedChart({ points, positive = true, currency = 'ARS' }: { points: HistoryPoint[]; positive?: boolean; currency?: Currency }) {
+    if (points.length < 2) return <p className="widget-muted text-center py-2">Sin historial suficiente para el gráfico detallado.</p>;
+    const recent = points.slice(-30);
+    const low = Math.min(...recent.map(point => point.price));
+    const high = Math.max(...recent.map(point => point.price));
+    const spread = high - low || 1;
+    const w = 240;
+    const h = 50;
+    const pts = recent.map((point, index) => {
+        const x = (index / (recent.length - 1)) * w;
+        const y = h - ((point.price - low) / spread) * (h - 10) - 5;
+        return { x, y, price: point.price };
+    });
+    const line = pts.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+    const area = `${line} L ${w} ${h} L 0 ${h} Z`;
+    const gradId = `w-grad-${recent.length}-${Math.round(low)}`;
+    return (
+        <div className="widget-expanded-graph">
+            <div className="widget-expanded-range">
+                <span>Mín {money(low, currency)}</span>
+                <span>Máx {money(high, currency)}</span>
+            </div>
+            <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="widget-expanded-svg">
+                <defs>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={positive ? 'var(--sig)' : 'var(--neg)'} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={positive ? 'var(--sig)' : 'var(--neg)'} stopOpacity="0" />
+                    </linearGradient>
+                </defs>
+                <path d={area} fill={`url(#${gradId})`} />
+                <path d={line} fill="none" stroke={positive ? 'var(--sig)' : 'var(--neg)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            </svg>
+        </div>
+    );
+}
+
 function useAssetHistories(items: Investment[], enabled: boolean) {
     const signature = useMemo(() => [...new Set(items.filter(item => item.kind !== 'rate' && item.coin).map(item => `${item.kind}:${item.coin}`))].sort().join('|'), [items]);
     const [histories, setHistories] = useState<Record<string, HistoryPoint[]>>({});
@@ -260,7 +296,9 @@ function WidgetFrame({ title, eyebrow, updatedAt, refreshing, error, onRefresh, 
         </header>
         <div className="widget-title-row" onMouseDown={startDragging}><div><p className="widget-eyebrow">{eyebrow}</p><h1>{title}</h1></div><span className={`widget-live-dot ${error ? 'has-error' : ''}`} title={error || 'Actualización automática activa'} /></div>
         {error && <p className="widget-warning" role="status">{error}</p>}
-        {children}
+        <div className="widget-content-scroll">
+            {children}
+        </div>
         <footer className="widget-footer">
             <span>{updatedAt ? `Actualizado ${new Date(updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : 'Esperando cotizaciones'}</span>
             <label>Actualizar<select aria-label="Frecuencia de actualización" value={seconds} onChange={event => { const next = Number(event.target.value); setSeconds(next); try { localStorage.setItem(REFRESH_KEY, String(next)); } catch { /* Preferencia de esta ventana. */ } }}><option value={30}>30 s</option><option value={60}>1 min</option><option value={120}>2 min</option><option value={300}>5 min</option></select></label>
@@ -414,13 +452,69 @@ function PortfolioWidget({ marketOnly, asset }: { marketOnly: boolean; asset: { 
 }
 
 function PositionRow({ item, value, quote, displayCurrency, fx, points }: { item: Investment; value: number | null; quote: number | null; displayCurrency: Currency; fx: number | null; points: HistoryPoint[] }) {
+    const [expanded, setExpanded] = useState(false);
     const change = item.kind === 'rate' ? (() => { const now = Date.now(); const current = valueAt(item, now, now); const previous = valueAt(item, now - DAY, now); return current != null && previous != null && previous > 0 ? (current / previous - 1) * 100 : null; })() : quote != null ? dailyChange(item, quote, points) : null;
     const currency = item.kind === 'cedear' || item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'fund' ? 'ARS' : 'USD';
     const basis = item.costUnknown || Date.parse(`${item.date}T00:00:00Z`) > Date.now() ? null : convert(item.amount, item.currency, displayCurrency, fx);
     const gain = value != null && basis != null ? value - basis : null;
     const quantity = item.kind === 'rate' ? `${item.rate}% ${item.period === 'year' ? 'anual' : 'mensual'}` : `${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 8 }).format(item.units ?? 0)} unidades`;
     const chartPoints = quote != null && points.length ? [...points, { time: Date.now(), price: quote }] : points;
-    return <article className="widget-position-row"><div className="widget-position-icon" aria-hidden="true">{(item.coin ?? item.kind).replace(/[^a-z0-9]/gi, '').slice(0, 2).toUpperCase()}</div><div className="widget-position-name"><strong>{item.name}</strong><span>{item.coin ?? quantity}</span></div><Sparkline points={chartPoints} positive={change == null || change >= 0} /><div className="widget-position-price"><strong>{money(value, displayCurrency)}</strong><span>{item.kind === 'rate' ? quantity : `${quantity} · ${quote == null ? 'Precio —' : money(quote, currency)}`}</span><span className={`widget-pnl ${gain == null ? '' : gain >= 0 ? 'is-up' : 'is-down'}`}>{gain == null ? item.costUnknown ? 'Costo desconocido' : percent(change) : `${money(gain, displayCurrency)} · ${percent(basis && basis > 0 ? gain / basis * 100 : null)}`}</span></div></article>;
+
+    return (
+        <div className="widget-position-group">
+            <article
+                className={`widget-position-row ${expanded ? 'is-expanded' : ''}`}
+                onClick={() => setExpanded(prev => !prev)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(prev => !prev); } }}
+                aria-expanded={expanded}
+                title="Hacé click para ver gráfico y detalles"
+            >
+                <div className="widget-position-icon" aria-hidden="true">
+                    {(item.coin ?? item.kind).replace(/[^a-z0-9]/gi, '').slice(0, 2).toUpperCase()}
+                </div>
+                <div className="widget-position-name">
+                    <strong>{item.name}</strong>
+                    <span>{item.coin ?? quantity}</span>
+                </div>
+                <Sparkline points={chartPoints} positive={change == null || change >= 0} />
+                <div className="widget-position-price">
+                    <strong>{money(value, displayCurrency)}</strong>
+                    <span>{item.kind === 'rate' ? quantity : `${quantity} · ${quote == null ? 'Precio —' : money(quote, currency)}`}</span>
+                    <span className={`widget-pnl ${gain == null ? '' : gain >= 0 ? 'is-up' : 'is-down'}`}>
+                        {gain == null ? item.costUnknown ? 'Costo desconocido' : percent(change) : `${money(gain, displayCurrency)} · ${percent(basis && basis > 0 ? gain / basis * 100 : null)}`}
+                    </span>
+                </div>
+            </article>
+
+            {expanded && (
+                <div className="widget-expanded-detail">
+                    <ExpandedChart points={chartPoints} positive={change == null || change >= 0} currency={currency} />
+                    <div className="widget-expanded-stats">
+                        <div className="widget-expanded-stat">
+                            <span>Posición</span>
+                            <strong>{quantity}</strong>
+                        </div>
+                        <div className="widget-expanded-stat">
+                            <span>Precio actual</span>
+                            <strong>{quote != null ? money(quote, currency) : '—'}</strong>
+                        </div>
+                        <div className="widget-expanded-stat">
+                            <span>Costo compra</span>
+                            <strong>{basis != null ? money(basis, displayCurrency) : 'Desconocido'}</strong>
+                        </div>
+                        <div className="widget-expanded-stat">
+                            <span>Resultado</span>
+                            <strong className={`widget-pnl ${gain == null ? '' : gain >= 0 ? 'is-up' : 'is-down'}`}>
+                                {gain != null ? `${money(gain, displayCurrency)} (${percent(basis && basis > 0 ? gain / basis * 100 : null)})` : '—'}
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default function Widgets() {

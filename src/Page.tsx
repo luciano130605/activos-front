@@ -275,7 +275,8 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         return () => window.removeEventListener('popstate', onNavigate);
     }, [panelEditor]);
     const [panels] = preference('panels');
-    const visiblePanels = panels ? (panels.includes('panel-v2') ? panels.filter(id => id !== 'panel-v2') : [...panels.filter(id => id !== 'inflation'), ...(panels.includes('value') ? ['macro', 'streak'] : [])]) : ['value', 'macro', 'streak', 'evolution', 'distribution', 'investments'];
+    const defaultPanels = ['value', 'investments'];
+    const visiblePanels = panels ? (panels.includes('panel-v2') ? panels.filter(id => id !== 'panel-v2') : panels.filter(id => id !== 'inflation')) : defaultPanels;
     const today = Date.now();
     const fxRate = usdc?.price; // 1 USDC en pesos: referencia única de conversión
     const fxSource = usdc?.source === 'mep' ? 'DolarAPI · MEP (CoinGecko no respondió)' : 'CoinGecko · USDC/ARS';
@@ -866,31 +867,32 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         mutations.observe(root, { childList: true, subtree: true });
         return () => { mutations.disconnect(); observer.disconnect(); };
     }, []);
-    return <div data-theme={resolvedTheme} className="app min-h-dvh [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
+    return <div data-theme={resolvedTheme} className="app min-h-dvh w-full max-w-full overflow-x-hidden [&_input[type=date]]:[color-scheme:dark] data-[theme=light]:[&_input[type=date]]:[color-scheme:light]">
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImportFile} aria-label="Importar archivo JSON" />
-        <div inert={locked} className="mx-auto max-w-[1360px] px-4 pb-20 sm:px-8">
+        <div inert={locked} className="mx-auto max-w-[1360px] w-full px-4 pb-28 sm:pb-20 sm:px-8 overflow-x-hidden">
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => { setInitialLocalSearch(undefined); setAssetSearch('crypto'); }} onAdd={openModal} onExport={exportJSON} onImport={() => fileRef.current?.click()}
                 email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onMailSettings={() => { setSpaceSubscreen('mail'); setEmailSettings(true); }} onCustomize={() => setPanelEditor(true)} customizing={panelEditor} spaceSubscreen={spaceSubscreen !== null} onPasskey={() => { setSpaceSubscreen('passkey'); void preparePasskeyDialog(); }} passkeyCount={passkeyCount} alerts={alerts} alertStatuses={alertStatuses} onDeleteAlert={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} onSaveAlert={alert => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).map(item => item.id === alert.id ? { ...alert, id: crypto.randomUUID() } : item) }))} alertHistory={alertHistory} onClearHistory={() => setAlertHistory([])} quietHours={view.portfolio.preferences.quietHours} onQuietHours={value => sync.update(current => ({ ...current, preferences: { ...current.preferences, quietHours: value } }))} alertCount={alerts.length} triggeredCount={triggeredAlerts.length} />
-            <div style={view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker" role="group" aria-label="Cotizaciones de referencia">
+            <div style={view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker w-full max-w-full" role="group" aria-label="Cotizaciones de referencia">
                 <div className="ticker-track">
-                    {[false, true].map(duplicate => <div className="ticker-group" key={String(duplicate)} aria-hidden={duplicate || undefined}>
+                    <div className="ticker-group">
                         <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
                         {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
                         <MarketHours />
-                        <span role={duplicate ? undefined : 'status'}>{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
+                        <span role="status">{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
                         <span><span className={statusDot} aria-hidden="true" style={{ alignSelf: 'center' }} />{syncLabel}</span>
-                    </div>)}
+                    </div>
                 </div>
             </div>
             <main ref={mainRef}>
-                <header className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
-                    <div><p className="lb mb-2">PANEL PERSONAL / {pageInfo.label.toUpperCase()}</p><h1 ref={titleRef} tabIndex={-1} className="text-[clamp(2.2rem,5vw,3.3rem)] font-light leading-none tracking-[-.045em] outline-none">{pageInfo.title}<span className="sig">.</span></h1><p className="mu mt-3">{pageInfo.description}</p></div>
+                <header className="mb-6 mt-4 sm:mt-6 flex flex-wrap items-baseline justify-between gap-3">
+                    <div>
+                        <h1 ref={titleRef} tabIndex={-1} className="text-2xl sm:text-3xl font-light tracking-tight text-[var(--ink)] outline-none">
+                            {pageInfo.title}<span className="sig">.</span>
+                        </h1>
+                        {pageInfo.description && <p className="mu mt-1 text-[12px]">{pageInfo.description}</p>}
+                    </div>
                 </header>
-                {page === 'summary' && <section className="card mb-4 flex flex-wrap items-center justify-between gap-4 border-[var(--sig)]/25 bg-[var(--sig)]/[.04] p-4 sm:p-5">
-                    <div><p className="lb">AGENTES EXTERNOS · MCP</p><h2 className="mt-1 text-[17px] font-medium">Usá el MCP con ChatGPT o Claude</h2><p className="mu mt-1 text-[12px]">Conectá un agente para consultar tu cartera o, si le das permiso, editar posiciones.</p></div>
-                    <button type="button" className="btn-primary min-h-10" onClick={() => window.dispatchEvent(new Event('open-mcp-settings'))}>Configurar conexión</button>
-                </section>}
                 {view.error && view.status !== 'expired' && <div role="alert" className="mb-4 rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] px-4 py-3 text-[12px]"><p>{view.error}</p><div className="mt-3 flex flex-wrap gap-4">{view.status === 'conflict' ? <button onClick={() => void reloadPortfolio()} className="underline">Cargar versión guardada</button> : <button onClick={() => void sync.flush()} className="underline">Reintentar guardado</button>}<button onClick={() => void exportJSON()} className="underline">Exportar mis cambios</button></div></div>}
                 {legacy && <div className="card mb-4 p-4 text-[12px]"><p>Encontramos {legacy.investments.length} inversiones guardadas en este navegador. Podés agregarlas a la cuenta de <strong>{account.user.email}</strong>.</p><div className="mt-3 flex gap-4"><button disabled={view.status === 'saving'} onClick={() => void importLegacy()} className="underline disabled:opacity-50">Guardar en mi cuenta</button><button onClick={() => setLegacy(null)} className="text-[var(--muted)]">Ahora no</button></div></div>}
                 {notice && <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-4 py-3 text-[12px]"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Cerrar aviso" className="text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={Cancel01Icon} size={14} /></button></div>}
@@ -907,45 +909,100 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {page === 'investments' && investmentView === 'map' && <Suspense fallback={<div className="card p-8 text-[13px] text-[var(--muted)]" role="status">Cargando mapa…</div>}><PortfolioMap positions={mapPositions} format={fmt} /></Suspense>}
                 <div className="flex flex-col">
                     <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}>
-                        <section className="mb-3.5 grid gap-3.5 lg:grid-cols-[1.5fr_1fr]" aria-label="Valor de la cartera">
-                            <article className="card hero-glow flex min-h-[360px] flex-col overflow-hidden p-6">
-                                <div className="flex items-center justify-between"><span className="lb">VALOR ACTUAL</span></div>
-                                {items.length > 0 && <fieldset className="mt-4"><legend className="mu mb-2 text-[11px]">Incluir en el resumen</legend><div className="flex flex-wrap gap-2">{kinds.filter(k => k.id !== 'all' && allCount(k.id) > 0).map(k => { const category = k.id as Exclude<Filter, 'all'>; const selected = !hiddenSummaryKinds.includes(category); return <button key={category} type="button" aria-pressed={selected} onClick={() => setHiddenSummaryKinds(prev => prev.includes(category) ? prev.filter(id => id !== category) : [...prev, category])} className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors ${selected ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]' : 'border-[var(--line)] text-[var(--muted)] opacity-60'}`}>{k.label}</button>; })}</div></fieldset>}
-                                <p className="big mt-6" aria-label={hidden ? 'Monto oculto' : undefined}><AnimatedAmount key={page} value={summaryCurrent} currency={display} hidden={hidden} large /></p>
-                                <div className="mt-4 flex flex-wrap items-center gap-3"><span className={`pill ${summaryGain >= 0 ? '' : 'neg'}`}>
-                                    <HugeiconsIcon
-                                        icon={summaryGain >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon}
-                                        size={16}
-                                        color={summaryGain >= 0 ? "#22c55e" : "#ef4444"}
-                                        strokeWidth={2}
-                                    />
-                                    {Number.isFinite(summaryGainPct) ? percent(summaryGainPct) : '—'}</span><span className="mu">{Number.isFinite(summaryGain) ? `${fmt(summaryGain)} respecto al capital aportado` : 'Rendimiento no disponible: hay costos desconocidos'}</span></div>
-                                {slicesForBar.length > 0 && <div className="mt-7"><div className="dm" role="img" aria-label={`Distribución: ${slicesForBar.map(k => `${k.label} ${(k.value / slicesTotal * 100).toFixed(0)}%`).join(', ')}`}>{slicesForBar.map(k => <i key={k.label} style={{ ['--c' as string]: k.color, flex: k.value }} />)}</div><div className="lg mt-3">{slicesForBar.map(k => <span key={k.label} style={{ ['--c' as string]: k.color }}>{k.label} {(k.value / slicesTotal * 100).toFixed(0)}%</span>)}</div></div>}
-                                {summaryChart && <svg className="chart-animate line-chart mt-auto -mx-6 -mb-6 block h-[100px] w-[calc(100%+3rem)] pt-4" viewBox={`0 0 ${summaryChart.w} ${summaryChart.h}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: .28 }} /><stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} /></linearGradient></defs><path d={summaryChart.area} fill="url(#hero-fill)" /><path d={summaryChart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>}
-                            </article>
-                            <div className="grid gap-3.5">
-                                <article className="card p-6">
-                                    <p className="lb">CAPITAL Y RESULTADO</p>
-                                    <div className="mt-4 grid grid-cols-2 gap-4"><div><p className="mu">Aportado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight"><AnimatedAmount key={page} value={summaryInvested} currency={display} hidden={hidden} /></p></div><div><p className="mu">Resultado</p><p className="mt-1 break-all text-[clamp(1.2rem,2.4vw,1.8rem)] font-light tabular-nums tracking-tight" style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}><AnimatedAmount key={page} value={summaryGain} currency={display} hidden={hidden} /></p></div></div>
-                                    {Number.isFinite(summaryGain) && <><div className="trk mt-5" role="img" aria-label={`Capital ${(capShare * 100).toFixed(0)}% del valor actual`}><i style={{ width: `${Math.min(100, capShare * 100)}%` }} /><b style={{ width: `${Math.max(0, 100 - capShare * 100)}%`, background: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }} /></div>
-                                    <div className="mu mt-2 flex justify-between text-[11px]"><span>capital</span><span style={{ color: summaryGain >= 0 ? 'var(--sig)' : 'var(--neg)' }}>{summaryGain >= 0 ? 'ganancia' : 'pérdida'}</span></div></>}
-                                </article>
-                                <article className="card side-glow p-6">
-                                    <div className="flex items-center justify-between"><p className="lb">REFERENCIA USDC</p><RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar cotizaciones" /></div>
-                                    <p className="mt-3 text-[clamp(1.6rem,3vw,2.2rem)] font-light leading-none tracking-tight tabular-nums">{fxRate ? money(fxRate, 'ARS') : 'No disponible'}</p>
-                                    <p className="mu mt-2 flex items-center gap-1 text-[11px]">
-                                        1 USDC en pesos · convierte USD
+                        <section className="mb-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]" aria-label="Valor de la cartera">
+                            <article className="card flex min-h-[320px] flex-col overflow-hidden p-6">
+                                <div className="flex items-center justify-between">
+                                    <span className="lb">VALOR DE LA CARTERA</span>
+                                    <span className="font-mono text-xs text-[var(--muted)]">{display}</span>
+                                </div>
+                                <p className="big mt-4" aria-label={hidden ? 'Monto oculto' : undefined}>
+                                    <AnimatedAmount key={page} value={summaryCurrent} currency={display} hidden={hidden} large />
+                                </p>
+                                <div className="mt-3 flex flex-wrap items-center gap-3">
+                                    <span className={`pill ${summaryGain >= 0 ? '' : 'neg'}`}>
                                         <HugeiconsIcon
-                                            icon={ArrowReloadHorizontalIcon}
-                                            size={13}
-                                            className="inline-block"
+                                            icon={summaryGain >= 0 ? ChartIncreaseIcon : ChartDecreaseIcon}
+                                            size={15}
+                                            strokeWidth={2}
                                         />
-                                        ARS en toda la app
-                                    </p>
-                                    {compare.length > 0 && <div className="mt-4 divide-y divide-[var(--line)] border-t border-[var(--line)]">{compare.map(k => { const gap = fxRate ? (fxRate / rates[k].venta - 1) * 100 : NaN; return <div key={k} className="flex items-center justify-between py-2 font-mono text-[12px]"><span className="text-[var(--muted)]">{dollarLabels[k]}</span><span className="tabular-nums">{money(rates[k].venta, 'ARS')}</span><span className={`pill ${gap >= 0 || !Number.isFinite(gap) ? '' : 'neg'}`} title={`USDC ${Number.isFinite(gap) ? percent(gap) : '—'} respecto al dólar ${dollarLabels[k]}`}>{Number.isFinite(gap) ? percent(gap) : '—'}</span></div>; })}</div>}
-                                    <div className="mt-3 space-y-1"><p className="mu text-[10.5px]">Precio de USDC: <a href="https://www.coingecko.com/en/coins/usd-coin" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-[var(--ink)]">{usdc ? fxSource : 'CoinGecko'}</a></p><QuoteSource source="dollar" label="Dólares comparados" /></div>
-                                </article>
-                            </div>
+                                        {Number.isFinite(summaryGainPct) ? percent(summaryGainPct) : '—'}
+                                    </span>
+                                    {Number.isFinite(summaryGain) && (
+                                        <span className="font-mono text-xs tabular-nums text-[var(--muted)]">
+                                            {summaryGain >= 0 ? '+' : ''}{fmt(summaryGain)} resultado
+                                        </span>
+                                    )}
+                                    {Number.isFinite(summaryInvested) && (
+                                        <span className="text-xs text-[var(--muted)]">
+                                            · Aportado: <span className="font-mono tabular-nums text-[var(--ink)]">{fmt(summaryInvested)}</span>
+                                        </span>
+                                    )}
+                                </div>
+                                {slicesForBar.length > 0 && (
+                                    <div className="mt-6">
+                                        <div className="h-1.5 w-full flex overflow-hidden rounded-full bg-[var(--line)]" role="img" aria-label={`Distribución: ${slicesForBar.map(k => `${k.label} ${(k.value / slicesTotal * 100).toFixed(0)}%`).join(', ')}`}>
+                                            {slicesForBar.map(k => (
+                                                <div key={k.label} style={{ background: k.color, width: `${(k.value / slicesTotal * 100)}%` }} />
+                                            ))}
+                                        </div>
+                                        <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--muted)]">
+                                            {slicesForBar.map(k => (
+                                                <span key={k.label} className="inline-flex items-center gap-1.5">
+                                                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: k.color }} />
+                                                    {k.label} <b className="font-medium text-[var(--ink)]">{(k.value / slicesTotal * 100).toFixed(0)}%</b>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {summaryChart && (
+                                    <div className="mt-auto pt-4 -mx-6 -mb-6 overflow-hidden">
+                                        <svg className="chart-animate line-chart h-[90px] w-full" viewBox={`0 0 ${summaryChart.w} ${summaryChart.h}`} preserveAspectRatio="none" aria-hidden="true">
+                                            <defs>
+                                                <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" style={{ stopColor: 'var(--sig)', stopOpacity: 0.16 }} />
+                                                    <stop offset="100%" style={{ stopColor: 'var(--sig)', stopOpacity: 0 }} />
+                                                </linearGradient>
+                                            </defs>
+                                            <path d={summaryChart.area} fill="url(#hero-fill)" />
+                                            <path d={summaryChart.line} fill="none" style={{ stroke: 'var(--sig)' }} strokeWidth="1.75" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                                        </svg>
+                                    </div>
+                                )}
+                            </article>
+                            <article className="card flex flex-col justify-between p-6">
+                                <div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="lb">COTIZACIONES</span>
+                                        <RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar cotizaciones" />
+                                    </div>
+                                    <div className="mt-4">
+                                        <p className="text-[26px] font-light leading-none tracking-tight tabular-nums">{fxRate ? money(fxRate, 'ARS') : 'No disponible'}</p>
+                                        <p className="mu mt-1 text-[11px]">USDC en pesos (referencia de conversión)</p>
+                                    </div>
+                                    {compare.length > 0 && (
+                                        <div className="mt-5 divide-y divide-[var(--line)] border-t border-[var(--line)]">
+                                            {compare.map(k => {
+                                                const gap = fxRate ? (fxRate / rates[k].venta - 1) * 100 : NaN;
+                                                return (
+                                                    <div key={k} className="flex items-center justify-between py-2 text-[12px]">
+                                                        <span className="text-[var(--muted)]">{dollarLabels[k]}</span>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="font-mono tabular-nums text-[var(--ink)]">{money(rates[k].venta, 'ARS')}</span>
+                                                            <span className={`pill text-[10.5px] ${gap >= 0 || !Number.isFinite(gap) ? '' : 'neg'}`} title={`USDC ${Number.isFinite(gap) ? percent(gap) : '—'} respecto al dólar ${dollarLabels[k]}`}>
+                                                                {Number.isFinite(gap) ? percent(gap) : '—'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-[var(--line)]">
+                                    <QuoteSource source="dollar" label="Fuente: DolarAPI / CoinGecko" />
+                                </div>
+                            </article>
                         </section>
                     </div>
 
@@ -969,19 +1026,30 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
 
                     <div style={{ order: panelOrder('investments') }} hidden={(page !== 'investments' || investmentView !== 'list') && (page !== 'summary' || !visiblePanels.includes('investments'))}>
                         <section className="card overflow-hidden" aria-label="Mis inversiones">
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6"><div><p className="lb">MIS INVERSIONES <span className="ml-2 text-[var(--faint)]">{filtered.length}</span></p><p className="mu mt-2 text-[11.5px]">Tocá una inversión para ver sus detalles · ⋯ para más opciones</p></div>
-                                <div className="flex items-center gap-2"><label className="relative hidden sm:block"><HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" /><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" /></label><RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar precios" /></div></div>
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6">
+                                <div className="flex items-center gap-2.5">
+                                    <p className="lb">MIS INVERSIONES</p>
+                                    <span className="rounded-full bg-[var(--raised)] border border-[var(--line)] px-2 py-0.5 text-[10px] font-mono text-[var(--muted)]">{filtered.length}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="relative hidden sm:block">
+                                        <HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" />
+                                        <input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" />
+                                    </label>
+                                    <RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar precios" />
+                                </div>
+                            </div>
                             <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
                             <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
                             <div className="mt-3">{filtered.length ? filtered.map(i => {
                                 const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = isLocal(i) ? `${titleFor(i.kind)} · ${i.coin?.split('~')[0]}` : i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : i.kind === 'stock' ? `Acción · ${i.coin}` : `Cripto · ${i.coin}`;
                                 return <div key={i.id} className={`li cursor-pointer ${ctx?.id === i.id ? 'menu-open' : ''}`} onClick={e => { if ((e.target as HTMLElement).closest('button, a')) return; detailOpenerRef.current = e.currentTarget.querySelector('button[data-detail]'); setDetailId(i.id); }} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
                                     <div className="tk" style={{ ['--c' as string]: colorOf(cat) }} aria-hidden="true">{tickerOf(i)}</div>
-                                    <div className="min-w-0"><button type="button" data-detail onClick={e => { detailOpenerRef.current = e.currentTarget; setDetailId(i.id); }} className="block max-w-full truncate text-left text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2" aria-label={`Ver detalle de ${i.name}`}>{i.name}</button><p className="mu mt-1 text-[11.5px]">{sub} <span>· {i.costUnknown ? 'Importado ' : ''}{formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px]">{i.costUnknown ? 'Sin precio disponible' : 'Sin precio · se muestra el monto original'}</p>}</div>
-                                    <div className="r hid"><p><span className="amount-transition">{i.costUnknown ? '—' : mny(i.amount, i.currency)}</span></p><p className="mu mt-1 text-[10px]">{i.costUnknown ? 'Costo desconocido' : 'Invertido'}</p></div>
-                                    <div className="r hid"><p><span key={mny(v, i.currency)} className="amount-transition">{mny(v, i.currency)}</span></p><div className="mt-1 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada por vos</span> : <QuoteSource source={i.kind === 'fund' ? 'fund' : i.kind === 'arg-stock' || i.kind === 'bond' ? 'local' : i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
-                                    <div className="r"><span className={`pill ${change >= 0 ? '' : 'neg'}`}>{missing || i.costUnknown ? '—' : percent(change)}</span></div>
-                                    <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setCtx(ctx?.id === i.id ? null : { x: r.right - 220, y: r.bottom + 6, id: i.id }); }} aria-haspopup="menu" aria-expanded={ctx?.id === i.id} aria-label={`Acciones de ${i.name}`} className="ibtn !h-9 !w-9 !border-transparent !bg-transparent"><HugeiconsIcon icon={MoreHorizontalIcon} size={17} /></button>
+                                    <div className="min-w-0 flex-1 sm:flex-initial"><button type="button" data-detail onClick={e => { detailOpenerRef.current = e.currentTarget; setDetailId(i.id); }} className="block max-w-full truncate text-left text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2" aria-label={`Ver detalle de ${i.name}`}>{i.name}</button><p className="mu mt-0.5 text-[11px] truncate">{sub} <span>· {i.costUnknown ? 'Importado ' : ''}{formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px] text-[var(--neg)]">{i.costUnknown ? 'Sin precio disponible' : 'Sin precio · se muestra el monto original'}</p>}</div>
+                                    <div className="r hid"><p><span className="amount-transition">{i.costUnknown ? '—' : mny(i.amount, i.currency)}</span></p><p className="mu mt-0.5 text-[10px]">{i.costUnknown ? 'Costo desconocido' : 'Invertido'}</p></div>
+                                    <div className="r hid"><p><span key={mny(v, i.currency)} className="amount-transition">{mny(v, i.currency)}</span></p><div className="mt-0.5 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada</span> : <QuoteSource source={i.kind === 'fund' ? 'fund' : i.kind === 'arg-stock' || i.kind === 'bond' ? 'local' : i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
+                                    <div className="r flex sm:block flex-col items-end gap-1"><span className="sm:hidden font-mono text-[13px] font-medium tabular-nums">{mny(v, i.currency)}</span><span className={`pill text-[11px] ${change >= 0 ? '' : 'neg'}`}>{missing || i.costUnknown ? '—' : percent(change)}</span></div>
+                                    <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setCtx(ctx?.id === i.id ? null : { x: Math.max(12, r.right - 220), y: r.bottom + 6, id: i.id }); }} aria-haspopup="menu" aria-expanded={ctx?.id === i.id} aria-label={`Acciones de ${i.name}`} className="ibtn !h-8 !w-8 !border-transparent !bg-transparent text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={MoreHorizontalIcon} size={16} /></button>
                                 </div>;
                             }) : <div className="flex flex-col items-center px-4 py-16 text-center"><div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[var(--raised)]"><HugeiconsIcon icon={CoinsBitcoinIcon} size={21} className="text-[var(--muted)]" /></div><h3 className="text-[14px] font-medium">{items.length ? 'No hay inversiones con este filtro' : 'Tu cartera está vacía'}</h3><p className="mt-2 max-w-xs text-[12px] text-[var(--muted)]">{items.length ? 'Probá otra categoría o búsqueda.' : 'Empezá cargando una inversión o importá un archivo exportado.'}</p>{!items.length && <div className="mt-5 flex gap-2"><button onClick={openModal} className="btn-primary !min-h-10 !text-[13px]">Agregar inversión</button><button onClick={() => fileRef.current?.click()} className="btn-ghost">Importar datos</button></div>}</div>}</div>
                         </section>

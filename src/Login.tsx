@@ -2,7 +2,7 @@ import { loginWithPasskey, supportsPasskeys } from './passkeys';
 import { useState, type FormEvent } from 'react';
 import { request, type Account } from './account';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { EyeClosedFreeIcons,  LoaderIcon,  ViewIcon } from '@hugeicons/core-free-icons';
+import { EyeClosedFreeIcons, LoaderIcon, ViewIcon, FingerPrintIcon } from '@hugeicons/core-free-icons';
 
 type Props = { onLogin: (account: Account) => void; initialError?: string; fixedEmail?: string; onCancel?: () => void };
 
@@ -36,33 +36,191 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
     async function passkeyLogin() {
         setBusy(true); setError('');
         try { onLogin(await loginWithPasskey()); }
-        catch { setError('No se pudo ingresar con la passkey. Volvé a intentar o usá tu PIN.'); }
+        catch { setError('No se pudo ingresar con passkey. Probá de nuevo o usá tu PIN.'); }
         finally { setBusy(false); }
     }
 
-    const input = 'w-full rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-3.5 py-3 text-[14px] outline-none transition-colors focus:border-[var(--sig)]';
-    const pinInput = `${input} font-mono text-[18px] tracking-[.35em]`;
-    return <main data-theme="dark" className="app grid min-h-dvh place-items-center px-5 py-12">
-        <div className="w-full max-w-[430px]">
-            <div className="brand mb-9"><img src='/icon.png' alt="Activos Logo" className="brand-logo" />alza<span className="sig">.</span></div>
-            <section className="card hero-glow p-7 shadow-2xl sm:p-9">
-                <p className="lb mb-3">TU CARTERA PERSONAL</p>
-                <h1 className="text-[34px] font-light leading-[1.05] tracking-[-.045em]">{mode === 'register' ? 'Crear cuenta' : fixedEmail ? 'Volvé a ingresar' : 'Bienvenido de nuevo'}<span className="sig">.</span></h1>
-                <p className="mu mt-3 !font-sans text-[13px] leading-6">{mode === 'register'
-                    ? 'Registrate con tu correo y elegí un PIN de 6 dígitos. Vas a entrar directamente a tu cartera, sin códigos por correo.'
-                    : 'Ingresá con tu correo y el PIN de tu cuenta para ver y guardar tus inversiones.'}</p>
-                <form onSubmit={submit} className="mt-7 space-y-5">
-                    <div><label htmlFor="account-email" className="mb-2 block text-[12px] text-[var(--muted)]">Correo electrónico</label><input id="account-email" type="text" inputMode="email" autoComplete="email" required pattern="[^@\s]+@[^@\s]+\.[^@\s]+" onFocus={event => { if (event.currentTarget.value === '@gmail.com') event.currentTarget.setSelectionRange(0, 0); }} maxLength={254} readOnly={Boolean(fixedEmail)} disabled={busy} value={email} onChange={e => setEmail(e.target.value)} placeholder="vos@correo.com" className={input} /></div>
-                    <div><label htmlFor="account-pin" className="mb-2 block text-[12px] text-[var(--muted)]">{mode === 'register' ? 'Elegí un PIN de 6 dígitos' : 'PIN'}</label><div className="relative"><input id="account-pin" type={visible ? 'text' : 'password'} inputMode="numeric" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required pattern="[0-9]{6}" minLength={6} maxLength={6} disabled={busy} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} aria-describedby="pin-help" placeholder="••••••" className={`${pinInput} pr-12`} /><button type="button" onClick={() => setVisible(value => !value)} aria-label={visible ? 'Ocultar PIN' : 'Mostrar PIN'} aria-pressed={visible} className="absolute inset-y-0 right-0 px-3.5 text-[var(--muted)] hover:text-[var(--ink)]">{visible ? <HugeiconsIcon icon={EyeClosedFreeIcons} size={17} /> : <HugeiconsIcon icon={ViewIcon} size={17} />}</button></div><p id="pin-help" className="mu mt-2 !font-sans text-[11px]">{mode === 'register' ? 'Recordalo: lo vas a necesitar para ingresar a tu cuenta.' : 'Usá tu PIN fijo de 6 dígitos.'}</p></div>
-                    {mode === 'register' && <div><label htmlFor="account-confirm-pin" className="mb-2 block text-[12px] text-[var(--muted)]">Confirmá tu PIN</label><input id="account-confirm-pin" type={visible ? 'text' : 'password'} inputMode="numeric" autoComplete="new-password" required pattern="[0-9]{6}" minLength={6} maxLength={6} disabled={busy} value={confirmPin} onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="••••••" className={pinInput} />{confirmPin && pin !== confirmPin && <p className="mt-2 text-[11px] text-[var(--neg)]">Los PINs no coinciden.</p>}</div>}
-                    {error && <p role="alert" className="rounded-lg border border-[var(--neg)]/25 bg-[var(--negbg)] p-3 text-[12px] leading-5">{error}</p>}
-                    <button type="submit" disabled={busy} className="btn-primary w-full disabled:cursor-wait disabled:opacity-60">{busy ? <><HugeiconsIcon icon={LoaderIcon} size={16} className="animate-spin motion-reduce:animate-none" />{mode === 'register' ? 'Creando cuenta…' : 'Ingresando…'}</> : mode === 'register' ? 'Crear cuenta y entrar' : 'Ingresar'}</button>
-                    {mode === 'login' && !fixedEmail && supportsPasskeys() && <div><button type="button" disabled={busy} onClick={() => void passkeyLogin()} className="btn-ghost w-full disabled:opacity-60">Ingresar con passkey o llave de seguridad</button><p className="mu mt-2 text-center !font-sans text-[11px] leading-5">Elegí Face ID, una llave de seguridad o una passkey en otro dispositivo. Si aparece un QR, escanealo con tu iPhone.</p></div>}
-                    {!fixedEmail && <button type="button" disabled={busy} onClick={() => { setMode(value => value === 'login' ? 'register' : 'login'); setPin(''); setConfirmPin(''); setError(''); }} className="w-full text-[12px] text-[var(--muted)] hover:text-[var(--ink)] disabled:opacity-60">{mode === 'register' ? '¿Ya tenés cuenta? Ingresar' : '¿Primera vez? Crear cuenta'}</button>}
-                    {onCancel && <button type="button" onClick={onCancel} className="w-full text-[12px] text-[var(--muted)]">Volver a mi cartera</button>}
+    const input = 'w-full rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-3.5 py-3 text-[14px] text-[var(--ink)] placeholder:text-[var(--faint)] outline-none transition-colors focus:border-[var(--sig)] focus:ring-1 focus:ring-[var(--sig)]/30';
+    const pinInput = `${input} font-mono text-[18px] tracking-[.35em] text-center`;
+
+    return <main data-theme="dark" className="app grid min-h-dvh place-items-center px-4 py-10 selection:bg-[var(--sig)] selection:text-[#09090b]">
+        <div className="w-full max-w-[400px]">
+            {/* Logo minimalista */}
+            <div className="mb-8 flex items-center justify-center gap-2.5">
+                <img src="/icon.png" alt="Activos Logo" className="h-8 w-8 rounded-xl object-contain shadow-xs" />
+                <span className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
+                    alza<span className="text-[var(--sig)]">.</span>
+                </span>
+            </div>
+
+            {/* Tarjeta de Acceso */}
+            <section className="card hero-glow p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+                {!fixedEmail && (
+                    <div className="seg mb-6 w-full grid grid-cols-2 p-1" role="tablist">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mode === 'login'}
+                            aria-pressed={mode === 'login'}
+                            onClick={() => { setMode('login'); setError(''); }}
+                            className="!min-h-[34px] !text-xs font-medium"
+                        >
+                            Ingresar
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mode === 'register'}
+                            aria-pressed={mode === 'register'}
+                            onClick={() => { setMode('register'); setError(''); }}
+                            className="!min-h-[34px] !text-xs font-medium"
+                        >
+                            Crear cuenta
+                        </button>
+                    </div>
+                )}
+
+                <div className="mb-6">
+                    <h1 className="text-[22px] font-medium tracking-tight text-[var(--ink)]">
+                        {mode === 'register' ? 'Creá tu cuenta' : fixedEmail ? 'Volvé a ingresar' : 'Bienvenido'}
+                    </h1>
+                    <p className="mu mt-1 text-[12px] text-[var(--muted)]">
+                        {mode === 'register'
+                            ? 'Elegí un PIN de 6 dígitos para acceder a tu cartera.'
+                            : 'Ingresá tu correo y PIN para ver tus activos.'}
+                    </p>
+                </div>
+
+                <form onSubmit={submit} className="space-y-4">
+                    <div>
+                        <label htmlFor="account-email" className="mb-1.5 block text-[11.5px] font-medium text-[var(--muted)]">
+                            Correo electrónico
+                        </label>
+                        <input
+                            id="account-email"
+                            type="text"
+                            inputMode="email"
+                            autoComplete="email"
+                            required
+                            pattern="[^@\s]+@[^@\s]+\.[^@\s]+"
+                            onFocus={event => { if (event.currentTarget.value === '@gmail.com') event.currentTarget.setSelectionRange(0, 0); }}
+                            maxLength={254}
+                            readOnly={Boolean(fixedEmail)}
+                            disabled={busy}
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            placeholder="vos@correo.com"
+                            className={input}
+                        />
+                    </div>
+
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label htmlFor="account-pin" className="block text-[11.5px] font-medium text-[var(--muted)]">
+                                {mode === 'register' ? 'Elegí tu PIN de 6 dígitos' : 'PIN de 6 dígitos'}
+                            </label>
+                        </div>
+                        <div className="relative">
+                            <input
+                                id="account-pin"
+                                type={visible ? 'text' : 'password'}
+                                inputMode="numeric"
+                                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                                required
+                                pattern="[0-9]{6}"
+                                minLength={6}
+                                maxLength={6}
+                                disabled={busy}
+                                value={pin}
+                                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="••••••"
+                                className={pinInput}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setVisible(v => !v)}
+                                aria-label={visible ? 'Ocultar PIN' : 'Mostrar PIN'}
+                                className="absolute inset-y-0 right-0 flex items-center px-3.5 text-[var(--muted)] hover:text-[var(--ink)]"
+                            >
+                                <HugeiconsIcon icon={visible ? EyeClosedFreeIcons : ViewIcon} size={16} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {mode === 'register' && (
+                        <div>
+                            <label htmlFor="account-confirm-pin" className="mb-1.5 block text-[11.5px] font-medium text-[var(--muted)]">
+                                Confirmá tu PIN
+                            </label>
+                            <input
+                                id="account-confirm-pin"
+                                type={visible ? 'text' : 'password'}
+                                inputMode="numeric"
+                                autoComplete="new-password"
+                                required
+                                pattern="[0-9]{6}"
+                                minLength={6}
+                                maxLength={6}
+                                disabled={busy}
+                                value={confirmPin}
+                                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="••••••"
+                                className={pinInput}
+                            />
+                            {confirmPin && pin !== confirmPin && (
+                                <p className="mt-1.5 text-[11px] text-[var(--neg)]">Los PINs no coinciden.</p>
+                            )}
+                        </div>
+                    )}
+
+                    {error && (
+                        <p role="alert" className="rounded-xl border border-[var(--neg)]/30 bg-[var(--negbg)] p-3 text-[12px] leading-5 text-[var(--neg)]">
+                            {error}
+                        </p>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={busy}
+                        className="btn-primary w-full !min-h-11 !rounded-xl !text-sm font-medium disabled:opacity-60"
+                    >
+                        {busy ? (
+                            <>
+                                <HugeiconsIcon icon={LoaderIcon} size={16} className="animate-spin motion-reduce:animate-none" />
+                                {mode === 'register' ? 'Creando cuenta…' : 'Ingresando…'}
+                            </>
+                        ) : mode === 'register' ? 'Crear cuenta y entrar' : 'Ingresar'}
+                    </button>
+
+                    {mode === 'login' && !fixedEmail && supportsPasskeys() && (
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void passkeyLogin()}
+                            className="btn-ghost w-full !min-h-10 !rounded-xl !text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] flex items-center justify-center gap-2"
+                        >
+                            <HugeiconsIcon icon={FingerPrintIcon} size={16} />
+                            <span>Ingresar con Face ID o passkey</span>
+                        </button>
+                    )}
+
+                    {onCancel && (
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--ink)] pt-1"
+                        >
+                            Volver a mi cartera
+                        </button>
+                    )}
                 </form>
             </section>
-            <p className="mu mt-6 text-center text-[10px] leading-5">Cripto, CEDEARs, índices y tasas.<br />Todo en tu cuenta.</p><nav aria-label="Información legal" className="mt-4 flex justify-center gap-4 text-[11px] text-[var(--muted)]"><a className="underline underline-offset-4" href="/politicas">Privacidad</a><a className="underline underline-offset-4" href="/condiciones">Condiciones</a></nav>
+
+            <nav aria-label="Información legal" className="mt-6 flex justify-center gap-4 text-[11px] text-[var(--muted)]">
+                <a className="hover:text-[var(--ink)] transition-colors" href="/politicas">Privacidad</a>
+                <span>·</span>
+                <a className="hover:text-[var(--ink)] transition-colors" href="/condiciones">Términos</a>
+            </nav>
         </div>
     </main>;
 }
