@@ -17,7 +17,7 @@ type Props = {
     page: PageId; count: number; theme: 'light' | 'dark' | 'system'; resolvedTheme: 'light' | 'dark'; onTheme: (theme: 'light' | 'dark' | 'system') => void; hidden: boolean; onHidden: () => void;
     display: Currency; onDisplay: (c: Currency) => void; onSearch: () => void; onAdd: () => void; onExport: () => void; onImport: () => void;
     email: string; syncLabel: string; onLogout: () => void; leaving: boolean;
-    onMailSettings: () => void; onCustomize: () => void; customizing: boolean; spaceSubscreen: boolean; onPasskey: () => void; passkeyCount: number | null; onAiSettings: () => void;
+    onMailSettings: () => void; onCustomize: () => void; customizing: boolean; spaceSubscreen: boolean; onPasskey: () => void; passkeyCount: number | null;
     alerts: PriceAlert[]; alertStatuses: Record<string, AlertStatus>; onDeleteAlert: (id: string) => void; onSaveAlert: (alert: PriceAlert) => void; alertHistory: { id: string; alertId: string; title: string; message: string; time: number }[]; onClearHistory: () => void;
     quietHours?: Preferences['quietHours']; onQuietHours: (value: NonNullable<Preferences['quietHours']>) => void; alertCount: number; triggeredCount: number;
 };
@@ -49,6 +49,7 @@ export default function TopBar(p: Props) {
         setSettings(section);
     };
     useEffect(() => { const open = () => { openSettings('notificaciones'); setManageAlerts(true); }; window.addEventListener('open-alert-settings', open); return () => window.removeEventListener('open-alert-settings', open); }, []);
+    useEffect(() => { const open = () => openSettings('integracion'); window.addEventListener('open-mcp-settings', open); return () => window.removeEventListener('open-mcp-settings', open); }, []);
     const closeSettings = () => {
         const from = window.history.state?.espacioFrom;
         const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/espacio') ? from : '/';
@@ -88,7 +89,7 @@ export default function TopBar(p: Props) {
         ]} />}
         {notifications && <NotificationsMenu x={notifications.x} y={notifications.y} items={p.alertHistory} onClose={closeNotifications} onClear={p.onClearHistory} onOpen={() => { openSettings('notificaciones'); setManageAlerts(true); }} />}
         {sharing && <ShareDialog onClose={() => setSharing(false)} />}
-        {settings && !manageAlerts && !appearance && !p.customizing && !p.spaceSubscreen && <SettingsDialog initial={settings} manageAlerts={manageAlerts} onManageAlerts={setManageAlerts} alerts={p.alerts} alertStatuses={p.alertStatuses} onDeleteAlert={p.onDeleteAlert} onSectionChange={setSettings} onClose={closeSettings} onAppearance={() => setAppearance(true)} onCustomize={p.onCustomize} onPasskey={p.onPasskey} passkeyCount={p.passkeyCount} onAiSettings={p.onAiSettings} onMailSettings={p.onMailSettings} onExport={p.onExport} onImport={p.onImport} quietHours={p.quietHours} onQuietHours={p.onQuietHours} alertCount={p.alertCount} triggeredCount={p.triggeredCount} />}
+        {settings && !manageAlerts && !appearance && !p.customizing && !p.spaceSubscreen && <SettingsDialog initial={settings} manageAlerts={manageAlerts} onManageAlerts={setManageAlerts} alerts={p.alerts} alertStatuses={p.alertStatuses} onDeleteAlert={p.onDeleteAlert} onSectionChange={setSettings} onClose={closeSettings} onAppearance={() => setAppearance(true)} onCustomize={p.onCustomize} onPasskey={p.onPasskey} passkeyCount={p.passkeyCount} onMailSettings={p.onMailSettings} onExport={p.onExport} onImport={p.onImport} quietHours={p.quietHours} onQuietHours={p.onQuietHours} alertCount={p.alertCount} triggeredCount={p.triggeredCount} />}
         {settings && manageAlerts && !appearance && !p.spaceSubscreen && <div className="settings-subscreen settings-subscreen-narrow fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4"><section role="dialog" aria-modal="true" aria-labelledby="alerts-management-title" className="card w-full max-w-md overflow-y-auto p-6 shadow-2xl"><AlertsManagement alerts={p.alerts} statuses={p.alertStatuses} onDelete={p.onDeleteAlert} onSave={p.onSaveAlert} onBack={() => setManageAlerts(false)} /></section></div>}
         {appearance && <AppearanceDialog theme={p.theme} onTheme={p.onTheme} onClose={() => setAppearance(false)} />}
     </header>;

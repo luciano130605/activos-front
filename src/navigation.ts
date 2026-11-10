@@ -8,7 +8,6 @@ export const pages = {
     goals: { path: '/objetivos', label: 'Objetivos', title: 'Objetivos y rebalanceo', description: 'Definí cómo querés distribuir tu cartera y seguí tu progreso.' },
     prices: { path: '/precios', label: 'Precios y alertas', title: 'Precios y alertas', description: 'Explorá precios históricos y seguí tus activos.' },
     imports: { path: '/importaciones', label: 'Importar', title: 'Importar operaciones', description: 'Subí comprobantes y revisá cada operación antes de incorporarla.' },
-    assistant: { path: '/asistente', label: 'Asistente', title: 'Asistente', description: 'Tu espacio para investigar y administrar tu cartera.' },
     marketCalendar: { path: '/calendario-mercado', label: 'Calendario de mercado', title: 'Calendario de mercado', description: 'Feriados bursátiles, balances y eventos de deuda argentina.' },
     dividends: { path: '/dividendos', label: 'Dividendos', title: 'Dividendos', description: 'Próximos pagos anunciados para tus inversiones.' },
 } as const;
@@ -33,4 +32,3 @@ function subscribe(listener: () => void) {
 export function usePage() {
     return useSyncExternalStore(subscribe, currentPage, () => 'summary' as const);
 }
-

@@ -42,7 +42,6 @@ export type Preferences = {
     display: Currency;
     horizon: number;
     panels?: string[];
-    showChatButton?: boolean;
     showQuotesBar?: boolean;
     quietHours?: { enabled: boolean; start: string; end: string };
 };
@@ -77,7 +76,6 @@ export function cleanPreferences(raw: unknown): Preferences {
         dollar: typeof r.dollar === 'string' && dollars.includes(r.dollar) ? r.dollar : 'bolsa',
         hidden: r.hidden === true,
         sidebarCollapsed: r.sidebarCollapsed === true,
-        showChatButton: r.showChatButton !== false,
         showQuotesBar: r.showQuotesBar !== false,
         display: r.display === 'ARS' ? 'ARS' : 'USD',
         horizon: typeof r.horizon === 'number' && [0, 12, 36, 60].includes(r.horizon) ? r.horizon : 12,

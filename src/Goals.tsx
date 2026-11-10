@@ -1,18 +1,21 @@
 import { useState, type FormEvent } from 'react';
 import { allocationKeys, calculateAllocation } from './allocation';
 import type { AllocationCategory, AllocationTargets } from './portfolio';
-import type { AiProvider } from './ai-provider';
-import GoalsAssistant from './GoalsAssistant';
 
 type Category = { id: AllocationCategory; label: string; color: string; value: number; count: number };
-type Props = { provider: AiProvider; setProvider: (provider: AiProvider) => void; onAiSettings: () => void; categories: Category[]; targets?: AllocationTargets; format: (value: number) => string; onSave: (targets: AllocationTargets) => void; incompleteQuotes: boolean };
+type Props = {
+    categories: Category[];
+    targets?: AllocationTargets;
+    format: (value: number) => string;
+    onSave: (targets: AllocationTargets) => void;
+    incompleteQuotes: boolean;
+};
 const empty: AllocationTargets = { rate: 0, cedear: 0, index: 0, stock: 0, crypto: 0, 'arg-stock': 0, bond: 0, fund: 0, morpho: 0 };
 const percentage = (value: number) => `${value.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
-export default function Goals({ categories, targets, format, onSave, incompleteQuotes, provider, setProvider, onAiSettings }: Props) {
+
+export default function Goals({ categories, targets, format, onSave, incompleteQuotes }: Props) {
     const [draft, setDraft] = useState<Record<AllocationCategory, string>>(() => Object.fromEntries(allocationKeys.map(key => [key, String(targets?.[key] ?? 0)])) as Record<AllocationCategory, string>);
     const [error, setError] = useState('');
-    const [aiOpen, setAiOpen] = useState(false);
-    const [aiFields, setAiFields] = useState<Set<AllocationCategory>>(new Set());
     const [savedMessage, setSavedMessage] = useState(false);
     const values = Object.fromEntries(categories.map(category => [category.id, category.value])) as Record<AllocationCategory, number>;
     const numbers = Object.fromEntries(allocationKeys.map(key => [key, draft[key].trim() === '' ? NaN : Number(draft[key].replace(',', '.'))])) as AllocationTargets;
@@ -20,15 +23,60 @@ export default function Goals({ categories, targets, format, onSave, incompleteQ
     const normalizedTargets = targets ? { ...empty, ...targets } : null;
     const result = normalizedTargets ? calculateAllocation(values, normalizedTargets) : null;
     const valid = allocationKeys.every(key => Number.isFinite(numbers[key]) && numbers[key] >= 0 && numbers[key] <= 100) && Math.abs(sum - 100) <= 0.000001;
-    function save(event: FormEvent) { event.preventDefault(); if (!valid) { setError('Ingresá porcentajes entre 0 y 100 que sumen exactamente 100%.'); return; } onSave({ ...empty, ...numbers }); setError(''); setSavedMessage(true); }
+
+    function save(event: FormEvent) {
+        event.preventDefault();
+        if (!valid) { setError('Ingresá porcentajes entre 0 y 100 que sumen exactamente 100%.'); return; }
+        onSave({ ...empty, ...numbers });
+        setError('');
+        setSavedMessage(true);
+    }
+
     return <div className="flex snap-x snap-proximity items-start gap-3.5 overflow-x-auto overscroll-x-contain pb-2 sm:grid sm:overflow-visible sm:pb-0 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,.8fr)]">
-        <div className="contents sm:block sm:space-y-3.5"><section className="card hero-glow w-[88%] shrink-0 snap-start p-5 sm:w-auto sm:p-6"><p className="lb">TU PLAN DE INVERSIÓN</p><h2 className="mt-2 text-[clamp(1.5rem,3vw,2rem)] font-light tracking-tight">Una cartera con dirección<span className="sig">.</span></h2><p className="mu mt-3 max-w-xl text-[12px] leading-5">Compará el peso actual de cada categoría con la distribución que elegiste. Los aportes sugeridos buscan alcanzar tu objetivo sin vender posiciones.</p><div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><p className="mu text-[10px]">VALOR DE LA CARTERA</p><p className="mt-2 break-all text-[clamp(1.1rem,2.5vw,1.6rem)] font-light tabular-nums">{result ? format(result.total) : '—'}</p></div><div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><p className="mu text-[10px]">APORTE TOTAL SUGERIDO</p><p className="mt-2 break-all text-[clamp(1.1rem,2.5vw,1.6rem)] font-light tabular-nums">{result && result.total > 0 && result.totalContribution !== null ? format(result.totalContribution) : '—'}</p></div></div></section>
-            <section className="card chart-animate goals-chart w-[88%] shrink-0 snap-start p-5 sm:w-auto sm:p-6"><div><p className="lb">DISTRIBUCIÓN</p><h2 className="mt-2 text-[20px] font-light">Actual vs. objetivo</h2></div>{!targets ? <p className="mu py-12 text-center text-[12px]">Definí y guardá tu distribución objetivo para ver la comparación.</p> : !result ? <p role="status" className="mu py-12 text-center text-[12px]">No se puede calcular la distribución sin las conversiones necesarias.</p> : result.total <= 0 ? <p className="mu py-12 text-center text-[12px]">Agregá inversiones para comparar tu cartera con el objetivo.</p> : <div className="mt-5 space-y-5">{categories.map(category => { const actual = category.value / result.total * 100, goal = normalizedTargets![category.id], difference = actual - goal, contribution = result.contributions?.[category.id]; return <article key={category.id}><div className="flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-2 text-[13px]"><span className="h-2 w-2 rounded-full" style={{background: category.color}} />{category.label}</span><span className="font-mono text-[11px] tabular-nums">{percentage(actual)} <span className="text-[var(--muted)]">/ {percentage(goal)}</span></span></div><div className="relative mt-2 h-2 overflow-hidden rounded-full bg-[var(--raised)]"><div className="goals-bar h-full rounded-full" style={{width: `${Math.min(100, actual)}%`, background: category.color}} /><span className="goals-marker absolute top-0 h-full w-[2px] bg-[var(--ink)]" style={{left: `${Math.min(99.5, goal)}%`}} /></div><div className="mu mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 text-[10.5px]"><span>{Math.abs(difference) < .05 ? 'En objetivo' : `${difference > 0 ? '+' : ''}${difference.toLocaleString('es-AR', { maximumFractionDigits: 1 })} puntos respecto al objetivo`}</span><span>{contribution !== undefined ? contribution > .000001 ? `Aportar ${format(contribution)}` : 'Sin aporte necesario' : 'Aporte no calculable'}</span></div></article>; })}</div>}
+        <div className="contents sm:block sm:space-y-3.5">
+            <section className="card hero-glow w-[88%] shrink-0 snap-start p-5 sm:w-auto sm:p-6">
+                <p className="lb">TU PLAN DE INVERSIÓN</p>
+                <h2 className="mt-2 text-[clamp(1.5rem,3vw,2rem)] font-light tracking-tight">Una cartera con dirección<span className="sig">.</span></h2>
+                <p className="mu mt-3 max-w-xl text-[12px] leading-5">Compará el peso actual de cada categoría con la distribución que elegiste. Los aportes sugeridos buscan alcanzar tu objetivo sin vender posiciones.</p>
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><p className="mu text-[10px]">VALOR DE LA CARTERA</p><p className="mt-2 break-all text-[clamp(1.1rem,2.5vw,1.6rem)] font-light tabular-nums">{result ? format(result.total) : '—'}</p></div>
+                    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><p className="mu text-[10px]">APORTE TOTAL SUGERIDO</p><p className="mt-2 break-all text-[clamp(1.1rem,2.5vw,1.6rem)] font-light tabular-nums">{result && result.total > 0 && result.totalContribution !== null ? format(result.totalContribution) : '—'}</p></div>
+                </div>
+            </section>
+            <section className="card chart-animate goals-chart w-[88%] shrink-0 snap-start p-5 sm:w-auto sm:p-6">
+                <p className="lb">DISTRIBUCIÓN</p><h2 className="mt-2 text-[20px] font-light">Actual vs. objetivo</h2>
+                {!targets ? <p className="mu py-12 text-center text-[12px]">Definí y guardá tu distribución objetivo para ver la comparación.</p>
+                    : !result ? <p role="status" className="mu py-12 text-center text-[12px]">No se puede calcular la distribución sin las conversiones necesarias.</p>
+                        : result.total <= 0 ? <p className="mu py-12 text-center text-[12px]">Agregá inversiones para comparar tu cartera con el objetivo.</p>
+                            : <div className="mt-5 space-y-5">{categories.map(category => {
+                                const actual = category.value / result.total * 100;
+                                const goal = normalizedTargets![category.id];
+                                const difference = actual - goal;
+                                const contribution = result.contributions?.[category.id];
+                                return <article key={category.id}>
+                                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-2 text-[13px]"><span className="h-2 w-2 rounded-full" style={{ background: category.color }} />{category.label}</span><span className="font-mono text-[11px] tabular-nums">{percentage(actual)} <span className="text-[var(--muted)]">/ {percentage(goal)}</span></span></div>
+                                    <div className="relative mt-2 h-2 overflow-hidden rounded-full bg-[var(--raised)]"><div className="goals-bar h-full rounded-full" style={{ width: `${Math.min(100, actual)}%`, background: category.color }} /><span className="goals-marker absolute top-0 h-full w-[2px] bg-[var(--ink)]" style={{ left: `${Math.min(99.5, goal)}%` }} /></div>
+                                    <div className="mu mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 text-[10.5px]"><span>{Math.abs(difference) < .05 ? 'En objetivo' : `${difference > 0 ? '+' : ''}${difference.toLocaleString('es-AR', { maximumFractionDigits: 1 })} puntos respecto al objetivo`}</span><span>{contribution !== undefined ? contribution > .000001 ? `Aportar ${format(contribution)}` : 'Sin aporte necesario' : 'Aporte no calculable'}</span></div>
+                                </article>;
+                            })}</div>}
                 {result && result.blocked.length > 0 && <p className="mt-5 rounded-xl border border-[var(--line2)] bg-[var(--raised)] p-3 text-[11px] leading-5 text-[var(--muted)]">No es posible llegar exactamente al objetivo solo con aportes: tenés inversiones en {categories.filter(category => result.blocked.includes(category.id)).map(category => category.label).join(', ')} y su objetivo es 0%. Podés cambiar el objetivo o evaluar reducir esas posiciones.</p>}
                 {incompleteQuotes && <p className="mu mt-4 text-[11px] leading-5">Algunas cotizaciones no están disponibles: se usa el monto registrado para esas posiciones, por lo que los cálculos son aproximados.</p>}
                 <p className="mu mt-5 border-t border-[var(--line)] pt-4 text-[10.5px] leading-5">La marca indica el objetivo. El cálculo supone precios constantes, permite fracciones y no incluye comisiones ni impuestos. El resultado es orientativo y no ejecuta operaciones.</p>
-            </section></div>
-        <section className="card w-[88%] shrink-0 snap-start p-5 sm:w-auto sm:p-6"><p className="lb">MI DISTRIBUCIÓN IDEAL</p><h2 className="mt-2 text-[20px] font-light">Definí tus objetivos</h2><p className="mu mt-2 text-[12px] leading-5">Asigná un porcentaje a cada categoría. Entre todas deben sumar 100%.</p><button type="button" onClick={() => setAiOpen(true)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-[#a8d943]/40 bg-[#a8d943]/10 px-4 py-3 text-[12px] font-medium text-[#a8d943] hover:bg-[#a8d943]/20">Armar mis objetivos con IA</button>{aiFields.size > 0 && <p className="mt-3 text-[11px] text-[#a8d943]">Porcentajes sugeridos por IA. Revisalos antes de guardar.</p>}<form onSubmit={save} className="mt-5 space-y-3">{categories.map(category => <label key={category.id} className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--raised)] px-3 py-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{background: category.color}} /><span className="min-w-0 flex-1 text-[12px]">{category.label}</span><input type="number" inputMode="decimal" min="0" max="100" step="any" aria-label={`Objetivo de ${category.label}`} value={draft[category.id]} onChange={event => { setDraft(current => ({ ...current, [category.id]: event.target.value })); setAiFields(current => { const next = new Set(current); next.delete(category.id); return next; }); setError(''); setSavedMessage(false); }} className={`w-20 rounded-lg border bg-[var(--surface)] px-2 py-2 text-right font-mono text-[13px] tabular-nums outline-none ${aiFields.has(category.id) ? 'border-[#a8d943]/60 text-[#a8d943] focus:border-[#a8d943]' : 'border-[var(--line2)] focus:border-[var(--muted)]'}`}/><span className="mu text-[12px]">%</span></label>)}<div className="flex justify-between border-t border-[var(--line)] pt-4 text-[12px]"><span>Total asignado</span><span className={`font-mono ${valid ? 'text-[var(--sig)]' : 'text-[var(--muted)]'}`}>{Number.isFinite(sum) ? percentage(sum) : '—'} / 100%</span></div>{error && <p role="alert" className="text-[12px] text-[var(--neg)]">{error}</p>}{savedMessage && <p role="status" className="text-[12px] text-[var(--sig)]">Objetivo actualizado. Los cambios se están guardando en tu cuenta.</p>}<button className="btn-primary w-full" type="submit">Guardar objetivo</button></form></section>
-        {aiOpen && <GoalsAssistant categories={categories} incompleteQuotes={incompleteQuotes} provider={provider} setProvider={setProvider} onClose={() => setAiOpen(false)} onSettings={() => { setAiOpen(false); onAiSettings(); }} onApply={proposal => { setDraft(Object.fromEntries(allocationKeys.map(key => [key, String(proposal[key])])) as Record<AllocationCategory, string>); setAiFields(new Set(allocationKeys)); setError(''); setSavedMessage(false); }} />}
+            </section>
+        </div>
+        <section className="card w-[88%] shrink-0 snap-start p-5 sm:w-auto sm:p-6">
+            <p className="lb">MI DISTRIBUCIÓN IDEAL</p><h2 className="mt-2 text-[20px] font-light">Definí tus objetivos</h2>
+            <p className="mu mt-2 text-[12px] leading-5">Asigná un porcentaje a cada categoría. Entre todas deben sumar 100%.</p>
+            <form onSubmit={save} className="mt-5 space-y-3">{categories.map(category => <label key={category.id} className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-[var(--raised)] px-3 py-2">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: category.color }} /><span className="min-w-0 flex-1 text-[12px]">{category.label}</span>
+                <input type="number" inputMode="decimal" min="0" max="100" step="any" aria-label={`Objetivo de ${category.label}`} value={draft[category.id]} onChange={event => { setDraft(current => ({ ...current, [category.id]: event.target.value })); setError(''); setSavedMessage(false); }} className="w-20 rounded-lg border border-[var(--line2)] bg-[var(--surface)] px-2 py-2 text-right font-mono text-[13px] tabular-nums outline-none focus:border-[var(--muted)]" />
+                <span className="mu text-[12px]">%</span>
+            </label>)}
+                <div className="flex justify-between border-t border-[var(--line)] pt-4 text-[12px]"><span>Total asignado</span><span className={`font-mono ${valid ? 'text-[var(--sig)]' : 'text-[var(--muted)]'}`}>{Number.isFinite(sum) ? percentage(sum) : '—'} / 100%</span></div>
+                {error && <p role="alert" className="text-[12px] text-[var(--neg)]">{error}</p>}
+                {savedMessage && <p role="status" className="text-[12px] text-[var(--sig)]">Objetivo actualizado. Los cambios se están guardando en tu cuenta.</p>}
+                <button className="btn-primary w-full" type="submit">Guardar objetivo</button>
+            </form>
+        </section>
     </div>;
 }

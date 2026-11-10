@@ -1,12 +1,10 @@
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Upload06Icon, Calendar01Icon, ChartAnalysisIcon, ChartBubble02Icon, ChartLineData01Icon, ChartLineIcon, Coins01Icon, ChartCandleIcon, DashboardCircleIcon, Estimate01Icon, PieChart01Icon, PieChart02Icon, FileAddIcon, BitcoinTargetIcon, TargetDollarIcon } from '@hugeicons/core-free-icons';
 import type { PageId } from './navigation';
-import { Avatar } from './MarketChat';
 
-const icons = { goals: TargetDollarIcon, prices: ChartCandleIcon, imports: FileAddIcon, summary: ChartBubble02Icon, evolution: ChartLineIcon, inflation: Coins01Icon, investments: PieChart02Icon, dividends: Estimate01Icon, marketCalendar: Calendar01Icon, assistant: DashboardCircleIcon } satisfies Record<PageId, typeof DashboardCircleIcon>;
+const icons = { goals: TargetDollarIcon, prices: ChartCandleIcon, imports: FileAddIcon, summary: ChartBubble02Icon, evolution: ChartLineIcon, inflation: Coins01Icon, investments: PieChart02Icon, dividends: Estimate01Icon, marketCalendar: Calendar01Icon } satisfies Record<PageId, typeof DashboardCircleIcon>;
 
 export default function PageIcon({ page, size = 18, active = false }: { page: PageId; size?: number; active?: boolean }) {
-    if (page === 'assistant') return <span className="avatar-nav" style={{ width: size, height: size, filter: 'grayscale(1)', opacity: .65, display: 'inline-block', flexShrink: 0 }}><Avatar /></span>;
     if (page === 'imports') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path className="imports-background" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" /><path d="M14 3v5h5" /><path className="imports-plus" d="M12 11v6m-3-3h6" /></svg>;
     if (page === 'marketCalendar') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect className="calendar-background" x="3" y="5" width="18" height="16" rx="2.5" /><path d="M7 3v4M17 3v4M3 10h18" /><path className="calendar-date" d="m8 14 1-1v5m4-5h3l-2 5" /></svg>;
     if (page === 'dividends') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path className="dividends-background" d="M6 3h12a2 2 0 0 1 2 2v16l-3-1.5-2.5 1.5-2.5-1.5L9.5 21 7 19.5 4 21V5a2 2 0 0 1 2-2Z" /><path className="dividends-dollar" d="M14.5 8.5h-3a1.75 1.75 0 0 0 0 3.5h1a1.75 1.75 0 0 1 0 3.5h-3M12 7v10" /></svg>;
@@ -15,4 +13,3 @@ export default function PageIcon({ page, size = 18, active = false }: { page: Pa
     if (page === 'investments') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path className="investment-slice investment-slice-top" d="M12 12V3a9 9 0 0 1 8.56 6.22Z" /><path className="investment-slice investment-slice-right" d="m12 12 8.56-2.78A9 9 0 0 1 12 21Z" /><path className="investment-slice investment-slice-left" d="M12 12v9a9 9 0 0 1 0-18Z" /></svg>;
     return <HugeiconsIcon icon={icons[page]} size={size} fill={page === 'summary' && active ? 'currentColor' : 'none'} />;
 }
-
