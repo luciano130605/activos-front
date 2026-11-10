@@ -34,6 +34,21 @@ export default function McpSettings() {
         await load();
     }
 
+    async function confirmAuthorization() {
+        setLoading(true);
+        try {
+            const latest = (await request<AuthorizationResponse>('mcp/authorizations')).authorizations;
+            setAuthorizations(latest);
+            setMessage(latest.length
+                ? 'Se encontraron autorizaciones guardadas. Revisá que el agente que conectaste aparezca en la lista de abajo; si aparece, ya está. Volvé al agente y actualizá el conector.'
+                : 'Todavía no figura la autorización. Volvé al agente e iniciá la conexión una sola vez; después regresá y tocá “Ya autoricé”.');
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : 'No se pudo comprobar la autorización.');
+        } finally {
+            setLoading(false);
+        }
+    }
+
     useEffect(() => { void load(); }, []);
 
     async function copyEndpoint() {
@@ -84,6 +99,9 @@ export default function McpSettings() {
             <li>Pegá la URL de Activos de arriba y guardá el conector. Después elegí conectar: Activos te va a pedir iniciar sesión y autorizar el acceso.</li>
             <li>La lectura es necesaria. El permiso para agregar, editar y eliminar inversiones es opcional y se puede rechazar.</li>
         </ol>
+        <button type="button" className="btn-ghost mt-3 !min-h-10 text-[12px]" onClick={() => void confirmAuthorization()} disabled={loading}>
+            {loading ? 'Comprobando…' : 'Ya autoricé'}
+        </button>
         <div className="mt-4 rounded-xl border border-[var(--line)] p-3">
             <p className="text-[11px] font-medium">Qué puede hacer</p>
             <p className="mu mt-2 text-[11px] leading-5">Consultar las posiciones (activo, tipo, moneda, monto, unidades y fecha), y leer algunas preferencias. Si autorizás escritura, también puede agregar, editar o eliminar posiciones. Los cambios se guardan en tu cartera con control de versiones.</p>
