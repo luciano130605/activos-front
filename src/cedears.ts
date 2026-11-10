@@ -1,4 +1,4 @@
-bactype LivePrice = { symbol: string; c: number };
+type LivePrice = { symbol: string; c: number };
 type HistoricalPrice = { date: string; c: number };
 export type CedearQuote = { price: number; sourceDate?: string };
 
@@ -13,7 +13,7 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T[]> {
         if (!Array.isArray(data)) throw new Error('El proveedor no devolvió cotizaciones válidas. Volvé a intentar.');
         return data;
     } catch (error) {
-        if (signal?.aborted) throw error;   
+        if (signal?.aborted) throw error;
         if (timeout.aborted) throw new Error('La consulta del CEDEAR tardó demasiado. Volvé a intentar.');
         if (error instanceof TypeError) throw new Error('No se pudo conectar con el proveedor de CEDEARs. Revisá tu conexión.');
         throw error;
