@@ -4,6 +4,10 @@ import { request } from './account';
 type Authorization = { id: string; name: string; scopes: string[]; updatedAt?: string | null };
 type AuthorizationResponse = { authorizations: Authorization[] };
 const endpoint = 'https://activos-nu.vercel.app/mcp';
+const providers = [
+    { name: 'ChatGPT', url: 'https://chatgpt.com/' },
+    { name: 'Claude', url: 'https://claude.ai/' },
+];
 
 export default function McpSettings() {
     const [authorizations, setAuthorizations] = useState<Authorization[]>([]);
@@ -38,6 +42,15 @@ export default function McpSettings() {
         }
     }
 
+    async function prepareConnection(provider: string) {
+        try {
+            await navigator.clipboard.writeText(endpoint);
+            setMessage(`URL copiada. En ${provider}, agregá un conector MCP y pegala para iniciar la conexión.`);
+        } catch {
+            setMessage(`En ${provider}, agregá un conector MCP y pegá la URL que aparece arriba.`);
+        }
+    }
+
     async function revoke(client: Authorization) {
         if (!window.confirm(`¿Revocar el acceso de ${client.name}? Dejará de poder consultar y modificar tu cartera.`)) return;
         setBusy(client.id);
@@ -60,9 +73,12 @@ export default function McpSettings() {
             <code className="mt-2 block break-all text-[12px] text-[var(--ink)]">{endpoint}</code>
             <button type="button" className="btn-ghost mt-3 !min-h-9 text-[11px]" onClick={() => void copyEndpoint()}>Copiar URL</button>
         </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+            {providers.map(provider => <a key={provider.name} className="btn-ghost inline-flex min-h-10 items-center justify-center px-4 text-[12px] no-underline" href={provider.url} target="_blank" rel="noopener noreferrer" onClick={() => void prepareConnection(provider.name)}>Conectar con {provider.name}</a>)}
+        </div>
         <ol className="mu mt-4 list-decimal space-y-2 pl-4 text-[11px] leading-5">
-            <li>En la configuración de ChatGPT, agregá un conector personalizado; en Claude, agregá un conector personalizado desde Conectores.</li>
-            <li>Pegá la URL de arriba. Al continuar, Activos te pedirá iniciar sesión y autorizar los permisos.</li>
+            <li>Abrí ChatGPT o Claude con los botones de arriba y buscá la opción para agregar un conector personalizado/remoto (MCP). En algunas cuentas, la disponibilidad depende del plan o de la configuración del espacio de trabajo.</li>
+            <li>Pegá la URL de Activos de arriba y guardá el conector. Después elegí conectar: Activos te va a pedir iniciar sesión y autorizar el acceso.</li>
             <li>La lectura es necesaria. El permiso para agregar, editar y eliminar inversiones es opcional y se puede rechazar.</li>
         </ol>
         <div className="mt-4 rounded-xl border border-[var(--line)] p-3">
