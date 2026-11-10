@@ -4,8 +4,11 @@ import { request } from './account';
 type Authorization = { id: string; name: string; scopes: string[]; updatedAt?: string | null };
 type AuthorizationResponse = { authorizations: Authorization[] };
 const endpoint = 'https://activos-nu.vercel.app/mcp';
+const chatGptSetupPrompt = `Quiero conectar mi cartera personal de Activos a ChatGPT mediante un conector remoto MCP. Guiame paso a paso usando la interfaz actual de ChatGPT. El servidor MCP es ${endpoint}. Explicame dónde agregar un conector personalizado/remoto, dónde pegar esa URL, cómo guardar y completar la autorización OAuth de Activos, y cómo habilitarlo en una conversación. Aclará que la disponibilidad depende del plan o de los permisos del espacio de trabajo. No inventes pasos si la interfaz cambió: decime qué buscar. El conector puede consultar mis inversiones y, solo si yo lo autorizo, agregar, editar o eliminar posiciones.`;
+const chatGptUrl = new URL('https://chatgpt.com/');
+chatGptUrl.searchParams.set('q', chatGptSetupPrompt);
 const providers = [
-    { name: 'ChatGPT', url: 'https://chatgpt.com/' },
+    { name: 'ChatGPT', url: chatGptUrl.toString() },
     { name: 'Claude', url: 'https://claude.ai/' },
 ];
 
