@@ -4,7 +4,13 @@ import PageLink from './PageLink';
 
 type Observation = { fecha: string; valor: number; previous?: number };
 type MacroData = { risk?: Observation; inflation?: Observation; rate?: Observation; merval?: Observation };
+
 type Rates = Record<string, { venta: number }>;
+
+type Stablecoins = {
+    usdt?: number;
+    usdc?: number;
+};
 const endpoints = { risk: 'https://api.argentinadatos.com/v1/finanzas/indices/riesgo-pais/ultimo', inflation: 'https://api.argentinadatos.com/v1/finanzas/indices/inflacion', rate: 'https://api.argentinadatos.com/v1/finanzas/tasas/depositos30Dias', merval: '/api/benchmarks/merval' } as const;
 const number = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 const price = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
@@ -16,9 +22,37 @@ const day = (value: string, monthly = false) => {
 export default function MacroDashboard({ rates, refreshDollars, dollarLoading }: { rates: Rates; refreshDollars: () => void; dollarLoading: boolean }) {
     const [data, setData] = useState<MacroData | null>(null);
     const [retry, setRetry] = useState(0);
+    const [stablecoins, setStablecoins] = useState<Stablecoins | null>(null);
     useEffect(() => {
         const controller = new AbortController();
         setData(null);
+        setStablecoins(null);
+
+        void fetch(
+            'https://api.coingecko.com/api/v3/simple/price?ids=tether%2Cusd-coin&vs_currencies=ars',
+            {
+                signal: AbortSignal.any([
+                    controller.signal,
+                    AbortSignal.timeout(20000),
+                ]),
+            }
+        )
+            .then(async (response) => {
+                if (!response.ok) throw new Error('Cotización no disponible');
+
+                const json: {
+                    tether?: { ars?: number };
+                    'usd-coin'?: { ars?: number };
+                } = await response.json();
+
+                setStablecoins({
+                    usdt: json.tether?.ars,
+                    usdc: json['usd-coin']?.ars,
+                });
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) setStablecoins({});
+            });
         void Promise.allSettled(Object.entries(endpoints).map(async ([key, path]) => {
             const response = await fetch(path, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) });
             if (!response.ok) throw new Error('Dato no disponible');
@@ -45,6 +79,29 @@ export default function MacroDashboard({ rates, refreshDollars, dollarLoading }:
         <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">CONTEXTO DE MERCADO</p><h2 id="macro-title" className="mt-2 text-[20px] font-light tracking-tight">Tablero macro</h2><p className="mu mt-2 text-[12px]">Referencias de Argentina para seguir el contexto de tu cartera.</p></div><RefreshButton onClick={refresh} loading={loading || dollarLoading} label="Actualizar tablero macro" /></div>
         <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
             {([['oficial', 'Dólar oficial'], ['bolsa', 'Dólar MEP'], ['contadoconliqui', 'Dólar CCL']] as const).map(([key, label]) => metric(label, rates[key]?.venta > 0 ? price.format(rates[key].venta) : unavailable, 'Venta · última consulta', 'DolarApi', 'https://dolarapi.com/'))}
+            {metric(
+                'USDT',
+                stablecoins === null
+                    ? '…'
+                    : stablecoins.usdt && stablecoins.usdt > 0
+                        ? price.format(stablecoins.usdt)
+                        : unavailable,
+                'Tether · ARS',
+                'CoinGecko',
+                'https://www.coingecko.com/en/coins/tether'
+            )}
+
+            {metric(
+                'USDC',
+                stablecoins === null
+                    ? '…'
+                    : stablecoins.usdc && stablecoins.usdc > 0
+                        ? price.format(stablecoins.usdc)
+                        : unavailable,
+                'USD Coin · ARS',
+                'CoinGecko',
+                'https://www.coingecko.com/en/coins/usd-coin'
+            )}
             {metric('Merval', loading ? '…' : data?.merval ? `${number.format(data.merval.valor)} pts` : unavailable, data?.merval ? `${day(data.merval.fecha)}${data.merval.previous ? ` · ${data.merval.valor >= data.merval.previous ? '+' : ''}${number.format((data.merval.valor / data.merval.previous - 1) * 100)}% vs. cierre anterior` : ''}` : 'Sin fecha disponible', 'Rosario Finanzas', 'https://rosariofinanzas.ar/')}
             {metric('Riesgo país', loading ? '…' : data?.risk ? `${number.format(data.risk.valor)} pb` : unavailable, data?.risk ? day(data.risk.fecha) : 'Sin fecha disponible', 'ArgentinaDatos · Ámbito', 'https://argentinadatos.com/docs/operations/get-finanzas-indices-riesgo-pais-ultimo')}
             {metric('Inflación mensual', loading ? '…' : data?.inflation ? `${number.format(data.inflation.valor)}%` : unavailable, data?.inflation ? day(data.inflation.fecha, true) : 'Sin fecha disponible', 'INDEC · ArgentinaDatos', 'https://www.indec.gob.ar/')}
