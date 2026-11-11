@@ -5,12 +5,7 @@ import PageLink from './PageLink';
 type Observation = { fecha: string; valor: number; previous?: number };
 type MacroData = { risk?: Observation; inflation?: Observation; rate?: Observation; merval?: Observation };
 
-type Rates = {
-  [key: string]: {
-    compra: number | null;
-    venta: number | null;
-  };
-};
+type Rates = Record<string, { compra: number; venta: number }>;
 
 type Stablecoins = {
     usdt?: number;
