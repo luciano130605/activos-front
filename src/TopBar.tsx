@@ -20,7 +20,7 @@ type Props = {
     email: string; syncLabel: string; onLogout: () => void; leaving: boolean;
     onMailSettings: () => void; onCustomize: () => void; customizing: boolean; spaceSubscreen: boolean; onPasskey: () => void; passkeyCount: number | null;
     alerts: PriceAlert[]; alertStatuses: Record<string, AlertStatus>; onDeleteAlert: (id: string) => void; onSaveAlert: (alert: PriceAlert) => void; alertHistory: { id: string; alertId: string; title: string; message: string; time: number }[]; onClearHistory: () => void;
-    quietHours?: Preferences['quietHours']; onQuietHours: (value: NonNullable<Preferences['quietHours']>) => void; alertCount: number; triggeredCount: number;
+    quietHours?: Preferences['quietHours']; onQuietHours: (value: NonNullable<Preferences['quietHours']>) => void; rateAlerts?: Preferences['rateAlerts']; onRateAlerts: (value: NonNullable<Preferences['rateAlerts']>) => void; alertCount: number; triggeredCount: number;
 };
 
 const mobileMainPages: { id: PageId; label: string }[] = [
@@ -184,7 +184,7 @@ export default function TopBar(p: Props) {
 
             {notifications && <NotificationsMenu x={notifications.x} y={notifications.y} items={p.alertHistory} onClose={closeNotifications} onClear={p.onClearHistory} onOpen={() => { openSettings('notificaciones'); setManageAlerts(true); }} />}
             {sharing && <ShareDialog onClose={() => setSharing(false)} />}
-            {settings && !manageAlerts && !appearance && !p.customizing && !p.spaceSubscreen && <SettingsDialog initial={settings} manageAlerts={manageAlerts} onManageAlerts={setManageAlerts} alerts={p.alerts} alertStatuses={p.alertStatuses} onDeleteAlert={p.onDeleteAlert} onSectionChange={setSettings} onClose={closeSettings} onAppearance={() => setAppearance(true)} onCustomize={p.onCustomize} onPasskey={p.onPasskey} passkeyCount={p.passkeyCount} onMailSettings={p.onMailSettings} onExport={p.onExport} onImport={p.onImport} quietHours={p.quietHours} onQuietHours={p.onQuietHours} alertCount={p.alertCount} triggeredCount={p.triggeredCount} />}
+            {settings && !manageAlerts && !appearance && !p.customizing && !p.spaceSubscreen && <SettingsDialog initial={settings} manageAlerts={manageAlerts} onManageAlerts={setManageAlerts} alerts={p.alerts} alertStatuses={p.alertStatuses} onDeleteAlert={p.onDeleteAlert} onSectionChange={setSettings} onClose={closeSettings} onAppearance={() => setAppearance(true)} onCustomize={p.onCustomize} onPasskey={p.onPasskey} passkeyCount={p.passkeyCount} onMailSettings={p.onMailSettings} onExport={p.onExport} onImport={p.onImport} quietHours={p.quietHours} onQuietHours={p.onQuietHours} rateAlerts={p.rateAlerts} onRateAlerts={p.onRateAlerts} alertCount={p.alertCount} triggeredCount={p.triggeredCount} />}
             {settings && manageAlerts && !appearance && !p.spaceSubscreen && <div className="appearance-overlay settings-subscreen settings-subscreen-narrow" onMouseDown={event => { if (event.target === event.currentTarget) setManageAlerts(false); }}><section role="dialog" aria-modal="true" aria-labelledby="alerts-management-title" className="settings-dialog flex !w-[min(460px,100%)] flex-col !overflow-hidden px-5 pt-5 pb-[max(8px,env(safe-area-inset-bottom))] sm:px-6 sm:pt-6"><AlertsManagement alerts={p.alerts} statuses={p.alertStatuses} onDelete={p.onDeleteAlert} onSave={p.onSaveAlert} onBack={() => setManageAlerts(false)} /></section></div>}
             {appearance && <AppearanceDialog theme={p.theme} onTheme={p.onTheme} onClose={() => setAppearance(false)} />}
         </header>

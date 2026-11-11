@@ -44,6 +44,7 @@ export type Preferences = {
     panels?: string[];
     showQuotesBar?: boolean;
     quietHours?: { enabled: boolean; start: string; end: string };
+    rateAlerts?: { enabled: boolean; channels: 'push' | 'telegram' | 'both' };
 };
 
 export type ImportOperation = {

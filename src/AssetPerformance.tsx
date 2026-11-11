@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Investment } from './portfolio';
 import { adjustLocalSplits } from './localSplits';
-import { apiUrl } from './account';
+import { apiUrl, request } from './account';
+import type { Rates } from './Cauciones';
 import { morphoHistory } from './morpho';
 
 export type HistoryPoint = { time: number; price: number };
@@ -46,7 +47,28 @@ export function adjustPossibleRatios(points: Point[]) {
     }
     return { points: adjusted, changes };
 }
-export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock' | 'bond' | 'fund' | 'morpho', id: string, signal: AbortSignal): Promise<Point[]> {
+// Índice simulado de una caución renovada: tasas diarias registradas por el radar y, antes de eso, la tasa actual.
+async function caucionHistory(id: string): Promise<Point[]> {
+    const plazo = Number(id);
+    const rates = await request<Rates>('rates');
+    const row = rates.cauciones.find(item => item.plazo === plazo);
+    if (!row) throw new Error('El proveedor no informa ese plazo de caución.');
+    const recorded = new Map((rates.history ?? []).filter(item => item.bucket === row.bucket).map(item => [item.date, item.tasa]));
+    const firstRecorded = [...recorded.keys()].sort()[0] ?? '';
+    const day = 86400000, end = Date.parse(`${new Date().toLocaleDateString('en-CA')}T12:00:00Z`);
+    const points: Point[] = [];
+    let price = 100, tasa = row.tasa;
+    for (let time = end - 6 * 366 * day; time <= end; time += day) {
+        points.push({ time: Math.min(time, Date.now()), price });
+        const date = new Date(time).toISOString().slice(0, 10);
+        if (firstRecorded && date >= firstRecorded) tasa = recorded.get(date) ?? tasa;
+        // Interés simple por plazo, capitalizado en cada renovación.
+        price *= Math.pow(1 + tasa / 100 * plazo / 365, 1 / plazo);
+    }
+    return points;
+}
+export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock' | 'bond' | 'fund' | 'morpho' | 'caucion', id: string, signal: AbortSignal): Promise<Point[]> {
+    if (kind === 'caucion') return caucionHistory(id);
     const key = `activos:asset-history:${kind === 'stock' ? 'stock-v2' : kind}:${id}`;
     try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return kind === 'arg-stock' ? adjustLocalSplits(id, cache.points) : cache.points; } catch { /* Sin caché. */ }
     if (kind === 'morpho') {
