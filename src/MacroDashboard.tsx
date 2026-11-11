@@ -91,17 +91,7 @@ export default function MacroDashboard({ rates, refreshDollars, dollarLoading }:
                 'https://www.coingecko.com/en/coins/tether'
             )}
 
-            {metric(
-                'USDC',
-                stablecoins === null
-                    ? '…'
-                    : stablecoins.usdc && stablecoins.usdc > 0
-                        ? price.format(stablecoins.usdc)
-                        : unavailable,
-                'USD Coin · ARS',
-                'CoinGecko',
-                'https://www.coingecko.com/en/coins/usd-coin'
-            )}
+         
             {metric('Merval', loading ? '…' : data?.merval ? `${number.format(data.merval.valor)} pts` : unavailable, data?.merval ? `${day(data.merval.fecha)}${data.merval.previous ? ` · ${data.merval.valor >= data.merval.previous ? '+' : ''}${number.format((data.merval.valor / data.merval.previous - 1) * 100)}% vs. cierre anterior` : ''}` : 'Sin fecha disponible', 'Rosario Finanzas', 'https://rosariofinanzas.ar/')}
             {metric('Riesgo país', loading ? '…' : data?.risk ? `${number.format(data.risk.valor)} pb` : unavailable, data?.risk ? day(data.risk.fecha) : 'Sin fecha disponible', 'ArgentinaDatos · Ámbito', 'https://argentinadatos.com/docs/operations/get-finanzas-indices-riesgo-pais-ultimo')}
             {metric('Inflación mensual', loading ? '…' : data?.inflation ? `${number.format(data.inflation.valor)}%` : unavailable, data?.inflation ? day(data.inflation.fecha, true) : 'Sin fecha disponible', 'INDEC · ArgentinaDatos', 'https://www.indec.gob.ar/')}
