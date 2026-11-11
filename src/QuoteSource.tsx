@@ -5,7 +5,7 @@ const sources = {
     dollar: { name: 'DolarAPI', url: 'https://dolarapi.com/v1/dolares' },
     usdc: { name: 'CoinGecko · USDC/ARS', url: 'https://www.coingecko.com/en/coins/usd-coin' },
     crypto: { name: 'CoinGecko', url: 'https://www.coingecko.com/' },
-    stock: { name: 'Data912 o Yahoo Finance', url: 'https://finance.yahoo.com/' },
+    stock: { name: 'Yahoo Finance', url: 'https://finance.yahoo.com/' },
     cedear: { name: 'Data912', url: 'https://data912.com/live/arg_cedears' },
     morpho: { name: 'Morpho', url: 'https://app.morpho.org/' },
 };
@@ -25,7 +25,7 @@ export default function QuoteSource({ source, asset, historical = false, label =
             : provider.url;
 
     return <span className={`inline-flex max-w-full flex-wrap items-center gap-x-1 font-mono text-[10px] leading-5 text-[var(--muted)] ${className}`}>
-        <span>{label}:</span>
+        <span>{label}</span>
         <a href={href} target="_blank" rel="noopener noreferrer" title={`Ver fuente en ${provider.name} (abre en otra pestaña)`}
             className="inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm underline decoration-[var(--line2)] underline-offset-2 transition-colors hover:text-[var(--ink)] hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--muted)]">
             <span className="truncate">{provider.name}</span>

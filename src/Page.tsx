@@ -38,7 +38,7 @@ const PricesPage = lazy(() => import('./PricesPage'));
 const Goals = lazy(() => import('./Goals'));
 
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, Cancel01Icon, Upload06Icon, Upload01Icon, ChevronLeft } from '@hugeicons/core-free-icons';
+import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIcon, ChartLineIcon, CoinsBitcoinIcon, Copy01Icon, Copy02Icon, CopyPlusIcon, Delete02Icon, Edit01Icon, Edit02Icon, Estimate01Icon, LandmarkFreeIcons, LinkSquare02Icon, LoaderIcon, MoreHorizontalIcon, PlusIcon, Refresh04Icon, Search01Icon, Cancel01Icon, Upload06Icon, Upload01Icon, ChevronLeft, RightToLeftListTriangleIcon, GlobalIcon } from '@hugeicons/core-free-icons';
 type Filter = 'all' | Kind | 'index';
 type AssetQuote = { id: string; date: string; kind: Exclude<Kind, 'rate'> } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
 type DollarRate = { nombre: string; compra: number | null; venta: number };
@@ -160,7 +160,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     useEffect(() => { void passkeyStatus().then(result => { setPasskeyCount(result.count); setSavedPasskeys(result.keys); }).catch(() => setPasskeyCount(null)); }, []);
     async function preparePasskeyDialog() {
         setPasskeyDialog(true); setPasskeyOptions(null); setPasskeyMessage('');
-        void passkeyStatus().then(result => { setPasskeyCount(result.count); setSavedPasskeys(result.keys); }).catch(() => {});
+        void passkeyStatus().then(result => { setPasskeyCount(result.count); setSavedPasskeys(result.keys); }).catch(() => { });
         if (!supportsPasskeys()) { setPasskeyMessage('Este dispositivo o navegador no admite passkeys. Abrí la app en Safari con HTTPS.'); return; }
         setPasskeyBusy(true);
         try { setPasskeyOptions(await preparePasskey()); }
@@ -286,7 +286,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
     const morphos = useMemo(() => [...new Set(items.filter(i => i.kind === 'morpho' && i.coin).map(i => i.coin!))], [items]);
     const stocks = useMemo(() => [...new Set(items.filter(i => i.kind === 'stock' && i.coin).map(i => i.coin!))], [items]);
     const assetId = kind === 'crypto' || kind === 'fund' || kind === 'morpho' ? coin.trim().toLowerCase() : coin.trim().toUpperCase();
-    const quoteSource = kind === 'crypto' ? 'CoinGecko' : kind === 'morpho' ? 'Morpho' : kind === 'stock' ? 'Data912 o Yahoo Finance' : 'Data912';
+    const quoteSource = kind === 'crypto' ? 'CoinGecko' : kind === 'morpho' ? 'Morpho' : kind === 'stock' ? 'sourcesYahoo Finance' : 'Data912';
     const todayDate = localISO();
     const activeQuote = modal && kind !== 'rate' && assetQuote?.id === assetId && assetQuote.date === todayDate && assetQuote.kind === kind ? assetQuote : null;
     const quotePrice = activeQuote?.status === 'ready' ? activeQuote.price : undefined;
@@ -808,7 +808,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
         setSellExecutionPrice(!hidden && Number.isFinite(initial) && initial > 0 ? String(initial) : '');
     }
 
-  
+
     const sellItem = items.find(item => item.id === sellId);
     const sellPrice = Number(sellExecutionPrice);
     const sellTotal = sellItem && Number.isFinite(sellPrice) && sellPrice > 0 ? sellItem.kind === 'rate' ? sellPrice : (sellItem.units ?? 0) * sellPrice : NaN;
@@ -873,15 +873,37 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             <TopBar page={page} count={items.length} theme={theme} resolvedTheme={resolvedTheme} onTheme={setTheme} hidden={hidden} onHidden={() => setHidden(v => !v)}
                 display={display} onDisplay={setDisplay} onSearch={() => { setInitialLocalSearch(undefined); setAssetSearch('crypto'); }} onAdd={openModal} onExport={exportJSON} onImport={() => fileRef.current?.click()}
                 email={account.user.email} syncLabel={syncLabel} onLogout={() => void logout()} leaving={leaving} onMailSettings={() => { setSpaceSubscreen('mail'); setEmailSettings(true); }} onCustomize={() => setPanelEditor(true)} customizing={panelEditor} spaceSubscreen={spaceSubscreen !== null} onPasskey={() => { setSpaceSubscreen('passkey'); void preparePasskeyDialog(); }} passkeyCount={passkeyCount} alerts={alerts} alertStatuses={alertStatuses} onDeleteAlert={id => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).filter(alert => alert.id !== id) }))} onSaveAlert={alert => sync.update(current => ({ ...current, alerts: (current.alerts ?? []).map(item => item.id === alert.id ? { ...alert, id: crypto.randomUUID() } : item) }))} alertHistory={alertHistory} onClearHistory={() => setAlertHistory([])} quietHours={view.portfolio.preferences.quietHours} onQuietHours={value => sync.update(current => ({ ...current, preferences: { ...current.preferences, quietHours: value } }))} alertCount={alerts.length} triggeredCount={triggeredAlerts.length} />
-            <div style={view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined} className="ticker w-full max-w-full" role="group" aria-label="Cotizaciones de referencia">
+            <div
+                style={view.portfolio.preferences.showQuotesBar === false ? { display: 'none' } : undefined}
+                className="ticker w-full max-w-full"
+                role="group"
+                aria-label="Cotizaciones de referencia"
+            >
                 <div className="ticker-track">
-                    <div className="ticker-group">
-                        <span title={`Fuente: ${fxSource}`}>USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b></span>
-                        {compare.map(k => <span key={k}>{dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b></span>)}
-                        <MarketHours />
-                        <span role="status">{priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}</span>
-                        <span><span className={statusDot} aria-hidden="true" style={{ alignSelf: 'center' }} />{syncLabel}</span>
-                    </div>
+                    {[0, 1].map(copy => (
+                        <div className="ticker-group" key={copy} aria-hidden={copy === 1}>
+                            <span title={`Fuente: ${fxSource}`}>
+                                USDC <b>{fxRate ? money(fxRate, 'ARS') : '—'}</b>
+                            </span>
+
+                            {compare.map(k => (
+                                <span key={k}>
+                                    {dollarLabels[k]} <b>{money(rates[k].venta, 'ARS')}</b>
+                                </span>
+                            ))}
+
+                            <MarketHours />
+
+                            <span role={copy === 0 ? 'status' : undefined}>
+                                {priceError ? 'Cotizaciones parciales' : updated ? `Actualizado ${updated}` : 'Consultando…'}
+                            </span>
+
+                            <span>
+                                <span className={statusDot} aria-hidden="true" style={{ alignSelf: 'center' }} />
+                                {syncLabel}
+                            </span>
+                        </div>
+                    ))}
                 </div>
             </div>
             <main ref={mainRef}>
@@ -905,7 +927,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {page === 'marketCalendar' && <MarketCalendar investments={items} />}
                 {page === 'dividends' && <Dividends dirty={view.dirty} hidden={hidden} userId={account.user.id} portfolioKey={dividendFingerprint} items={items} alerts={alerts} onAddAlert={alert => sync.update(current => ({ ...current, alerts: [...(current.alerts ?? []), alert] }))} />}
 
-                {page === 'investments' && <div className="mb-4 flex justify-end"><div className="seg" role="group" aria-label="Vista de inversiones"><button type="button" aria-pressed={investmentView === 'list'} onClick={() => setInvestmentView('list')}>Lista</button><button type="button" aria-pressed={investmentView === 'map'} onClick={() => setInvestmentView('map')}>Mapa 3D</button></div></div>}
+                {page === 'investments' && <div className="mb-4 flex justify-end"><div className="seg" role="group" aria-label="Vista de inversiones"><button type="button" aria-pressed={investmentView === 'list'} onClick={() => setInvestmentView('list')}><HugeiconsIcon icon={RightToLeftListTriangleIcon} size={19} /></button><button type="button" aria-pressed={investmentView === 'map'} onClick={() => setInvestmentView('map')}><HugeiconsIcon icon={GlobalIcon} size={19} /></button></div></div>}
                 {page === 'investments' && investmentView === 'map' && <Suspense fallback={<div className="card p-8 text-[13px] text-[var(--muted)]" role="status">Cargando mapa…</div>}><PortfolioMap positions={mapPositions} format={fmt} /></Suspense>}
                 <div className="flex flex-col">
                     <div style={{ order: panelOrder('value') }} hidden={page !== 'summary' || !visiblePanels.includes('value')}>
@@ -978,7 +1000,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                     </div>
                                     <div className="mt-4">
                                         <p className="text-[26px] font-light leading-none tracking-tight tabular-nums">{fxRate ? money(fxRate, 'ARS') : 'No disponible'}</p>
-                                        <p className="mu mt-1 text-[11px]">USDC en pesos (referencia de conversión)</p>
+                                        <p className="mu mt-1 text-[11px]">USDC en pesos (referencia de conversión) · Precio venta</p>
                                     </div>
                                     {compare.length > 0 && (
                                         <div className="mt-5 divide-y divide-[var(--line)] border-t border-[var(--line)]">
@@ -1000,7 +1022,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                                     )}
                                 </div>
                                 <div className="mt-4 pt-3 border-t border-[var(--line)]">
-                                    <QuoteSource source="dollar" label="Fuente: DolarAPI / CoinGecko" />
+                                    <QuoteSource source="dollar" label="" />
                                 </div>
                             </article>
                         </section>
@@ -1025,29 +1047,26 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                     <div style={{ order: panelOrder('distribution') }} hidden={page !== 'summary' || !visiblePanels.includes('distribution')}>{items.length > 0 && <Distribution byKind={byKind} byCurrency={byCurrency} byAsset={byAsset} bySector={bySector} byCountry={byCountry} format={fmt} />}</div>
 
                     <div style={{ order: panelOrder('investments') }} hidden={(page !== 'investments' || investmentView !== 'list') && (page !== 'summary' || !visiblePanels.includes('investments'))}>
-                        <section className="card overflow-hidden" aria-label="Mis inversiones">
+                        <section className="card overflow-hidden mb-3.5" aria-label="Mis inversiones">
                             <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6">
                                 <div className="flex items-center gap-2.5">
                                     <p className="lb">MIS INVERSIONES</p>
                                     <span className="rounded-full bg-[var(--raised)] border border-[var(--line)] px-2 py-0.5 text-[10px] font-mono text-[var(--muted)]">{filtered.length}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <label className="relative hidden sm:block">
-                                        <HugeiconsIcon icon={Search01Icon} size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--faint)]" />
-                                        <input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className="w-52 rounded-[10px] border border-[var(--line)] bg-[var(--raised)] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[var(--muted)]" />
-                                    </label>
+
                                     <RefreshButton onClick={() => void refresh()} loading={refreshing} label="Actualizar precios" />
                                 </div>
                             </div>
                             <div className="tabs px-4 pb-1 pt-4 sm:px-5" role="group" aria-label="Filtrar por tipo">{kinds.map(k => <button key={k.id} type="button" aria-pressed={filter === k.id} onClick={() => setFilter(k.id)}>{k.id !== 'all' && <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: k.color }} />}{k.id === 'all' ? 'Todas' : k.label}<em>{allCount(k.id)}</em></button>)}</div>
-                            <div className="px-5 pt-3 sm:hidden"><input aria-label="Buscar en mis inversiones" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en mi cartera…" className={field} /></div>
+
                             <div className="mt-3">{filtered.length ? filtered.map(i => {
                                 const v = valueAt(i, today, prices, today, officialRate); const change = i.amount > 0 ? (v - i.amount) / i.amount * 100 : 0; const missing = i.kind !== 'rate' && (i.coin && prices[`${i.kind}:${i.coin}`] == null); const cat = categoryOf(i); const sub = isLocal(i) ? `${titleFor(i.kind)} · ${i.coin?.split('~')[0]}` : i.kind === 'rate' ? `Con tasa · ${i.rate}% ${i.period === 'year' ? 'anual' : 'mensual'}` : cat === 'index' ? `Índice · ${indexName(i.coin ?? '')}` : i.kind === 'cedear' ? `CEDEAR · ${i.coin}` : i.kind === 'stock' ? `Acción · ${i.coin}` : `Cripto · ${i.coin}`;
                                 return <div key={i.id} className={`li cursor-pointer ${ctx?.id === i.id ? 'menu-open' : ''}`} onClick={e => { if ((e.target as HTMLElement).closest('button, a')) return; detailOpenerRef.current = e.currentTarget.querySelector('button[data-detail]'); setDetailId(i.id); }} onContextMenu={e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, id: i.id }); }}>
                                     <div className="tk" style={{ ['--c' as string]: colorOf(cat) }} aria-hidden="true">{tickerOf(i)}</div>
                                     <div className="min-w-0 flex-1 sm:flex-initial"><button type="button" data-detail onClick={e => { detailOpenerRef.current = e.currentTarget; setDetailId(i.id); }} className="block max-w-full truncate text-left text-[14px] font-medium hover:underline focus-visible:outline-2 focus-visible:outline-offset-2" aria-label={`Ver detalle de ${i.name}`}>{i.name}</button><p className="mu mt-0.5 text-[11px] truncate">{sub} <span>· {i.costUnknown ? 'Importado ' : ''}{formatDate(i.date)}</span></p>{missing && <p className="mu mt-0.5 text-[10px] text-[var(--neg)]">{i.costUnknown ? 'Sin precio disponible' : 'Sin precio · se muestra el monto original'}</p>}</div>
                                     <div className="r hid"><p><span className="amount-transition">{i.costUnknown ? '—' : mny(i.amount, i.currency)}</span></p><p className="mu mt-0.5 text-[10px]">{i.costUnknown ? 'Costo desconocido' : 'Invertido'}</p></div>
-                                    <div className="r hid"><p><span key={mny(v, i.currency)} className="amount-transition">{mny(v, i.currency)}</span></p><div className="mt-0.5 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada</span> : <QuoteSource source={i.kind === 'fund' ? 'fund' : i.kind === 'arg-stock' || i.kind === 'bond' ? 'local' : i.kind} asset={i.coin} label={missing ? 'Proveedor' : 'Fuente'} className="justify-end" />}</div></div>
+                                    <div className="r hid"><p><span key={mny(v, i.currency)} className="amount-transition">{mny(v, i.currency)}</span></p><div className="mt-0.5 text-[10px] text-[var(--muted)]">{i.kind === 'rate' ? <span title="Valor calculado con el monto, la fecha y la tasa que ingresaste">Tasa ingresada</span> : ""}</div></div>
                                     <div className="r flex sm:block flex-col items-end gap-1"><span className="sm:hidden font-mono text-[13px] font-medium tabular-nums">{mny(v, i.currency)}</span><span className={`pill text-[11px] ${change >= 0 ? '' : 'neg'}`}>{missing || i.costUnknown ? '—' : percent(change)}</span></div>
                                     <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setCtx(ctx?.id === i.id ? null : { x: Math.max(12, r.right - 220), y: r.bottom + 6, id: i.id }); }} aria-haspopup="menu" aria-expanded={ctx?.id === i.id} aria-label={`Acciones de ${i.name}`} className="ibtn !h-8 !w-8 !border-transparent !bg-transparent text-[var(--muted)] hover:text-[var(--ink)]"><HugeiconsIcon icon={MoreHorizontalIcon} size={16} /></button>
                                 </div>;
@@ -1058,7 +1077,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
                 {page === 'investments' && investmentView === 'list' && <AssetPerformance items={items} hidden={hidden} />}
                 {page === 'investments' && investmentView === 'list' && (view.portfolio.sales?.length ?? 0) > 0 && <section className="card mt-4 p-5"><p className="lb">VENTAS REGISTRADAS</p><div className="mt-3 divide-y divide-[var(--line)]">{[...(view.portfolio.sales ?? [])].reverse().map(sale => <div key={sale.id} className="flex flex-wrap justify-between gap-2 py-3 text-[12px]"><span>{sale.name} · {formatDate(sale.date)} · {(sale.fraction * 100).toFixed(2)}%</span><span>Neto {mny(sale.proceeds, sale.currency)} · costo {mny(sale.cost, sale.costCurrency)}{sale.fee != null ? ` · comisión ${mny(sale.fee, sale.currency)}` : ''}{sale.executionPrice != null ? ` · precio ${mny(sale.executionPrice, sale.currency)} por unidad` : ''}{sale.currency === sale.costCurrency ? ` · resultado ${mny(sale.proceeds - sale.cost, sale.currency)}` : ''}</span></div>)}</div></section>}
                 <footer className="mu mt-8 space-y-2 text-[10px]">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Fuentes de las cotizaciones"><QuoteSource source="usdc" label="USDC" /><QuoteSource source="dollar" label="Dólares" /><QuoteSource source="crypto" label="Cripto" /><QuoteSource source="cedear" label="CEDEARs e índices" /></div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Fuentes de las cotizaciones"><QuoteSource source="usdc" label="USDC/USDT" /><QuoteSource source="dollar" label="Dólares" /><QuoteSource source="crypto" label="Cripto" /><QuoteSource source="cedear" label="CEDEAR e Acciones 🇦🇷" /><QuoteSource source="stock" label="Acciones e índices 🇺🇸" /></div>
                     <nav aria-label="Información legal" className="flex flex-wrap gap-2 pt-2"><a href="/politicas" className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[11px] hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2">Política de privacidad</a><a href="/condiciones" className="rounded-lg border border-[var(--line2)] px-3 py-2 text-[11px] hover:bg-[var(--raised)] focus-visible:outline-2 focus-visible:outline-offset-2">Términos y condiciones</a></nav>
                 </footer>
             </main>

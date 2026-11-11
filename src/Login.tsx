@@ -2,7 +2,7 @@ import { loginWithPasskey, supportsPasskeys } from './passkeys';
 import { useState, type FormEvent } from 'react';
 import { request, type Account } from './account';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { EyeClosedFreeIcons, LoaderIcon, ViewIcon, FingerPrintIcon } from '@hugeicons/core-free-icons';
+import { EyeClosedFreeIcons, LoaderIcon, ViewIcon, FingerPrintIcon, ScanFaceIcon } from '@hugeicons/core-free-icons';
 
 type Props = { onLogin: (account: Account) => void; initialError?: string; fixedEmail?: string; onCancel?: () => void };
 
@@ -41,7 +41,7 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
     }
 
     const input = 'w-full rounded-xl border border-[var(--line2)] bg-[var(--raised)] px-3.5 py-3 text-[14px] text-[var(--ink)] placeholder:text-[var(--faint)] outline-none transition-colors focus:border-[var(--sig)] focus:ring-1 focus:ring-[var(--sig)]/30';
-    const pinInput = `${input} font-mono text-[18px] tracking-[.35em] text-center`;
+    const pinInput = `${input} font-mono text-[18px] tracking-[.35em]`;
 
     return <main data-theme="dark" className="app grid min-h-dvh place-items-center px-4 py-10 selection:bg-[var(--sig)] selection:text-[#09090b]">
         <div className="w-full max-w-[400px]">
@@ -56,14 +56,14 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
             {/* Tarjeta de Acceso */}
             <section className="card hero-glow p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
                 {!fixedEmail && (
-                    <div className="seg mb-6 w-full grid grid-cols-2 p-1" role="tablist">
+                    <div className="seg mb-6 w-full grid grid-cols-2 p-1 align-center justify-center" role="tablist">
                         <button
                             type="button"
                             role="tab"
                             aria-selected={mode === 'login'}
                             aria-pressed={mode === 'login'}
                             onClick={() => { setMode('login'); setError(''); }}
-                            className="!min-h-[34px] !text-xs font-medium"
+                            className="!min-h-[34px] w-full !text-xs font-medium"
                         >
                             Ingresar
                         </button>
@@ -73,7 +73,7 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
                             aria-selected={mode === 'register'}
                             aria-pressed={mode === 'register'}
                             onClick={() => { setMode('register'); setError(''); }}
-                            className="!min-h-[34px] !text-xs font-medium"
+                            className="!min-h-[34px] w-full !text-xs font-medium"
                         >
                             Crear cuenta
                         </button>
@@ -199,7 +199,7 @@ export default function Login({ onLogin, initialError = '', fixedEmail, onCancel
                             onClick={() => void passkeyLogin()}
                             className="btn-ghost w-full !min-h-10 !rounded-xl !text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)] flex items-center justify-center gap-2"
                         >
-                            <HugeiconsIcon icon={FingerPrintIcon} size={16} />
+                            <HugeiconsIcon icon={ScanFaceIcon} size={16} />
                             <span>Ingresar con Face ID o passkey</span>
                         </button>
                     )}

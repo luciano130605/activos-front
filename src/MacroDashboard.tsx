@@ -5,7 +5,7 @@ import PageLink from './PageLink';
 type Observation = { fecha: string; valor: number; previous?: number };
 type MacroData = { risk?: Observation; inflation?: Observation; rate?: Observation; merval?: Observation };
 
-type Rates = Record<string, { venta: number }>;
+type Rates = Record<string, { compra: number; venta: number }>;
 
 type Stablecoins = {
     usdt?: number;
@@ -69,35 +69,101 @@ export default function MacroDashboard({ rates, refreshDollars, dollarLoading }:
     const refresh = () => { refreshDollars(); setRetry(value => value + 1); };
     const loading = data === null;
     const unavailable = 'No disponible';
-    const metric = (title: string, value: string, note: string, source: string, url: string) => <article key={title} className="macro-metric">
-        <p className="macro-metric-label">{title}</p>
-        <p className="macro-value">{value}</p>
-        <p className="macro-note">{note}</p>
-        <a className="macro-source" href={url} target="_blank" rel="noopener noreferrer">{source}</a>
-    </article>;
-    return <section className="card macro-dashboard mb-3.5 p-5 sm:p-6" aria-labelledby="macro-title">
+    const metric = (
+        title: string,
+        value: string,
+        note: string,
+        featured = false
+    ) => (
+        <article
+            key={title}
+            className={`macro-metric ${featured ? 'macro-metric-featured' : ''}`}
+        >
+            <p className="macro-metric-label">{title}</p>
+            <p className="macro-value">{value}</p>
+            <p className="macro-note">{note}</p>
+        </article>
+    );
+    return <section className="card macro-dashboard mb-3.5  p-5 sm:p-6" aria-labelledby="macro-title">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="lb">CONTEXTO DE MERCADO</p><h2 id="macro-title" className="mt-2 text-[20px] font-light tracking-tight">Tablero macro</h2><p className="mu mt-2 text-[12px]">Referencias de Argentina para seguir el contexto de tu cartera.</p></div><RefreshButton onClick={refresh} loading={loading || dollarLoading} label="Actualizar tablero macro" /></div>
-        <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-            {([['oficial', 'Dólar oficial'], ['bolsa', 'Dólar MEP'], ['contadoconliqui', 'Dólar CCL']] as const).map(([key, label]) => metric(label, rates[key]?.venta > 0 ? price.format(rates[key].venta) : unavailable, 'Venta · última consulta', 'DolarApi', 'https://dolarapi.com/'))}
+
+        <div className="macro-grid">
+
+
+
+            {/* Oficial */}
+            {[
+                { key: 'oficial', label: 'Dólar oficial' },
+                { key: 'contadoconliqui', label: 'Dólar CCL' },
+                { key: 'bolsa', label: 'Dólar MEP' },
+            ].map(({ key, label }) => (
+                <article className="macro-metric" key={key}>
+                    <p className="macro-metric-label">{label}</p>
+                    <div className="macro-small-quotes">
+                        <div>
+                            <span>Compra</span>
+                            <strong>
+                                {rates[key]?.compra > 0
+                                    ? price.format(rates[key].compra)
+                                    : unavailable}
+                            </strong>
+                        </div>
+                        <div>
+                            <span>Venta</span>
+                            <strong className='venta'>
+                                {rates[key]?.venta > 0
+                                    ? price.format(rates[key].venta)
+                                    : unavailable}
+                            </strong>
+                        </div>
+                    </div>
+                </article>
+            ))}
+
+            {/* Stablecoins */}
+            {[
+                { label: 'USDT', value: stablecoins?.usdt },
+                { label: 'USDC', value: stablecoins?.usdc },
+            ].map(({ label, value }) => (
+                <article className="macro-metric" key={label}>
+                    <p className="macro-metric-label">{label}</p>
+                    <strong className="macro-value">
+                        {stablecoins === null
+                            ? '…'
+                            : value && value > 0
+                                ? price.format(value)
+                                : unavailable}
+                    </strong>
+                    <p className="macro-note">Referencia en pesos argentinos</p>
+                </article>
+            ))}
+
             {metric(
-                'USDT',
-                stablecoins === null
-                    ? '…'
-                    : stablecoins.usdt && stablecoins.usdt > 0
-                        ? price.format(stablecoins.usdt)
-                        : unavailable,
-                'Tether · ARS',
-                'CoinGecko',
-                'https://www.coingecko.com/en/coins/tether'
+                'Merval',
+                loading ? '…' : data?.merval ? `${number.format(data.merval.valor)} pts` : unavailable,
+                data?.merval ? day(data.merval.fecha) : 'Sin fecha disponible'
             )}
 
-         
-            {metric('Merval', loading ? '…' : data?.merval ? `${number.format(data.merval.valor)} pts` : unavailable, data?.merval ? `${day(data.merval.fecha)}${data.merval.previous ? ` · ${data.merval.valor >= data.merval.previous ? '+' : ''}${number.format((data.merval.valor / data.merval.previous - 1) * 100)}% vs. cierre anterior` : ''}` : 'Sin fecha disponible', 'Rosario Finanzas', 'https://rosariofinanzas.ar/')}
-            {metric('Riesgo país', loading ? '…' : data?.risk ? `${number.format(data.risk.valor)} pb` : unavailable, data?.risk ? day(data.risk.fecha) : 'Sin fecha disponible', 'ArgentinaDatos · Ámbito', 'https://argentinadatos.com/docs/operations/get-finanzas-indices-riesgo-pais-ultimo')}
-            {metric('Inflación mensual', loading ? '…' : data?.inflation ? `${number.format(data.inflation.valor)}%` : unavailable, data?.inflation ? day(data.inflation.fecha, true) : 'Sin fecha disponible', 'INDEC · ArgentinaDatos', 'https://www.indec.gob.ar/')}
-            {metric('Depósitos 30 días', loading ? '…' : data?.rate ? `${number.format(data.rate.valor)}%` : unavailable, data?.rate ? `${day(data.rate.fecha)} · tasa anual` : 'Sin fecha disponible', 'BCRA · ArgentinaDatos', 'https://argentinadatos.com/docs/operations/get-finanzas-tasas-depositos-30-dias')}
+            {metric(
+                'Riesgo país',
+                loading ? '…' : data?.risk ? `${number.format(data.risk.valor)} pb` : unavailable,
+                data?.risk ? day(data.risk.fecha) : 'Sin fecha disponible'
+            )}
+
+            {metric(
+                'Inflación mensual',
+                loading ? '…' : data?.inflation ? `${number.format(data.inflation.valor)}%` : unavailable,
+                data?.inflation ? day(data.inflation.fecha, true) : 'Sin fecha disponible'
+            )}
+
+            {metric(
+                'Depósitos 30 días',
+                loading ? '…' : data?.rate ? `${number.format(data.rate.valor)}%` : unavailable,
+                data?.rate ? `${day(data.rate.fecha)} · tasa anual` : 'Sin fecha disponible'
+            )}
         </div>
-        <div className="mu mt-4 flex flex-wrap items-center justify-between gap-3 text-[11px]"><span>Los indicadores tienen distintas fechas de publicación. La tasa es una referencia, no una oferta de un banco.</span><PageLink page="inflation" className="underline underline-offset-4">Ver inflación en detalle</PageLink></div>
+
+        <div className="mu mt-4 flex flex-wrap items-center justify-between gap-3 text-[11px]"><span>Los indicadores tienen distintas fechas de publicación. La tasa es una referencia, no una oferta de un banco.</span></div>
         {data && (!data.risk || !data.inflation || !data.rate || !data.merval) && <p role="status" className="mt-3 text-[11px] text-[var(--neg)]">Algunos indicadores no pudieron consultarse. Podés volver a intentar con el botón de actualizar.</p>}
     </section>;
 }

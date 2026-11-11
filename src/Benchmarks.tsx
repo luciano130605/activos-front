@@ -1000,26 +1000,26 @@ export default function Benchmarks({
             </div>}
 
             <div className="mt-5 grid max-w-2xl grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-start gap-3 sm:gap-4">
-            <div className="min-w-0">
-                <label htmlFor="benchmark-period" className="mb-2 block text-[11px] text-[var(--muted)]">Período</label>
-                <Select id="benchmark-period" label="Período de comparación" value={String(months)} onChange={value => onMonthsChange(Number(value))} options={[
-                    { value: '1', label: '1 mes' }, { value: '6', label: '6 meses' },
-                    { value: '12', label: '1 año' }, { value: '24', label: '2 años' },
-                    { value: '36', label: '3 años' }, { value: '72', label: '6 años' },
-                ].map(option => ({ ...option, disabled: !availablePeriods.includes(Number(option.value)) }))} />
-                {availablePeriods.length < 6 && <p className="mu mt-2 text-[11px]">Los períodos sin historial suficiente para la selección están deshabilitados.</p>}
-            </div>
+                <div className="min-w-0">
+                    <label htmlFor="benchmark-period" className="mb-2 block text-[11px] text-[var(--muted)]">Período</label>
+                    <Select id="benchmark-period" label="Período de comparación" value={String(months)} onChange={value => onMonthsChange(Number(value))} options={[
+                        { value: '1', label: '1 mes' }, { value: '6', label: '6 meses' },
+                        { value: '12', label: '1 año' }, { value: '24', label: '2 años' },
+                        { value: '36', label: '3 años' }, { value: '72', label: '6 años' },
+                    ].map(option => ({ ...option, disabled: !availablePeriods.includes(Number(option.value)) }))} />
+                    {availablePeriods.length < 6 && <p className="mu mt-2 text-[11px]">Los períodos sin historial suficiente para la selección están deshabilitados.</p>}
+                </div>
 
-            <div className="min-w-0">
+                <div className="min-w-0">
 
-                <label htmlFor="benchmark-selection" className="mb-2 block text-[11px] text-[var(--muted)]">Comparar</label>
+                    <label htmlFor="benchmark-selection" className="mb-2 block text-[11px] text-[var(--muted)]">Comparar</label>
 
-                <Select id="benchmark-selection" label="Seleccionar cartera o activo" value={selection} onChange={onSelectionChange} options={[{ value: 'all', label: 'Mi cartera completa' }, ...options]} />
-                <button type="button" onClick={onSearch} className="mt-3 rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] hover:bg-[var(--raised)]">Buscar otro activo</button>
-                <p className="mu mt-2 text-[11px]">El activo buscado se usa solo para comparar y no se guarda en tu cartera.</p>
-                {searchStatus && <p role="status" className="mu mt-2 text-[12px]">{searchStatus}</p>}
+                    <Select id="benchmark-selection" label="Seleccionar cartera o activo" value={selection} onChange={onSelectionChange} options={[{ value: 'all', label: 'Mi cartera completa' }, ...options]} />
+                    <button type="button" onClick={onSearch} className="mt-3 rounded-lg border border-[var(--line2)] px-3 py-2 text-[12px] hover:bg-[var(--raised)]">Buscar otro activo</button>
+                    <p className="mu mt-2 text-[11px]">El activo buscado se usa solo para comparar y no se guarda en tu cartera.</p>
+                    {searchStatus && <p role="status" className="mu mt-2 text-[12px]">{searchStatus}</p>}
 
-            </div>
+                </div>
             </div>
 
             {selection === 'all' && <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-4">
@@ -1119,40 +1119,40 @@ export default function Benchmarks({
                 {keys.map(key => (
 
                     <span key={key} className={`inline-flex items-center rounded-md ${key === 'merval' || key === 'uva' ? `border pr-1 ${visible[key] ? 'border-[var(--line2)] bg-[var(--raised)]' : 'border-[var(--line)]'}` : ''}`}>
-                    <button
+                        <button
 
-                        type="button"
+                            type="button"
 
-                        aria-pressed={visible[key]}
+                            aria-pressed={visible[key]}
 
-                        onClick={() =>
+                            onClick={() =>
 
-                            setVisible(v => ({
+                                setVisible(v => ({
 
-                                ...v,
+                                    ...v,
 
-                                [key]: !v[key],
+                                    [key]: !v[key],
 
-                            }))
+                                }))
 
-                        }
+                            }
 
-                        className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-[11px] transition-all duration-150 ${key === 'merval' || key === 'uva' ? (visible[key] ? 'text-[var(--ink)]' : 'text-[var(--muted)] opacity-50') : `border hover:border-[var(--line2)] ${visible[key] ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]' : 'border-[var(--line)] text-[var(--muted)] opacity-50'}`}`}
+                            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-[11px] transition-all duration-150 ${key === 'merval' || key === 'uva' ? (visible[key] ? 'text-[var(--ink)]' : 'text-[var(--muted)] opacity-50') : `border hover:border-[var(--line2)] ${visible[key] ? 'border-[var(--line2)] bg-[var(--raised)] text-[var(--ink)]' : 'border-[var(--line)] text-[var(--muted)] opacity-50'}`}`}
 
-                    >
+                        >
 
-                        <span
+                            <span
 
-                            className="h-2 w-2 rounded-full"
+                                className="h-2 w-2 rounded-full"
 
-                            style={{ background: colors[key] }}
+                                style={{ background: colors[key] }}
 
-                        />
+                            />
 
-                        {labels[key]}
+                            {labels[key]}
 
-                    </button>
-                    {(key === 'merval' || key === 'uva') && <Explanation inside label={`Qué es ${labels[key]}`} content={key === 'merval' ? 'El Merval es un índice que sigue la evolución de un grupo de acciones argentinas que cotizan en bolsa. Sirve como referencia general del mercado local.' : 'La UVA es una unidad de valor que se actualiza según la inflación. Se usa, por ejemplo, en algunos préstamos y plazos fijos.'}><span aria-hidden="true" className="font-mono text-[12px]">ⓘ</span></Explanation>}
+                        </button>
+                        {(key === 'merval' || key === 'uva') && <Explanation inside label={`Qué es ${labels[key]}`} content={key === 'merval' ? 'El Merval es un índice que sigue la evolución de un grupo de acciones argentinas que cotizan en bolsa. Sirve como referencia general del mercado local.' : 'La UVA es una unidad de valor que se actualiza según la inflación. Se usa, por ejemplo, en algunos préstamos y plazos fijos.'}><span aria-hidden="true" className="font-mono text-[12px]">ⓘ</span></Explanation>}
                     </span>
 
                 ))}
@@ -1192,58 +1192,86 @@ export default function Benchmarks({
                     }} onTouchMove={event => {
                         if (event.touches.length === 2 && pinch.current?.distance) setMobileZoom(Math.max(1, Math.min(4, pinch.current.zoom * touchDistance(event.touches) / pinch.current.distance)));
                     }} onTouchEnd={event => { if (event.touches.length < 2) pinch.current = null; }} onTouchCancel={() => { pinch.current = null; }}>
-                    <div className="evolution-chart-inner relative select-none" style={{ '--mobile-chart-zoom': mobileZoom } as React.CSSProperties}>
+                        <div className="evolution-chart-inner relative select-none" style={{ '--mobile-chart-zoom': mobileZoom } as React.CSSProperties}>
 
-                        <svg
+                            <svg
 
-                            ref={svgRef}
+                                ref={svgRef}
 
-                            viewBox={`0 0 ${W} ${H}`}
+                                viewBox={`0 0 ${W} ${H}`}
 
-                            className="chart-animate line-chart block w-full overflow-visible"
+                                className="chart-animate line-chart block w-full overflow-visible"
 
-                            role="img"
+                                role="img"
 
-                            aria-label="Gráfico de rendimiento comparado, base 100"
+                                aria-label="Gráfico de rendimiento comparado, base 100"
 
-                            onPointerDown={event => { if (!pinch.current) handlePointerMove(event); }}
-                            onPointerMove={event => { if (!pinch.current) handlePointerMove(event); }}
+                                onPointerDown={event => { if (!pinch.current) handlePointerMove(event); }}
+                                onPointerMove={event => { if (!pinch.current) handlePointerMove(event); }}
 
-                            onPointerLeave={() => { setHoverT(null); setHoverKey(null); }}
+                                onPointerLeave={() => { setHoverT(null); setHoverKey(null); }}
 
-                        >
+                            >
 
-                            {/* Horizontal grid */}
+                                {/* Horizontal grid */}
 
-                            {result.ticks.map((v, i) => (
+                                {result.ticks.map((v, i) => (
 
-                                <g key={i}>
+                                    <g key={i}>
 
-                                    <line
+                                        <line
 
-                                        x1={LEFT}
+                                            x1={LEFT}
 
-                                        x2={W - RIGHT}
+                                            x2={W - RIGHT}
 
-                                        y1={result.y(v)}
+                                            y1={result.y(v)}
 
-                                        y2={result.y(v)}
+                                            y2={result.y(v)}
 
-                                        stroke="var(--line)"
+                                            stroke="var(--line)"
 
-                                        strokeWidth="1"
+                                            strokeWidth="1"
 
-                                        strokeDasharray={i === 0 ? '0' : '3 5'}
+                                            strokeDasharray={i === 0 ? '0' : '3 5'}
 
-                                    />
+                                        />
+
+                                        <text
+
+                                            x={LEFT - 12}
+
+                                            y={result.y(v) + 4}
+
+                                            textAnchor="end"
+
+                                            fill="var(--muted)"
+
+                                            fontSize="11"
+
+                                        >
+
+                                            {v.toFixed(0)}
+
+                                        </text>
+
+                                    </g>
+
+                                ))}
+
+                                {/* Monthly axis */}
+
+                                {result.monthTicks.map(t => (
 
                                     <text
 
-                                        x={LEFT - 12}
+                                        key={t}
 
-                                        y={result.y(v) + 4}
+                                        x={result.x(t)}
 
-                                        textAnchor="end"
+                                        y={H - 8}
+
+                                        textAnchor="middle"
 
                                         fill="var(--muted)"
 
@@ -1251,258 +1279,230 @@ export default function Benchmarks({
 
                                     >
 
-                                        {v.toFixed(0)}
+                                        {months > 12 ? new Date(t).toLocaleDateString('es-AR', { month: 'short', year: '2-digit', timeZone: 'UTC' }) : monthLabel(t)}
 
                                     </text>
 
-                                </g>
+                                ))}
 
-                            ))}
+                                {/* Base 100 */}
 
-                            {/* Monthly axis */}
+                                <line
 
-                            {result.monthTicks.map(t => (
+                                    x1={LEFT}
 
-                                <text
+                                    x2={W - RIGHT}
 
-                                    key={t}
+                                    y1={result.y(100)}
 
-                                    x={result.x(t)}
+                                    y2={result.y(100)}
 
-                                    y={H - 8}
+                                    stroke="var(--muted)"
 
-                                    textAnchor="middle"
+                                    strokeWidth="1"
 
-                                    fill="var(--muted)"
+                                    strokeDasharray="5 5"
 
-                                    fontSize="11"
-
-                                >
-
-                                    {months > 12 ? new Date(t).toLocaleDateString('es-AR', { month: 'short', year: '2-digit', timeZone: 'UTC' }) : monthLabel(t)}
-
-                                </text>
-
-                            ))}
-
-                            {/* Base 100 */}
-
-                            <line
-
-                                x1={LEFT}
-
-                                x2={W - RIGHT}
-
-                                y1={result.y(100)}
-
-                                y2={result.y(100)}
-
-                                stroke="var(--muted)"
-
-                                strokeWidth="1"
-
-                                strokeDasharray="5 5"
-
-                                opacity=".5"
-
-                            />
-
-                            {/* Curves */}
-
-                            {result.lines.map(line => (
-
-                                <path
-
-                                    key={line.key}
-
-                                    d={line.points.map((p, i) =>
-
-                                        `${i === 0 ? 'M' : 'L'} ${result.x(p.t).toFixed(2)} ${result.y(p.value).toFixed(2)}`
-
-                                    ).join(' ')}
-
-                                    fill="none"
-
-                                    stroke={colors[line.key]}
-
-                                    strokeWidth={line.key === 'cartera' ? 3 : 2}
-
-                                    strokeLinecap="round"
-
-                                    strokeLinejoin="round"
-
-                                    vectorEffect="non-scaling-stroke"
-
-                                    opacity={hover && hoverKey !== line.key ? .45 : 1}
-
-                                    pointerEvents="none"
+                                    opacity=".5"
 
                                 />
 
-                            ))}
+                                {/* Curves */}
 
-                            {/* Crosshair */}
+                                {result.lines.map(line => (
 
-                            {hover && (
+                                    <path
 
-                                <g pointerEvents="none">
+                                        key={line.key}
 
-                                    <line
+                                        d={line.points.map((p, i) =>
 
-                                        x1={hover.x}
+                                            `${i === 0 ? 'M' : 'L'} ${result.x(p.t).toFixed(2)} ${result.y(p.value).toFixed(2)}`
 
-                                        x2={hover.x}
+                                        ).join(' ')}
 
-                                        y1={TOP}
+                                        fill="none"
 
-                                        y2={TOP + PH}
+                                        stroke={colors[line.key]}
 
-                                        stroke="var(--muted)"
+                                        strokeWidth={line.key === 'cartera' ? 3 : 2}
 
-                                        strokeWidth="1"
+                                        strokeLinecap="round"
 
-                                        strokeDasharray="4 4"
+                                        strokeLinejoin="round"
 
-                                        opacity=".8"
+                                        vectorEffect="non-scaling-stroke"
+
+                                        opacity={hover && hoverKey !== line.key ? .45 : 1}
+
+                                        pointerEvents="none"
 
                                     />
 
-                                    {hover.points.map(point => (
+                                ))}
 
-                                        <g key={point.key}>
+                                {/* Crosshair */}
 
-                                            <circle
+                                {hover && (
 
-                                                cx={hover.x}
+                                    <g pointerEvents="none">
 
-                                                cy={result.y(point.value)}
+                                        <line
 
-                                                r="7"
+                                            x1={hover.x}
 
-                                                fill={point.color}
+                                            x2={hover.x}
 
-                                                opacity=".18"
+                                            y1={TOP}
 
-                                            />
+                                            y2={TOP + PH}
 
-                                            <circle
+                                            stroke="var(--muted)"
 
-                                                cx={hover.x}
+                                            strokeWidth="1"
 
-                                                cy={result.y(point.value)}
+                                            strokeDasharray="4 4"
 
-                                                r="4"
+                                            opacity=".8"
 
-                                                fill={point.color}
+                                        />
 
-                                                stroke="var(--surface)"
+                                        {hover.points.map(point => (
 
-                                                strokeWidth="2"
+                                            <g key={point.key}>
 
-                                            />
+                                                <circle
 
-                                        </g>
+                                                    cx={hover.x}
 
-                                    ))}
+                                                    cy={result.y(point.value)}
 
-                                </g>
+                                                    r="7"
 
-                            )}
+                                                    fill={point.color}
 
-                        </svg>
-
-                        {/* Hover tooltip */}
-
-                        {hover && hover.points.length > 0 && (
-
-                            <div
-
-                                className="pointer-events-none absolute top-0 z-20 w-[260px] max-w-[90%] rounded-xl border border-[var(--line2)] bg-[var(--surface)] p-3 shadow-xl sm:w-[290px]"
-
-                                style={{
-
-                                    left: `${Math.max(
-
-                                        16,
-
-                                        Math.min(84, (hover.x / W) * 100)
-
-                                    )}%`,
-
-                                    transform: 'translateX(-50%)',
-
-                                }}
-
-                            >
-
-                                <p className="border-b border-[var(--line)] pb-2 text-[12px] font-semibold capitalize">
-
-                                    {shortDateLabel(hover.t)}
-
-                                </p>
-
-                                <div className="mt-3 space-y-2.5">
-
-                                    {hover.points.map(point => (
-
-                                        <div
-
-                                            key={point.key}
-
-                                            className="flex items-center justify-between gap-3"
-
-                                        >
-
-                                            <div className="flex min-w-0 items-center gap-2">
-
-                                                <span
-
-                                                    className="h-2 w-2 shrink-0 rounded-full"
-
-                                                    style={{ background: point.color }}
+                                                    opacity=".18"
 
                                                 />
 
-                                                <span className="truncate text-[11px] text-[var(--muted)]">
+                                                <circle
 
-                                                    {point.label}
+                                                    cx={hover.x}
 
-                                                </span>
+                                                    cy={result.y(point.value)}
+
+                                                    r="4"
+
+                                                    fill={point.color}
+
+                                                    stroke="var(--surface)"
+
+                                                    strokeWidth="2"
+
+                                                />
+
+                                            </g>
+
+                                        ))}
+
+                                    </g>
+
+                                )}
+
+                            </svg>
+
+                            {/* Hover tooltip */}
+
+                            {hover && hover.points.length > 0 && (
+
+                                <div
+
+                                    className="pointer-events-none absolute top-0 z-20 w-[260px] max-w-[90%] rounded-xl border border-[var(--line2)] bg-[var(--surface)] p-3 shadow-xl sm:w-[290px]"
+
+                                    style={{
+
+                                        left: `${Math.max(
+
+                                            16,
+
+                                            Math.min(84, (hover.x / W) * 100)
+
+                                        )}%`,
+
+                                        transform: 'translateX(-50%)',
+
+                                    }}
+
+                                >
+
+                                    <p className="border-b border-[var(--line)] pb-2 text-[12px] font-semibold capitalize">
+
+                                        {shortDateLabel(hover.t)}
+
+                                    </p>
+
+                                    <div className="mt-3 space-y-2.5">
+
+                                        {hover.points.map(point => (
+
+                                            <div
+
+                                                key={point.key}
+
+                                                className="flex items-center justify-between gap-3"
+
+                                            >
+
+                                                <div className="flex min-w-0 items-center gap-2">
+
+                                                    <span
+
+                                                        className="h-2 w-2 shrink-0 rounded-full"
+
+                                                        style={{ background: point.color }}
+
+                                                    />
+
+                                                    <span className="truncate text-[11px] text-[var(--muted)]">
+
+                                                        {point.label}
+
+                                                    </span>
+
+                                                </div>
+
+                                                <div className="shrink-0 text-right">
+
+                                                    <p className="text-[12px] font-semibold tabular-nums">
+
+                                                        {percent(point.change)}
+
+                                                    </p>
+
+                                                    <p className="mu text-[10px] tabular-nums">
+
+                                                        {point.value.toFixed(2)} pts
+
+                                                    </p>
+                                                    {point.original != null && Number.isFinite(point.original) && <p className="mu mt-1 text-[10px] tabular-nums">
+                                                        {point.key === 'inflation' ? `Inflación mensual: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'deposit' ? `TNA: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'merval' ? `Índice: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })} pts` : `${point.key === 'cartera' ? (selection === 'all' ? 'Valor estimado' : selection === 'temporary' ? 'Precio por unidad' : 'Valor de la selección') : 'Cotización'}: ${point.original.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}`}
+                                                    </p>}
+                                                    {point.unitPrice != null && Number.isFinite(point.unitPrice) && <p className="mu mt-1 text-[10px] tabular-nums">Precio por unidad: {point.unitPrice.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 4 })}</p>}
+                                                    {point.observedAt != null && <p className="mu text-[10px]">Dato del {shortDateLabel(point.observedAt)}</p>}
+
+                                                </div>
 
                                             </div>
 
-                                            <div className="shrink-0 text-right">
+                                        ))}
 
-                                                <p className="text-[12px] font-semibold tabular-nums">
-
-                                                    {percent(point.change)}
-
-                                                </p>
-
-                                                <p className="mu text-[10px] tabular-nums">
-
-                                                    {point.value.toFixed(2)} pts
-
-                                                </p>
-                                                {point.original != null && Number.isFinite(point.original) && <p className="mu mt-1 text-[10px] tabular-nums">
-                                                    {point.key === 'inflation' ? `Inflación mensual: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'deposit' ? `TNA: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%` : point.key === 'merval' ? `Índice: ${point.original.toLocaleString('es-AR', { maximumFractionDigits: 2 })} pts` : `${point.key === 'cartera' ? (selection === 'all' ? 'Valor estimado' : selection === 'temporary' ? 'Precio por unidad' : 'Valor de la selección') : 'Cotización'}: ${point.original.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })}`}
-                                                </p>}
-                                                {point.unitPrice != null && Number.isFinite(point.unitPrice) && <p className="mu mt-1 text-[10px] tabular-nums">Precio por unidad: {point.unitPrice.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 4 })}</p>}
-                                                {point.observedAt != null && <p className="mu text-[10px]">Dato del {shortDateLabel(point.observedAt)}</p>}
-
-                                            </div>
-
-                                        </div>
-
-                                    ))}
+                                    </div>
 
                                 </div>
 
-                            </div>
+                            )}
 
-                        )}
-
-                    </div>
+                        </div>
 
                     </div>
                     {mobileZoom > 1.01 && <button type="button" className="evolution-reset-zoom mu mt-2 text-[11px] underline" onClick={() => setMobileZoom(1)}>Restablecer zoom</button>}
@@ -1669,7 +1669,7 @@ export default function Benchmarks({
 
                 >
 
-                    Fuente: ArgentinaDatos
+                    ArgentinaDatos
 
                 </a>
 
