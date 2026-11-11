@@ -42,12 +42,7 @@ import { ArrowReloadHorizontalIcon, Bitcoin, ChartDecreaseIcon, ChartIncreaseIco
 type Filter = 'all' | Kind | 'index';
 type AssetQuote = { id: string; date: string; kind: Exclude<Kind, 'rate'> } & ({ status: 'loading' } | { status: 'ready'; price: number; sourceDate?: string } | { status: 'error'; message: string });
 type DollarRate = { nombre: string; compra: number | null; venta: number };
-type Rates = {
-    [key: string]: {
-        compra: number | null;
-        venta: number | null;
-    };
-};
+type Rates = Record<string, DollarRate>;
 const MASK = '****';
 const MONTH_MS = 1000 * 60 * 60 * 24 * 30.4375;
 const kinds: { id: Filter; label: string; color: string }[] = [

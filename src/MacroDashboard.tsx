@@ -5,7 +5,7 @@ import PageLink from './PageLink';
 type Observation = { fecha: string; valor: number; previous?: number };
 type MacroData = { risk?: Observation; inflation?: Observation; rate?: Observation; merval?: Observation };
 
-type Rates = Record<string, { compra: number; venta: number }>;
+type Rates = Record<string, { compra: number | null; venta: number }>;
 
 type Stablecoins = {
     usdt?: number;
@@ -96,29 +96,32 @@ export default function MacroDashboard({ rates, refreshDollars, dollarLoading }:
                 { key: 'oficial', label: 'Dólar oficial' },
                 { key: 'contadoconliqui', label: 'Dólar CCL' },
                 { key: 'bolsa', label: 'Dólar MEP' },
-            ].map(({ key, label }) => (
+            ].map(({ key, label }) => {
+                const rate = rates[key];
+                return (
                 <article className="macro-metric" key={key}>
                     <p className="macro-metric-label">{label}</p>
                     <div className="macro-small-quotes">
                         <div>
                             <span>Compra</span>
                             <strong>
-                                {rates[key]?.compra > 0
-                                    ? price.format(rates[key].compra)
+                                {rate?.compra != null && rate.compra > 0
+                                    ? price.format(rate.compra)
                                     : unavailable}
                             </strong>
                         </div>
                         <div>
                             <span>Venta</span>
                             <strong className='venta'>
-                                {rates[key]?.venta > 0
-                                    ? price.format(rates[key].venta)
+                                {rate?.venta != null && rate.venta > 0
+                                    ? price.format(rate.venta)
                                     : unavailable}
                             </strong>
                         </div>
                     </div>
                 </article>
-            ))}
+                );
+            })}
 
             {/* Stablecoins */}
             {[
