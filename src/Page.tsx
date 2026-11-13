@@ -108,12 +108,13 @@ function groupInvestments(members: Investment[]): Investment {
     const sorted = [...members].sort((a, b) => a.date.localeCompare(b.date));
     const first = sorted[0];
     const costed = members.filter(m => !m.costUnknown);
-    const priced = costed.filter(m => m.purchasePrice != null && m.units);
+    const unitCost = (m: Investment) => m.purchasePrice ?? (m.units && m.currency === (['cedear', 'arg-stock', 'bond', 'fund'].includes(m.kind) ? 'ARS' : 'USD') ? m.amount / m.units : undefined);
+    const priced = costed.filter(m => unitCost(m) != null && m.units);
     const pricedUnits = priced.reduce((t, m) => t + m.units!, 0);
     const agg: Investment = { ...first, id: `g:${first.kind}:${first.coin}:${first.currency}`, units: members.reduce((t, m) => t + (m.units ?? 0), 0), amount: costed.reduce((t, m) => t + m.amount, 0) };
     delete agg.costUnknown; delete agg.purchasePrice;
     if (!costed.length) agg.costUnknown = true;
-    if (pricedUnits > 0) agg.purchasePrice = priced.reduce((t, m) => t + m.units! * m.purchasePrice!, 0) / pricedUnits;
+    if (pricedUnits > 0) agg.purchasePrice = priced.reduce((t, m) => t + m.units! * unitCost(m)!, 0) / pricedUnits;
     return agg;
 }
 function valueAt(i: Investment, t: number, prices: Record<string, number>, now: number, officialRate?: number) {
@@ -684,7 +685,7 @@ export default function Page({ account, onLogout }: { account: Account; onLogout
             if (investment.units == null || !Number.isFinite(investment.units) || investment.units <= 0) return setError('El monto es demasiado grande o pequeño para calcular las unidades.');
             if (original?.costUnknown) investment.purchasePrice = value / investment.units;
             else if (unchangedPosition) { investment.purchasePrice = original.purchasePrice; investment.purchaseFx = original.purchaseFx; }
-            else if (priceMode === 'purchase') { investment.purchasePrice = selectedPrice; if (currency !== quoteCurrency && fxRate) investment.purchaseFx = fxRate; }
+            else { investment.purchasePrice = selectedPrice; if (currency !== quoteCurrency && fxRate) investment.purchaseFx = fxRate; }
             if (activeQuote?.status === 'ready') setPrices(prev => ({ ...prev, [`${kind}:${id}`]: activeQuote.price }));
         }
         setItems(prev => editingId ? prev.map(x => x.id === editingId ? investment : x) : [...prev, investment]);
