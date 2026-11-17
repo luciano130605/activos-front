@@ -101,8 +101,10 @@ async function caucionHistory(id: string): Promise<Point[]> {
     }
     return points;
 }
-export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock' | 'bond' | 'fund' | 'morpho' | 'caucion', id: string, signal: AbortSignal): Promise<Point[]> {
+export async function history(kind: 'cedear' | 'crypto' | 'stock' | 'arg-stock' | 'bond' | 'lecap' | 'fund' | 'morpho' | 'caucion', id: string, signal: AbortSignal): Promise<Point[]> {
     if (kind === 'caucion') return caucionHistory(id);
+    // Data912 no publica historial de letras.
+    if (kind === 'lecap') throw new Error('El proveedor no publica historial de LECAPs.');
     const key = `activos:asset-history:${kind === 'stock' ? 'stock-v2' : kind}:${id}`;
     try { const cache = JSON.parse(sessionStorage.getItem(key) ?? 'null'); if (cache && Date.now() - cache.time < 30 * 60 * 1000 && Array.isArray(cache.points)) return kind === 'arg-stock' ? adjustLocalSplits(id, cache.points) : cache.points; } catch { /* Sin caché. */ }
     if (kind === 'morpho') {

@@ -32,11 +32,11 @@ function readRefreshSeconds() {
 }
 
 function validKind(value: string | null): value is AssetKind {
-    return value === 'crypto' || value === 'cedear' || value === 'stock' || value === 'arg-stock' || value === 'bond' || value === 'fund' || value === 'morpho';
+    return value === 'crypto' || value === 'cedear' || value === 'stock' || value === 'arg-stock' || value === 'bond' || value === 'lecap' || value === 'fund' || value === 'morpho';
 }
 
 function emptyAsset(kind: AssetKind, id: string): Investment {
-    const local = kind === 'arg-stock' || kind === 'bond' || kind === 'fund';
+    const local = kind === 'arg-stock' || kind === 'bond' || kind === 'lecap' || kind === 'fund';
     return { id: `widget:${kind}:${id}`, name: id, kind, coin: id, units: 1, amount: 1, currency: local || kind === 'cedear' ? 'ARS' : 'USD', date: new Date().toLocaleDateString('en-CA') };
 }
 
@@ -87,7 +87,7 @@ async function loadPrices(items: Investment[], display: Currency, signal: AbortS
     const cedears = uniqueIds(items, 'cedear');
     const stocks = uniqueIds(items, 'stock');
     const morphos = uniqueIds(items, 'morpho');
-    const localItems = items.filter(item => (item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'fund') && item.coin) as (Investment & { kind: LocalKind; coin: string })[];
+    const localItems = items.filter(item => (item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'lecap' || item.kind === 'fund') && item.coin) as (Investment & { kind: LocalKind; coin: string })[];
     const needsFx = items.some(item => item.kind === 'rate' ? item.currency !== display : quoteCurrency(item) !== display || item.currency !== display);
     const groups = await Promise.allSettled([
         coinPricesNow(crypto, signal), cedearPricesNow(cedears, signal), stockPricesNow(stocks, signal),
@@ -104,7 +104,7 @@ async function loadPrices(items: Investment[], display: Currency, signal: AbortS
 }
 
 function quoteCurrency(item: Investment): Currency {
-    return item.kind === 'cedear' || item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'fund' ? 'ARS' : 'USD';
+    return item.kind === 'cedear' || item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'lecap' || item.kind === 'fund' ? 'ARS' : 'USD';
 }
 
 function convert(value: number, from: Currency, to: Currency, fx: number | null) {
@@ -429,7 +429,7 @@ function PortfolioWidget({ marketOnly, asset }: { marketOnly: boolean; asset: { 
         {authRequired ? <div className="widget-status"><span className="widget-status-mark" aria-hidden="true">!</span><p>Iniciá sesión en Activos para ver los datos de tu cuenta. Volvé a actualizar después de ingresar.</p></div> : null}
         {!snapshot && !authRequired ? <WidgetStatus loading={refreshing} message="Todavía no hay datos para mostrar." /> : null}
         {asset && snapshot && assetQuote != null && <section className="widget-asset-card">
-            <p className="widget-asset-kind">{asset.kind === 'crypto' ? 'Criptomoneda' : asset.kind === 'cedear' ? 'CEDEAR' : asset.kind === 'stock' ? 'Acción · USD' : asset.kind === 'arg-stock' ? 'Acción argentina' : asset.kind === 'bond' ? 'Bono' : asset.kind === 'fund' ? 'Fondo común' : 'Morpho'}</p>
+            <p className="widget-asset-kind">{asset.kind === 'crypto' ? 'Criptomoneda' : asset.kind === 'cedear' ? 'CEDEAR' : asset.kind === 'stock' ? 'Acción · USD' : asset.kind === 'arg-stock' ? 'Acción argentina' : asset.kind === 'bond' ? 'Bono' : asset.kind === 'lecap' ? 'LECAP' : asset.kind === 'fund' ? 'Fondo común' : 'Morpho'}</p>
             <strong className="widget-asset-price">{money(assetQuote, quoteCurrency(assetItem!))}</strong>
             <QuoteChange value={change} />
             <Sparkline points={assetChart} positive={change == null || change >= 0} />
@@ -454,7 +454,7 @@ function PortfolioWidget({ marketOnly, asset }: { marketOnly: boolean; asset: { 
 function PositionRow({ item, value, quote, displayCurrency, fx, points }: { item: Investment; value: number | null; quote: number | null; displayCurrency: Currency; fx: number | null; points: HistoryPoint[] }) {
     const [expanded, setExpanded] = useState(false);
     const change = item.kind === 'rate' ? (() => { const now = Date.now(); const current = valueAt(item, now, now); const previous = valueAt(item, now - DAY, now); return current != null && previous != null && previous > 0 ? (current / previous - 1) * 100 : null; })() : quote != null ? dailyChange(item, quote, points) : null;
-    const currency = item.kind === 'cedear' || item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'fund' ? 'ARS' : 'USD';
+    const currency = item.kind === 'cedear' || item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'lecap' || item.kind === 'fund' ? 'ARS' : 'USD';
     const basis = item.costUnknown || Date.parse(`${item.date}T00:00:00Z`) > Date.now() ? null : convert(item.amount, item.currency, displayCurrency, fx);
     const gain = value != null && basis != null ? value - basis : null;
     const quantity = item.kind === 'rate' ? `${item.rate}% ${item.period === 'year' ? 'anual' : 'mensual'}` : `${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 8 }).format(item.units ?? 0)} unidades`;

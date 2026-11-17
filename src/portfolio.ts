@@ -1,4 +1,4 @@
-export type Kind = 'rate' | 'crypto' | 'cedear' | 'stock' | 'arg-stock' | 'bond' | 'fund' | 'morpho';
+export type Kind = 'rate' | 'crypto' | 'cedear' | 'stock' | 'arg-stock' | 'bond' | 'lecap' | 'fund' | 'morpho';
 export type Period = 'year' | 'month';
 export type Currency = 'USD' | 'ARS';
 export type Investment = {
@@ -30,7 +30,7 @@ export function cleanSale(raw: unknown): Sale | null {
     return { id: s.id, name: s.name, date: s.date, fraction: s.fraction, proceeds: s.proceeds, cost: s.cost, currency: s.currency, costCurrency: s.costCurrency };
 }
 
-export type AllocationCategory = 'rate' | 'cedear' | 'index' | 'stock' | 'crypto' | 'arg-stock' | 'bond' | 'fund' | 'morpho';
+export type AllocationCategory = 'rate' | 'cedear' | 'index' | 'stock' | 'crypto' | 'arg-stock' | 'bond' | 'lecap' | 'fund' | 'morpho';
 export type AllocationTargets = Record<AllocationCategory, number>;
 
 export type Preferences = {
@@ -40,6 +40,7 @@ export type Preferences = {
     hidden: boolean;
     sidebarCollapsed: boolean;
     display: Currency;
+    decimals?: 0 | 2 | 4 | 6;
     horizon: number;
     panels?: string[];
     showQuotesBar?: boolean;
@@ -53,7 +54,7 @@ export type ImportOperation = {
     quantity: string; price: string; amount: string; currency: string; fee: string; externalId: string; executions: string;
 };
 
-export type PriceAlert = { id: string; kind: 'price' | 'variation' | 'concentration' | 'dividend' | 'maturity'; assetKind: 'cedear' | 'stock' | 'crypto' | 'arg-stock' | 'bond' | 'fund' | 'morpho'; assetId: string; assetName: string; threshold: number; direction: 'above' | 'below'; date: string; channels?: 'push' | 'telegram' | 'both' };
+export type PriceAlert = { id: string; kind: 'price' | 'variation' | 'concentration' | 'dividend' | 'maturity'; assetKind: 'cedear' | 'stock' | 'crypto' | 'arg-stock' | 'bond' | 'lecap' | 'fund' | 'morpho'; assetId: string; assetName: string; threshold: number; direction: 'above' | 'below'; date: string; channels?: 'push' | 'telegram' | 'both' };
 
 export type Portfolio = {
     alerts?: PriceAlert[];
@@ -66,6 +67,7 @@ export type Portfolio = {
 export const defaultPreferences: Preferences = {
     theme: 'dark', dollar: 'bolsa', hidden: false,
     sidebarCollapsed: false, display: 'USD', horizon: 12,
+    decimals: 2,
 };
 
 const dollars = ['bolsa', 'contadoconliqui', 'blue', 'oficial', 'mayorista', 'cripto', 'tarjeta'];
@@ -79,6 +81,7 @@ export function cleanPreferences(raw: unknown): Preferences {
         sidebarCollapsed: r.sidebarCollapsed === true,
         showQuotesBar: r.showQuotesBar !== false,
         display: r.display === 'ARS' ? 'ARS' : 'USD',
+        decimals: r.decimals === 0 || r.decimals === 4 || r.decimals === 6 ? r.decimals : 2,
         horizon: typeof r.horizon === 'number' && [0, 12, 36, 60].includes(r.horizon) ? r.horizon : 12,
     };
 }
@@ -114,9 +117,9 @@ export function cleanInvestment(raw: unknown): Investment | null {
     if (!raw || typeof raw !== 'object') return null;
     const r = raw as Record<string, unknown>;
     const kind = r.kind, currency = r.currency, period = r.period, date = r.date;
-    if (kind !== 'rate' && kind !== 'crypto' && kind !== 'cedear' && kind !== 'stock' && kind !== 'arg-stock' && kind !== 'bond' && kind !== 'fund' && kind !== 'morpho') return null;
+    if (kind !== 'rate' && kind !== 'crypto' && kind !== 'cedear' && kind !== 'stock' && kind !== 'arg-stock' && kind !== 'bond' && kind !== 'lecap' && kind !== 'fund' && kind !== 'morpho') return null;
     if (currency !== 'USD' && currency !== 'ARS') return null;
-    if ((kind === 'stock' && currency !== 'USD') || (['arg-stock', 'bond', 'fund'].includes(kind) && currency !== 'ARS')) return null;
+    if ((kind === 'stock' && currency !== 'USD') || (['arg-stock', 'bond', 'lecap', 'fund'].includes(kind) && currency !== 'ARS')) return null;
     if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
     const parsedDate = new Date(`${date}T12:00:00Z`);
     if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) return null;

@@ -10,7 +10,7 @@ type Props = {
     onSave: (targets: AllocationTargets) => void;
     incompleteQuotes: boolean;
 };
-const empty: AllocationTargets = { rate: 0, cedear: 0, index: 0, stock: 0, crypto: 0, 'arg-stock': 0, bond: 0, fund: 0, morpho: 0 };
+const empty: AllocationTargets = { rate: 0, cedear: 0, index: 0, stock: 0, crypto: 0, 'arg-stock': 0, bond: 0, lecap: 0, fund: 0, morpho: 0 };
 const percentage = (value: number) => `${value.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`;
 
 export default function Goals({ categories, targets, format, onSave, incompleteQuotes }: Props) {

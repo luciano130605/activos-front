@@ -1,12 +1,14 @@
 import type { Investment } from './portfolio';
-export type LocalKind = 'arg-stock' | 'bond' | 'fund';
+export type LocalKind = 'arg-stock' | 'bond' | 'lecap' | 'fund';
+// Data912 publica acciones, bonos y letras (LECAPs) en listados separados.
+const data912Path = (kind: Exclude<LocalKind, 'fund'>) => kind === 'bond' ? 'arg_bonds' : kind === 'lecap' ? 'arg_notes' : 'arg_stocks';
 type LocalItem = Investment & { kind: LocalKind; coin: string };
-export function isLocal(item: Investment): item is LocalItem { return (item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'fund') && !!item.coin; }
+export function isLocal(item: Investment): item is LocalItem { return (item.kind === 'arg-stock' || item.kind === 'bond' || item.kind === 'lecap' || item.kind === 'fund') && !!item.coin; }
 export async function localQuotes(items: { kind: LocalKind; coin: string }[], signal?: AbortSignal): Promise<Record<string, number>> {
     if (!items.length) return {};
     const groups = [...new Set(items.map(i => i.kind))];
     const results = await Promise.allSettled(groups.map(async kind => {
-        const url = kind === 'fund' ? 'https://api.argentinadatos.com/v1/finanzas/fci/fondos' : `https://data912.com/live/${kind === 'bond' ? 'arg_bonds' : 'arg_stocks'}`;
+        const url = kind === 'fund' ? 'https://api.argentinadatos.com/v1/finanzas/fci/fondos' : `https://data912.com/live/${data912Path(kind)}`;
         const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
         if (!response.ok) throw new Error('No se pudieron consultar las cotizaciones locales.');
         const body = await response.json(); const rows = kind === 'fund' ? body?.fondos : body;
@@ -20,7 +22,7 @@ export async function localQuotes(items: { kind: LocalKind; coin: string }[], si
             }
             const row = rows.find(r => String(r?.symbol ?? '').toUpperCase() === item.coin.toUpperCase());
             const price = Number(row?.c);
-            return Number.isFinite(price) && price > 0 ? [[`${kind}:${item.coin}`, kind === 'bond' ? price / 100 : price]] : [];
+            return Number.isFinite(price) && price > 0 ? [[`${kind}:${item.coin}`, kind === 'bond' || kind === 'lecap' ? price / 100 : price]] : [];
         }));
     }));
     if (results.every(result => result.status === 'rejected')) throw new Error('No se pudieron consultar las cotizaciones locales.');
