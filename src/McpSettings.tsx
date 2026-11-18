@@ -107,7 +107,7 @@ export default function McpSettings() {
 
     return <section className="settings-channel mt-4">
         <p className="text-[13px] font-medium">Conectá ChatGPT o Claude</p>
-        <p className="mu mt-2 text-[11px] leading-5">MCP conecta tu cuenta de Activos con un agente de IA mediante OAuth. El proveedor no recibe tu PIN ni tus claves de API de Activos.</p>
+        <p className="mu mt-2 text-[11px] leading-5">MCP conecta tu cuenta de Activos con un agente de IA mediante OAuth. El proveedor no recibe tu contraseña ni tus claves de API de Activos.</p>
         <div className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--raised)] p-3">
             <p className="mu text-[10px]">URL del servidor MCP</p>
             <code className="mt-2 block break-all text-[12px] text-[var(--ink)]">{endpoint}</code>

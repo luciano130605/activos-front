@@ -1,7 +1,8 @@
 import type { Portfolio } from './portfolio';
 
 export type Snapshot = { portfolio: Portfolio; version: number; mutationId: string | null };
-export type Account = Snapshot & { user: { id: string; email: string } };
+export type Device = { id: string; name: string; platform: 'ios'; lockAfterMs: number; createdAt: string; lastUsedAt: string; current: boolean };
+export type Account = Snapshot & { user: { id: string; email: string; name: string }; setupRequired?: boolean; device?: Device | null };
 export type Mutation = { portfolio: Portfolio; version: number; mutationId: string };
 
 export class ApiError extends Error {
